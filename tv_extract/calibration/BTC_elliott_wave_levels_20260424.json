@@ -1,0 +1,35 @@
+{
+  "symbol": "KRAKEN:BTCUSD",
+  "resolution": "1W",
+  "extracted": "2026-04-24",
+  "current_price": 77650,
+  "source_indicator": "Elliott Wave Chart Pattern",
+  "notes": "Super cycle wave (5) topped at 126,198. Currently in ABC correction. (c) target: 60,500. Price at 77,650 is BELOW (a) low of 80,595 — confirmed in (c) leg down.",
+  "minor_waves": [
+    {"wave": "1", "price": 19660, "type": "high"},
+    {"wave": "2", "price": 3120, "type": "low"},
+    {"wave": "3", "price": 64900, "type": "high"},
+    {"wave": "4", "price": 28816.6, "type": "low"},
+    {"wave": "5", "price": 68991, "type": "high"},
+    {"wave": "a", "price": 32940.1, "type": "low"},
+    {"wave": "b", "price": 48200, "type": "high"},
+    {"wave": "c", "price": 15470.5, "type": "low"}
+  ],
+  "intermediate_waves": [
+    {"wave": "1", "price": 31790.8, "type": "high"},
+    {"wave": "2", "price": 24800, "type": "low"},
+    {"wave": "3", "price": 73734, "type": "high"},
+    {"wave": "4", "price": 49111, "type": "low"},
+    {"wave": "5", "price": 109112, "type": "high"}
+  ],
+  "super_cycle_waves": [
+    {"wave": "(1)", "price": 68991, "type": "high"},
+    {"wave": "(2)", "price": 15470.5, "type": "low"},
+    {"wave": "(3)", "price": 109112, "type": "high"},
+    {"wave": "(4)", "price": 74409.1, "type": "low"},
+    {"wave": "(5)", "price": 126198.1, "type": "high"},
+    {"wave": "(a)", "price": 80595.2, "type": "low"},
+    {"wave": "(b)", "price": 97899.7, "type": "high"},
+    {"wave": "(c)", "price": 60500, "type": "projected_low"}
+  ]
+}

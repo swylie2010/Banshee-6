@@ -1,0 +1,36 @@
+# Banshee Pro 2 — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# UI & charts
+streamlit
+plotly
+
+# Data
+pandas
+numpy
+yfinance          # price history (Strategy Lab backtest)
+ccxt              # crypto exchange data
+feedparser        # RSS feeds (Market Intel)
+requests
+
+# Backtesting
+vectorbt
+numba             # vectorbt hard dependency
+scikit-learn      # DBSCAN clustering for geometric harmonic hot zones
+
+# MCP server
+mcp
+
+# Core server (Banshee Core — FastAPI on port 8765)
+fastapi
+uvicorn
+
+# Background scheduler (cache heartbeat — optional but recommended)
+apscheduler
+alpaca-py
+
+# AI providers (one or both depending on keys)
+anthropic
+google-generativeai   # legacy SDK (kept for compatibility)
+google-genai          # new Google GenAI SDK (used by banshee_ai.py)
+openai

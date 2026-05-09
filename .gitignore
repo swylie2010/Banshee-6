@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Secrets — never commit these
+.env
+*.env
+
+# Local operational data (machine-specific, changes constantly)
+daily_briefings.jsonl
+paper_trades.json
+
+# Raw downloaded market data (large, ephemeral — regenerate with calibrate.py)
+tv_extract/ohlcv/
+
+# OS noise
+Thumbs.db
+.DS_Store
+
+# Editor
+.vscode/
+*.swp
