@@ -1851,6 +1851,22 @@ function LabPage({ onBack }) {
 }
 
 // Temporary stubs — will be replaced by Tasks 5-6
+/* ── NumInput — labeled number input used by RiskDeskPage */
+function NumInput({ label, value, onChange, step = 1 }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{label}</div>
+      <input
+        type="number" step={step}
+        value={value}
+        onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        className="mono"
+        style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "7px 10px", fontSize: 12, letterSpacing: "0.06em", outline: "none", width: "100%" }}
+      />
+    </div>
+  );
+}
+
 /* ── RiskDeskPage — reactive position sizing calculator (Page 6) */
 function RiskDeskPage({ openSym, radarData, onBack }) {
   const [account,    setAccount]    = useState(10000);
@@ -1860,6 +1876,7 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
   const [conflicted, setConflicted] = useState(false);
   const [plan,       setPlan]       = useState(null);
   const [calculating, setCalculating] = useState(false);
+  const [calcError,  setCalcError]  = useState(null);
 
   /* auto-populate from focused symbol on mount */
   useEffect(() => {
@@ -1876,10 +1893,15 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
   /* debounced recalculation */
   useEffect(() => {
     if (!entry || !stop || Math.abs(entry - stop) < 0.0001) return;
+    setCalculating(true);
     const id = setTimeout(() => {
-      setCalculating(true);
       window.API.fetchExecutionPlan({ account_size: account, risk_percent: riskPct, entry_price: entry, stop_loss: stop, smc_conflicted: conflicted })
-        .then(p => { setCalculating(false); if (p && !p.error) setPlan(p); });
+        .then(p => {
+          setCalculating(false);
+          if (p && !p.error) { setPlan(p); setCalcError(null); }
+          else { setPlan(null); setCalcError(p?.error || "Calculation failed"); }
+        })
+        .catch(() => { setCalculating(false); setPlan(null); setCalcError("Network error"); });
     }, 300);
     return () => clearTimeout(id);
   }, [account, riskPct, entry, stop, conflicted]);
@@ -1887,21 +1909,6 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
   const isLong      = plan?.is_long ?? (entry > stop);
   const dirColor    = isLong ? "var(--buy)" : "var(--sell)";
   const conflictClr = "var(--sell)";
-
-  function NumInput({ label, value, onChange, step = 1 }) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{label}</div>
-        <input
-          type="number" step={step}
-          value={value}
-          onChange={e => onChange(parseFloat(e.target.value) || 0)}
-          className="mono"
-          style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "7px 10px", fontSize: 12, letterSpacing: "0.06em", outline: "none", width: "100%" }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "var(--bg-0)", zIndex: 20, overflowY: "auto", display: "flex", flexDirection: "column" }}>
@@ -1930,6 +1937,12 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
           <input type="checkbox" checked={conflicted} onChange={e => setConflicted(e.target.checked)} />
           ⚠ SMC CONFLICTED — halve position size (HTF/LTF structure disagrees)
         </label>
+
+        {calcError && (
+          <div style={{ color: "var(--sell)", fontSize: 11, padding: "4px 0" }}>
+            {calcError}
+          </div>
+        )}
 
         {/* calculating state */}
         {calculating && (
