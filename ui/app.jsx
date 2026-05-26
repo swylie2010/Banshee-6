@@ -2025,6 +2025,24 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
     </div>
   );
 }
+/* ── JournalPage helpers & constants (module-level, no closure deps) */
+function fmtDatetime(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (isNaN(d)) return ts;
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtDate(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (isNaN(d)) return ts;
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+const EXIT_REASONS = ["", "target_hit", "stop_hit", "manual_exit", "time_exit", "signal_reversal"];
+const DIR_OPTIONS  = ["", "yes", "no", "partial"];
+
 /* ── JournalPage — paper trade log & outcome tracking (Page 7) */
 function JournalPage({ radarData, onBack }) {
   const [trades,         setTrades]         = useState([]);
@@ -2040,37 +2058,23 @@ function JournalPage({ radarData, onBack }) {
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [syncing,        setSyncing]        = useState(false);
 
-  /* helper: format ISO timestamp to "YYYY-MM-DD HH:mm" */
-  function fmtDatetime(ts) {
-    if (!ts) return "—";
-    const d = new Date(ts);
-    if (isNaN(d)) return ts;
-    const pad = n => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
-  /* helper: format ISO timestamp to "YYYY-MM-DD" */
-  function fmtDate(ts) {
-    if (!ts) return "—";
-    const d = new Date(ts);
-    if (isNaN(d)) return ts;
-    const pad = n => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-  }
-
   /* load trades on mount */
-  function loadTrades() {
+  const loadTrades = React.useCallback(async () => {
     setLoading(true);
-    setError(null);
-    window.API.fetchTrades().then(data => {
-      setTrades(data.trades || []);
-      setStats(data.stats || {});
+    try {
+      const data = await window.API.fetchTrades();
+      if (data && !data.error) {
+        setTrades(data.trades || []);
+        setStats(data.stats || {});
+      } else {
+        setError(data?.error || "Failed to load");
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
       setLoading(false);
-    }).catch(err => {
-      setError(err.message || "Failed to load trades");
-      setLoading(false);
-    });
-  }
+    }
+  }, []); // state setters are stable, empty deps is correct
 
   useEffect(() => { loadTrades(); }, []);
 
@@ -2194,9 +2198,6 @@ function JournalPage({ radarData, onBack }) {
   };
   const selectStyle = { ...inputStyle, cursor: "pointer" };
 
-  const EXIT_REASONS = ["", "target_hit", "stop_hit", "manual_exit", "time_exit", "signal_reversal"];
-  const DIR_OPTIONS  = ["", "yes", "no", "partial"];
-
   /* ── RENDER ─────────────────────────────────────── */
   if (loading) {
     return (
@@ -2252,7 +2253,7 @@ function JournalPage({ radarData, onBack }) {
             </div>
             <div style={metricTileStyle}>
               <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>AVG P&amp;L</div>
-              <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: stats.avg_pnl >= 0 ? "var(--buy)" : "var(--sell)" }}>
+              <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: stats.avg_pnl != null ? (stats.avg_pnl >= 0 ? "var(--buy)" : "var(--sell)") : "var(--ink-4)" }}>
                 {stats.avg_pnl != null ? stats.avg_pnl.toFixed(1) + "%" : "—"}
               </div>
             </div>
@@ -2335,7 +2336,10 @@ function JournalPage({ radarData, onBack }) {
                               type="number"
                               step="any"
                               value={el.stop}
-                              onChange={e => setEditLevels(prev => ({ ...prev, [t.id]: { ...el, stop: e.target.value } }))}
+                              onChange={e => setEditLevels(prev => {
+                                const cur = prev[t.id] || { stop: "", target: "" };
+                                return { ...prev, [t.id]: { ...cur, stop: e.target.value } };
+                              })}
                               className="mono"
                               style={inputStyle}
                               placeholder={t.stop_price != null ? String(t.stop_price) : ""}
@@ -2347,7 +2351,10 @@ function JournalPage({ radarData, onBack }) {
                               type="number"
                               step="any"
                               value={el.target}
-                              onChange={e => setEditLevels(prev => ({ ...prev, [t.id]: { ...el, target: e.target.value } }))}
+                              onChange={e => setEditLevels(prev => {
+                                const cur = prev[t.id] || { stop: "", target: "" };
+                                return { ...prev, [t.id]: { ...cur, target: e.target.value } };
+                              })}
                               className="mono"
                               style={inputStyle}
                               placeholder={t.target_price != null ? String(t.target_price) : ""}
@@ -2377,7 +2384,10 @@ function JournalPage({ radarData, onBack }) {
                               type="number"
                               step="any"
                               value={cf.exitPrice}
-                              onChange={e => setCloseForm(prev => ({ ...prev, [t.id]: { ...cf, exitPrice: e.target.value } }))}
+                              onChange={e => setCloseForm(prev => {
+                                const cur = prev[t.id] || { exitPrice: "", exitReason: "", notes: "" };
+                                return { ...prev, [t.id]: { ...cur, exitPrice: e.target.value } };
+                              })}
                               className="mono"
                               style={inputStyle}
                             />
@@ -2386,7 +2396,10 @@ function JournalPage({ radarData, onBack }) {
                             <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>EXIT REASON</div>
                             <select
                               value={cf.exitReason}
-                              onChange={e => setCloseForm(prev => ({ ...prev, [t.id]: { ...cf, exitReason: e.target.value } }))}
+                              onChange={e => setCloseForm(prev => {
+                                const cur = prev[t.id] || { exitPrice: "", exitReason: "", notes: "" };
+                                return { ...prev, [t.id]: { ...cur, exitReason: e.target.value } };
+                              })}
                               className="mono"
                               style={selectStyle}
                             >
@@ -2398,7 +2411,10 @@ function JournalPage({ radarData, onBack }) {
                             <textarea
                               rows={2}
                               value={cf.notes}
-                              onChange={e => setCloseForm(prev => ({ ...prev, [t.id]: { ...cf, notes: e.target.value } }))}
+                              onChange={e => setCloseForm(prev => {
+                                const cur = prev[t.id] || { exitPrice: "", exitReason: "", notes: "" };
+                                return { ...prev, [t.id]: { ...cur, notes: e.target.value } };
+                              })}
                               className="mono"
                               style={{ ...inputStyle, resize: "vertical" }}
                             />
@@ -2518,7 +2534,10 @@ function JournalPage({ radarData, onBack }) {
                             <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>WAS DIRECTION CORRECT?</div>
                             <select
                               value={of_.directionVal}
-                              onChange={e => setOutcomeForm(prev => ({ ...prev, [t.id]: { ...of_, directionVal: e.target.value } }))}
+                              onChange={e => setOutcomeForm(prev => {
+                                const cur = prev[t.id] || { directionVal: "", exitReason: "", noteVal: "" };
+                                return { ...prev, [t.id]: { ...cur, directionVal: e.target.value } };
+                              })}
                               className="mono"
                               style={selectStyle}
                             >
@@ -2529,7 +2548,10 @@ function JournalPage({ radarData, onBack }) {
                             <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>EXIT REASON</div>
                             <select
                               value={of_.exitReason}
-                              onChange={e => setOutcomeForm(prev => ({ ...prev, [t.id]: { ...of_, exitReason: e.target.value } }))}
+                              onChange={e => setOutcomeForm(prev => {
+                                const cur = prev[t.id] || { directionVal: "", exitReason: "", noteVal: "" };
+                                return { ...prev, [t.id]: { ...cur, exitReason: e.target.value } };
+                              })}
                               className="mono"
                               style={selectStyle}
                             >
@@ -2542,7 +2564,10 @@ function JournalPage({ radarData, onBack }) {
                           <textarea
                             rows={2}
                             value={of_.noteVal}
-                            onChange={e => setOutcomeForm(prev => ({ ...prev, [t.id]: { ...of_, noteVal: e.target.value } }))}
+                            onChange={e => setOutcomeForm(prev => {
+                              const cur = prev[t.id] || { directionVal: "", exitReason: "", noteVal: "" };
+                              return { ...prev, [t.id]: { ...cur, noteVal: e.target.value } };
+                            })}
                             className="mono"
                             style={{ ...inputStyle, resize: "vertical" }}
                           />
