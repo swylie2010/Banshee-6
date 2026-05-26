@@ -1810,7 +1810,7 @@ def route_journal_trades():
 
 class JournalUpdateOutcomeRequest(BaseModel):
     trade_id: int
-    signal_correct: bool | None = None
+    signal_correct: str | None = None  # UI sends "yes"/"no"/"partial"/null
     exit_reason: str | None = None
     note: str = ""
 
@@ -1819,9 +1819,17 @@ class JournalUpdateOutcomeRequest(BaseModel):
 def route_journal_update_outcome(body: JournalUpdateOutcomeRequest):
     """Set signal quality fields on a trade (open or closed)."""
     import paper_trader
+    # Map string values from UI to bool/None/passthrough for set_signal_outcome
+    sc = body.signal_correct
+    if sc == "yes":
+        sc_val = True
+    elif sc == "no":
+        sc_val = False
+    else:
+        sc_val = sc  # "partial" or None pass through as-is
     ok = paper_trader.set_signal_outcome(
         trade_id=body.trade_id,
-        signal_correct=body.signal_correct,
+        signal_correct=sc_val,
         exit_reason=body.exit_reason,
         note=body.note,
     )
@@ -1834,8 +1842,8 @@ def route_journal_update_outcome(body: JournalUpdateOutcomeRequest):
 
 class JournalUpdateLevelsRequest(BaseModel):
     trade_id: int
-    stop_price: float
-    target_price: float
+    stop_price: float | None = None
+    target_price: float | None = None
 
 
 @app.post("/journal/update-levels")
@@ -1843,7 +1851,9 @@ def route_journal_update_levels(body: JournalUpdateLevelsRequest):
     """Update stop and target price on an open trade."""
     import paper_trader
     ok = paper_trader.update_trade_levels(
-        body.trade_id, body.stop_price, body.target_price
+        trade_id=body.trade_id,
+        stop_price=body.stop_price,
+        target_price=body.target_price,
     )
     if not ok:
         return JSONResponse(

@@ -7,7 +7,7 @@ Banshee context (verdict, regime, macro, ATR plan) alongside every trade.
 This is the forward signal log — the honest test of whether Banshee's full
 layered system outperforms the bare indicator backtests.
 
-Storage: ~/AntiEverything/Banshee_Pro_3/paper_trades.json
+Storage: ~/AntiEverything/Banshee_5/paper_trades.json
 """
 
 from __future__ import annotations
@@ -227,17 +227,27 @@ def close_all_open_trades(note: str = "") -> list[dict]:
     return closed
 
 
-def update_trade_levels(trade_id: int, stop_price: float, target_price: float) -> bool:
-    """Update stop and target on an open trade and recalculate R:R."""
+def update_trade_levels(
+    trade_id: int,
+    stop_price: Optional[float] = None,
+    target_price: Optional[float] = None,
+) -> bool:
+    """Update stop and/or target on an open trade and recalculate R:R.
+    Only updates fields that are provided (non-None); existing values are preserved."""
     with _JOURNAL_LOCK:
         trades = _load_journal()
         for t in trades:
             if t["id"] == trade_id:
-                entry = t.get("entry_price", stop_price)
-                t["stop_price"]   = stop_price
-                t["target_price"] = target_price
-                t["rr"] = round(abs(target_price - entry) / abs(entry - stop_price), 2) \
-                          if stop_price != entry else 0
+                if stop_price is not None:
+                    t["stop_price"] = stop_price
+                if target_price is not None:
+                    t["target_price"] = target_price
+                # Recalculate R:R only when both levels are known
+                entry = t.get("entry_price")
+                s = t.get("stop_price")
+                tgt = t.get("target_price")
+                if entry is not None and s is not None and tgt is not None and s != entry:
+                    t["rr"] = round(abs(tgt - entry) / abs(entry - s), 2)
                 _save_journal(trades)
                 return True
     return False
@@ -447,14 +457,13 @@ def annotate_trade(trade_id: int, note: str) -> bool:
 
 def set_signal_outcome(
     trade_id: int,
-    signal_correct: Optional[bool] = None,
+    signal_correct=None,  # bool | str | None — True/False or "partial"
     exit_reason: Optional[str] = None,
     note: str = "",
 ) -> bool:
     """
     Set quality fields on any trade (open or closed).
-    signal_correct: True = direction was right regardless of P&L/execution;
-                    False = Banshee called the wrong direction.
+    signal_correct: True/False = direction right/wrong; "partial" = mixed result.
     exit_reason: one of VALID_EXIT_REASONS.
     Optionally appends an annotation if note is provided.
     """
@@ -463,7 +472,8 @@ def set_signal_outcome(
         for t in trades:
             if t["id"] == trade_id:
                 if signal_correct is not None:
-                    t["signal_correct"] = bool(signal_correct)
+                    # Store bool as-is; store "partial" (or any str) as-is
+                    t["signal_correct"] = signal_correct if isinstance(signal_correct, str) else bool(signal_correct)
                 if exit_reason and exit_reason in VALID_EXIT_REASONS:
                     t["exit_reason"] = exit_reason
                 if note:
