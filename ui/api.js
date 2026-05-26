@@ -239,7 +239,7 @@ async function fetchExecutionPlan({ account_size, risk_percent, entry_price, sto
     return await res.json();
   } catch (err) {
     console.warn("[api] fetchExecutionPlan:", err.message);
-    return null;
+    return { error: err.message };
   }
 }
 
