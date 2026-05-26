@@ -1,7 +1,7 @@
 """
 test_banshee.py ? Banshee Pro Automated Test Suite
 ===================================================
-Run from the Banshee_Pro_3 directory:
+Run from the Banshee_5 directory:
     python test_banshee.py
 
 Tests are organised into sections:
@@ -562,6 +562,39 @@ _test("asymmetry ? 0 on neutral",       _asymmetry_zero_on_neutral)
 _test("asymmetry ? contrarian long",    _asymmetry_contrarian_long)
 _test("asymmetry ? short squeeze",      _asymmetry_short_squeeze)
 _test("asymmetry ? capped at 100",      _asymmetry_capped_at_100)
+
+
+# ── Journal / Strategies wrappers ──────────────────────────────────────────
+
+def _test_journal_trades_shape():
+    import paper_trader
+    trades = paper_trader.get_all_trades()
+    assert isinstance(trades, list), "get_all_trades must return a list"
+    stats = paper_trader.get_stats()
+    assert isinstance(stats, dict), "get_stats must return a dict"
+    assert "total" in stats, "stats must have 'total' key"
+
+_test("journal trades shape", _test_journal_trades_shape)
+
+
+def _test_strategies_file_readable():
+    import json, os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "strategies.json")
+    if not os.path.exists(path):
+        return  # no file yet — pass
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert isinstance(data, dict), "strategies.json must be a JSON object"
+
+_test("strategies.json readable", _test_strategies_file_readable)
+
+
+def _test_update_trade_levels_unknown_id():
+    import paper_trader
+    result = paper_trader.update_trade_levels(999999, 1.0, 2.0)
+    assert result is False, "update_trade_levels should return False for unknown ID"
+
+_test("update_trade_levels unknown id", _test_update_trade_levels_unknown_id)
 
 
 # --- Summary ------------------------------------------------------------------

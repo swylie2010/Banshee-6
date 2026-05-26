@@ -1,5 +1,5 @@
 """
-banshee_core.py — Banshee Pro 4 Core Server
+banshee_core.py — Banshee 5 Core Server
 ============================================
 FastAPI server on port 8765. Owns all engine calls and the unified cache.
 Runs 24/7 independently of Streamlit or MCP clients.
@@ -22,9 +22,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
 import uvicorn
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # ── Portability fix ───────────────────────────────────────────────────────────
@@ -39,7 +41,21 @@ import predator_engine
 from shared_data import load_providers, fetch_crypto_ohlcv
 from knowledge_graph import get_regime_weights
 
-app = FastAPI(title="Banshee Core", version="4.0")
+app = FastAPI(title="Banshee Core", version="5.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8765",
+        "http://127.0.0.1:8765",
+    ],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
+)
+
+_UI_DIR = Path(__file__).parent / "ui"
+if _UI_DIR.exists():
+    app.mount("/ui", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
 
 
 def _sanitize(obj):
@@ -396,6 +412,17 @@ def route_watchlist():
     return "\n".join(lines)
 
 
+def _compute_bias(trends: dict) -> str:
+    vals = list(trends.values())
+    bull = sum(1 for v in vals if v == "BULLISH")
+    bear = sum(1 for v in vals if v == "BEARISH")
+    if bull >= 3: return "↑ STRONG"
+    if bull == 2: return "↑ MILD"
+    if bear >= 3: return "↓ STRONG"
+    if bear == 2: return "↓ MILD"
+    return "→ FLAT"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ROUTE 5 — Asset Radar (single symbol)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -440,6 +467,9 @@ def route_radar(
             "verdict":              res["verdict"],
             "edge":                 res["edge"],
             "price":                res["price"],
+            "rsi":                  res.get("rsi", 50),
+            "chg_pct":              res.get("chg_pct", 0.0),
+            "bias":                 _compute_bias(res.get("trends", {})),
             "pre_signal":           res.get("pre_signal"),
             "setup_name":           res.get("setup_name"),
             "regime_bucket":        res.get("regime_bucket", "NEUTRAL"),
@@ -1106,6 +1136,100 @@ def health():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SETTINGS — read/write ~/.banshee_keys.json
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mask(v: str) -> str:
+    if isinstance(v, str) and len(v) > 4:
+        return "•••••" + v[-4:]
+    return v
+
+@app.get("/settings")
+def route_settings_get():
+    providers = load_providers()
+    masked = {}
+    for section, val in providers.items():
+        if isinstance(val, dict):
+            masked[section] = {
+                k: (_mask(v) if k in ("key", "secret") else v)
+                for k, v in val.items()
+            }
+        else:
+            masked[section] = val
+    return JSONResponse(content=masked)
+
+class SettingsBody(BaseModel):
+    settings: dict
+
+@app.post("/settings")
+def route_settings_save(body: SettingsBody):
+    existing = load_providers()
+    def _merge(old: dict, new: dict) -> dict:
+        result = dict(old)
+        for k, v in new.items():
+            if isinstance(v, str) and v.startswith("•••••"):
+                pass  # keep existing masked value
+            else:
+                result[k] = v
+        return result
+    merged = dict(existing)
+    for section, val in body.settings.items():
+        if isinstance(val, dict) and section in existing and isinstance(existing[section], dict):
+            merged[section] = _merge(existing[section], val)
+        else:
+            merged[section] = val
+    from shared_data import save_providers
+    save_providers(merged)
+    return {"status": "saved"}
+
+@app.post("/settings/test")
+def route_settings_test(body: SettingsBody):
+    ai_cfg   = body.settings.get("AI_API", {})
+    provider = ai_cfg.get("type", "").lower()
+    key      = ai_cfg.get("key", "")
+    model    = ai_cfg.get("model", "")
+    url      = ai_cfg.get("url", "")
+    if isinstance(key, str) and key.startswith("•••••"):
+        key = load_providers().get("AI_API", {}).get("key", "")
+    try:
+        if provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=key)
+            resp = genai.GenerativeModel(model or "gemini-2.5-flash").generate_content("Say OK in 3 words")
+            return {"status": "ok", "message": resp.text.strip()[:120]}
+        elif provider == "anthropic":
+            import anthropic as _anthropic
+            client = _anthropic.Anthropic(api_key=key)
+            msg = client.messages.create(
+                model=model or "claude-sonnet-4-6",
+                max_tokens=16,
+                messages=[{"role": "user", "content": "Say OK in 3 words"}],
+            )
+            return {"status": "ok", "message": msg.content[0].text.strip()}
+        elif provider == "openai":
+            import openai as _openai
+            client = _openai.OpenAI(api_key=key)
+            resp = client.chat.completions.create(
+                model=model or "gpt-4o-mini",
+                messages=[{"role": "user", "content": "Say OK in 3 words"}],
+                max_tokens=16,
+            )
+            return {"status": "ok", "message": resp.choices[0].message.content.strip()}
+        elif provider in ("ollama", "custom"):
+            import requests as _req
+            base = (url or "http://localhost:11434").rstrip("/")
+            r = _req.post(f"{base}/api/generate",
+                          json={"model": model, "prompt": "Say OK", "stream": False},
+                          timeout=10)
+            r.raise_for_status()
+            return {"status": "ok", "message": r.json().get("response", "")[:120]}
+        else:
+            return JSONResponse(content={"status": "error", "message": f"Unknown provider: {provider}"})
+    except Exception as exc:
+        return JSONResponse(content={"status": "error", "message": str(exc)[:200]})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # JSON ROUTES — Streamlit UI consumers
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1299,6 +1423,7 @@ class AIBriefingRequest(BaseModel):
     symbol: str
     mode: str = "swing"
     manual_stories: list = []
+    tab: str = "nexus"  # "nexus" | "smc" | "gh"
 
 
 @app.post("/ai/briefing", response_class=PlainTextResponse)
@@ -1357,9 +1482,32 @@ def route_ai_briefing(req: AIBriefingRequest):
     if not cfg or not cfg.get("key"):
         return "No AI key configured. Add one in ⚙️ Settings."
 
+    # for GH tab, also inject XABCD pattern context
+    xabcd_context = ""
+    if req.tab == "gh":
+        try:
+            import xabcd_scanner as _xabcd
+            _xabcd_df = tfs.get("1d") or next(
+                (v for v in tfs.values() if isinstance(v, pd.DataFrame) and not v.empty), None
+            )
+            if _xabcd_df is not None and not _xabcd_df.empty:
+                _patterns = _xabcd.scan(_xabcd_df)
+                if _patterns:
+                    _lines = []
+                    for p in _patterns[:4]:
+                        status = "CONFIRMED" if p.get("confirmed") else "FORMING"
+                        _lines.append(
+                            f"  {p['pattern']} ({status}) — PRZ: ${p.get('prz_lo', 0):,.2f}–${p.get('prz_hi', 0):,.2f}"
+                        )
+                    xabcd_context = "XABCD Harmonic Patterns:\n" + "\n".join(_lines)
+        except Exception:
+            pass
+        if xabcd_context:
+            geo_harmonic_context = (geo_harmonic_context + "\n\n" + xabcd_context).strip()
+
     prompt = banshee_ai.build_banshee_prompt(
         mac_data, mic_data, news_lines, req.manual_stories, include_macro=True,
-        geo_harmonic_context=geo_harmonic_context,
+        geo_harmonic_context=geo_harmonic_context, tab=req.tab,
     )
     return banshee_ai.call_ai(cfg, prompt)
 
@@ -1631,6 +1779,80 @@ Keep your response to 400 words. Be direct. Use trade IDs and regime names to ba
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ROUTE — Strategy data (React Signal Lab)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/strategies/data")
+def route_strategies_data():
+    """Return strategies.json as a JSON object for the React Signal Lab page."""
+    if not os.path.exists(_STRATEGIES_FILE):
+        return {}
+    try:
+        with open(_STRATEGIES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ROUTE — Journal trades (React Trade Journal)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/journal/trades")
+def route_journal_trades():
+    """Return all trades + stats for the React Trade Journal page."""
+    import paper_trader
+    return {
+        "trades": paper_trader.get_all_trades(),
+        "stats":  paper_trader.get_stats(),
+    }
+
+
+class JournalUpdateOutcomeRequest(BaseModel):
+    trade_id: int
+    signal_correct: bool | None = None
+    exit_reason: str | None = None
+    note: str = ""
+
+
+@app.post("/journal/update-outcome")
+def route_journal_update_outcome(body: JournalUpdateOutcomeRequest):
+    """Set signal quality fields on a trade (open or closed)."""
+    import paper_trader
+    ok = paper_trader.set_signal_outcome(
+        trade_id=body.trade_id,
+        signal_correct=body.signal_correct,
+        exit_reason=body.exit_reason,
+        note=body.note,
+    )
+    if not ok:
+        return JSONResponse(
+            content={"error": f"trade {body.trade_id} not found"}, status_code=404
+        )
+    return {"status": "updated", "trade_id": body.trade_id}
+
+
+class JournalUpdateLevelsRequest(BaseModel):
+    trade_id: int
+    stop_price: float
+    target_price: float
+
+
+@app.post("/journal/update-levels")
+def route_journal_update_levels(body: JournalUpdateLevelsRequest):
+    """Update stop and target price on an open trade."""
+    import paper_trader
+    ok = paper_trader.update_trade_levels(
+        body.trade_id, body.stop_price, body.target_price
+    )
+    if not ok:
+        return JSONResponse(
+            content={"error": f"trade {body.trade_id} not found"}, status_code=404
+        )
+    return {"status": "updated", "trade_id": body.trade_id}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ROUTE 12 — Geometric Harmonic Arc Analysis
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1650,6 +1872,10 @@ def route_geo_harmonic(
     Returns ranked hot-zone price levels (with bias + sources) for TradingView circle placement.
     """
     import geometric_harmonic as gh
+    _ghkey = f"gh:{symbol.upper()}:{tf}:{n_local}:{arithmetic_mid}:{multi_window}"
+    _entry = _RESP_CACHE.get(_ghkey)
+    if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
+        return JSONResponse(content=_entry["res"])
     tfs = _get_ohlcv_cached(symbol, "swing")
     if not tfs or "error" in tfs:
         return JSONResponse(content={"error": f"Failed to load data for {symbol}"})
@@ -1661,6 +1887,39 @@ def route_geo_harmonic(
         df = tfs[valid[0]]
     result = gh.run(df, n_local=n_local, arithmetic_mid=arithmetic_mid,
                     multi_window=multi_window)
+    if "error" not in result:
+        _RESP_CACHE[_ghkey] = {"ts": time.time(), "res": result}
+    return JSONResponse(content=result)
+
+
+@app.get("/xabcd")
+def route_xabcd(
+    symbol: str  = Query(...),
+    tf:     str  = Query("1d"),
+    pct:    float = Query(0.03),
+):
+    """
+    XABCD Harmonic Pattern Scanner — Gartley, Bat, Butterfly, Crab, Shark, 5-0.
+    Uses percentage-reversal ZigZag (pct=0.03 default) on the daily timeframe.
+    Returns confirmed patterns (D formed) and forming patterns (PRZ projected).
+    """
+    import xabcd_scanner as xs
+    _xkey = f"xabcd:{symbol.upper()}:{tf}:{pct}"
+    _entry = _RESP_CACHE.get(_xkey)
+    if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
+        return JSONResponse(content=_entry["res"])
+    tfs = _get_ohlcv_cached(symbol, "swing")
+    if not tfs or "error" in tfs:
+        return JSONResponse(content={"error": f"Failed to load data for {symbol}"})
+    df = tfs.get(tf)
+    if df is None or (hasattr(df, "empty") and df.empty):
+        valid = [k for k, v in tfs.items() if isinstance(v, pd.DataFrame) and not v.empty]
+        if not valid:
+            return JSONResponse(content={"error": f"No data for {symbol}"})
+        df = tfs[valid[0]]
+    result = xs.scan(df, pct=pct)
+    if "error" not in result:
+        _RESP_CACHE[_xkey] = {"ts": time.time(), "res": result}
     return JSONResponse(content=result)
 
 
@@ -1732,11 +1991,30 @@ def _bg_predator_daily():
         pass
 
 
+_PREWARM_SYMS = [
+    "BTC/USD","ETH/USD","SOL/USD","XRP/USD","BNB/USD","DOGE/USD","ADA/USD",
+    "AVAX/USD","DOT/USD","MATIC/USD","LINK/USD","UNI/USD","ATOM/USD",
+    "LTC/USD","BCH/USD","NEAR/USD","HBAR/USD","XLM/USD","TAO/USD","HYPE/USD",
+]
+
+def _bg_prewarm_ohlcv():
+    """Fetch OHLCV for all watchlist symbols on startup so the UI loads instantly."""
+    import time as _time
+    for sym in _PREWARM_SYMS:
+        try:
+            _get_ohlcv_cached(sym, "swing")
+            _time.sleep(0.3)   # gentle pacing — avoid exchange rate limits
+        except Exception:
+            pass
+
+
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger as _CronTrigger
 
     _bg_scheduler = BackgroundScheduler(daemon=True)
+    from datetime import datetime as _dt, timedelta as _td
+    _bg_scheduler.add_job(_bg_prewarm_ohlcv, "date", run_date=_dt.now() + _td(seconds=5), id="core_prewarm")
     _bg_scheduler.add_job(_bg_refresh_macro,       "interval", minutes=15, id="core_macro_heartbeat")
     _bg_scheduler.add_job(_bg_sync_paper_trades,   "interval", minutes=15, id="core_paper_sync")
     _bg_scheduler.add_job(_bg_check_kill_switch,   "interval", minutes=15, id="core_kill_switch")
@@ -1756,6 +2034,43 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 # SHUTDOWN
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ROUTE 13 — Watchlist Presets
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PRESETS_PATH = Path(__file__).parent / "watchlist_presets.json"
+
+def _load_presets() -> dict:
+    try:
+        return json.loads(_PRESETS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def _save_presets(data: dict):
+    _PRESETS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+@app.get("/presets")
+def route_presets_list():
+    return _load_presets()
+
+@app.post("/presets/{name}")
+def route_presets_save(name: str, body: dict = Body(...)):
+    symbols = body.get("symbols", [])
+    data = _load_presets()
+    data[name] = [s.strip().upper() for s in symbols if s.strip()]
+    _save_presets(data)
+    return {"saved": name, "symbols": data[name]}
+
+@app.delete("/presets/{name}")
+def route_presets_delete(name: str):
+    data = _load_presets()
+    if name not in data:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    del data[name]
+    _save_presets(data)
+    return {"deleted": name}
+
 
 @app.post("/shutdown")
 def route_shutdown():
