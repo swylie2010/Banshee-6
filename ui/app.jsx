@@ -1851,7 +1851,167 @@ function LabPage({ onBack }) {
 }
 
 // Temporary stubs — will be replaced by Tasks 5-6
-function RiskDeskPage({ onBack }) { return <div style={{position:"absolute",inset:0,background:"var(--bg-0)",zIndex:20,display:"flex",alignItems:"center",justifyContent:"center"}}><span className="mono" style={{color:"var(--ink-4)"}}>⚖ RISK DESK — coming soon</span></div>; }
+/* ── RiskDeskPage — reactive position sizing calculator (Page 6) */
+function RiskDeskPage({ openSym, radarData, onBack }) {
+  const [account,    setAccount]    = useState(10000);
+  const [riskPct,    setRiskPct]    = useState(1.0);
+  const [entry,      setEntry]      = useState(0);
+  const [stop,       setStop]       = useState(0);
+  const [conflicted, setConflicted] = useState(false);
+  const [plan,       setPlan]       = useState(null);
+  const [calculating, setCalculating] = useState(false);
+
+  /* auto-populate from focused symbol on mount */
+  useEffect(() => {
+    if (!openSym || !radarData[openSym]) return;
+    const r   = radarData[openSym];
+    const atr = r.atr_plan;
+    const v   = r.verdict || "";
+    setEntry(r.price || 0);
+    if (atr && v.includes("BUY")  && atr.stop_long)  setStop(parseFloat(Number(atr.stop_long).toFixed(4)));
+    else if (atr && v.includes("SELL") && atr.stop_short) setStop(parseFloat(Number(atr.stop_short).toFixed(4)));
+    else if (r.price) setStop(parseFloat((r.price * 0.95).toFixed(4)));
+  }, []); // mount only
+
+  /* debounced recalculation */
+  useEffect(() => {
+    if (!entry || !stop || Math.abs(entry - stop) < 0.0001) return;
+    const id = setTimeout(() => {
+      setCalculating(true);
+      window.API.fetchExecutionPlan({ account_size: account, risk_percent: riskPct, entry_price: entry, stop_loss: stop, smc_conflicted: conflicted })
+        .then(p => { setCalculating(false); if (p && !p.error) setPlan(p); });
+    }, 300);
+    return () => clearTimeout(id);
+  }, [account, riskPct, entry, stop, conflicted]);
+
+  const isLong      = plan?.is_long ?? (entry > stop);
+  const dirColor    = isLong ? "var(--buy)" : "var(--sell)";
+  const conflictClr = "var(--sell)";
+
+  function NumInput({ label, value, onChange, step = 1 }) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{label}</div>
+        <input
+          type="number" step={step}
+          value={value}
+          onChange={e => onChange(parseFloat(e.target.value) || 0)}
+          className="mono"
+          style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "7px 10px", fontSize: 12, letterSpacing: "0.06em", outline: "none", width: "100%" }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "var(--bg-0)", zIndex: 20, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      {/* header */}
+      <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
+        <div>
+          <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>⚖ RISK DESK</div>
+          <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>
+            Position size · Margin · R-multiples{openSym ? ` · Auto-filled from ${openSym}` : ""}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: "20px 24px", flex: 1 }}>
+        {/* inputs */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
+          <NumInput label="ACCOUNT SIZE ($)" value={account} onChange={setAccount} step={100} />
+          <NumInput label="RISK PER TRADE (%)" value={riskPct} onChange={setRiskPct} step={0.1} />
+          <NumInput label="ENTRY PRICE ($)" value={entry} onChange={setEntry} step={0.01} />
+          <NumInput label="STOP-LOSS PRICE ($)" value={stop} onChange={setStop} step={0.01} />
+        </div>
+
+        {/* conflicted checkbox */}
+        <label className="mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: conflicted ? conflictClr : "var(--ink-3)", cursor: "pointer", marginBottom: 20 }}>
+          <input type="checkbox" checked={conflicted} onChange={e => setConflicted(e.target.checked)} />
+          ⚠ SMC CONFLICTED — halve position size (HTF/LTF structure disagrees)
+        </label>
+
+        {/* calculating state */}
+        {calculating && (
+          <div className="mono blink" style={{ fontSize: 11, color: "var(--wait)", marginBottom: 16, letterSpacing: "0.1em" }}>◇ CALCULATING…</div>
+        )}
+
+        {/* results */}
+        {plan && !calculating ? (
+          <>
+            {plan.confidence_note && (
+              <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid var(--sell)", padding: "10px 16px", marginBottom: 16 }}>
+                <span className="mono" style={{ fontSize: 11, color: "var(--sell)" }}>⚠ {plan.confidence_note}</span>
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              {/* panel 1: position size */}
+              <div style={{ background: "var(--bg-2)", border: `2px solid ${conflicted ? conflictClr : dirColor}`, padding: 20 }}>
+                <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 8 }}>
+                  {conflicted ? "UNITS TO BUY — 50% (CONFLICTED)" : "UNITS TO BUY"}
+                </div>
+                <div className="mono" style={{ fontSize: 28, fontWeight: 800, color: conflicted ? conflictClr : dirColor }}>
+                  {Number(plan.position_size).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                </div>
+                <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 8 }}>
+                  Risking: ${Number(plan.max_risk_dollars).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+                <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4 }}>
+                  Position value: ${Number(plan.position_value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              {/* panel 2: capital efficiency */}
+              <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: 20 }}>
+                <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 12 }}>CAPITAL EFFICIENCY</div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th className="mono" style={{ fontSize: 9, color: "var(--ink-4)", textAlign: "left", paddingBottom: 6, letterSpacing: "0.1em" }}>LEVERAGE</th>
+                      <th className="mono" style={{ fontSize: 9, color: "var(--ink-4)", textAlign: "right", paddingBottom: 6, letterSpacing: "0.1em" }}>MARGIN REQ.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(plan.capital_efficiency || []).map(row => (
+                      <tr key={row.leverage} style={{ borderTop: "1px solid var(--line)" }}>
+                        <td className="mono" style={{ fontSize: 11, color: "var(--ink)", padding: "5px 0", fontWeight: 700 }}>{row.leverage}x</td>
+                        <td className="mono" style={{ fontSize: 11, color: "var(--ink-2)", textAlign: "right", padding: "5px 0" }}>
+                          ${Number(row.margin_required).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* panel 3: exit targets */}
+              <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: 20 }}>
+                <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 12 }}>EXIT TARGETS</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(plan.targets || []).map(tgt => (
+                    <div key={tgt.r_multiple} style={{ background: isLong ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)", border: `1px solid ${dirColor}`, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div className="mono" style={{ fontSize: 9, color: dirColor, letterSpacing: "0.12em", fontWeight: 700 }}>{tgt.r_multiple}:1 REWARD</div>
+                        <div className="mono" style={{ fontSize: 10, color: dirColor, marginTop: 2 }}>+${Number(tgt.profit).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                      </div>
+                      <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: dirColor }}>
+                        ${Number(tgt.price).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        ) : !calculating && !plan ? (
+          <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.08em" }}>
+            Enter trade parameters above to calculate position size.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 function JournalPage({ onBack }) { return <div style={{position:"absolute",inset:0,background:"var(--bg-0)",zIndex:20,display:"flex",alignItems:"center",justifyContent:"center"}}><span className="mono" style={{color:"var(--ink-4)"}}>◎ TRADE JOURNAL — coming soon</span></div>; }
 
 /* ── App ───────────────────────────────────────────────────── */
