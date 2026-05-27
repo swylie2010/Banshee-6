@@ -1042,6 +1042,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]   = useState(null);
   const aiAbortRef = useRef(null);
+  const [lensMode, setLensMode] = useState(1);
 
   function cancelAI() {
     if (aiAbortRef.current) { aiAbortRef.current.abort(); aiAbortRef.current = null; }
@@ -1052,12 +1053,27 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
     cancelAI();
     setSmcData(null); setGhData(null); setXabcdData(null);
     setAiText(null); setAiLoading(false); setAiError(null);
+    setLensMode(1);
   }, [asset.sym]);
 
   /* reset AI on tab change */
   useEffect(() => {
     cancelAI();
     setAiText(null); setAiLoading(false); setAiError(null);
+  }, [tab]);
+
+  /* lens hotkeys 1–4 — active only on SMC tab */
+  useEffect(() => {
+    if (tab !== "smc") return;
+    function onKey(e) {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.key === "1") setLensMode(1);
+      else if (e.key === "2") setLensMode(2);
+      else if (e.key === "3") setLensMode(3);
+      else if (e.key === "4") setLensMode(4);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [tab]);
 
   /* load SMC for smc + nexus tabs */
@@ -1183,7 +1199,8 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
         {/* SMC + GH tabs: chart + alert strip + AI panel */}
         {tab !== "nexus" && (
           <div style={{ padding: "12px 14px 0 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, padding: "6px 10px", background: "var(--bg-2)", border: "1px solid var(--line)", display: "inline-flex" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, padding: "6px 10px", background: "var(--bg-2)", border: "1px solid var(--line)" }}>
+              {/* TF selector — left side */}
               <window.Label>TF</window.Label>
               <div style={{ display: "flex", gap: 0, border: "1px solid var(--line-2)" }}>
                 {TF_LIST.map((t, i) => {
@@ -1195,6 +1212,31 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                   );
                 })}
               </div>
+              {/* Lens selector — right side, SMC tab only */}
+              {tab === "smc" && (() => {
+                const LENSES = [
+                  { mode: 1, label: "ALL" },
+                  { mode: 2, label: "BATTLEFIELD" },
+                  { mode: 3, label: "FOOTPRINTS" },
+                  { mode: 4, label: "SNIPER" },
+                ];
+                return (
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                    <window.Label>LENS</window.Label>
+                    <div style={{ display: "flex", gap: 0, border: "1px solid var(--line-2)" }}>
+                      {LENSES.map(({ mode, label }, i) => {
+                        const active = lensMode === mode;
+                        return (
+                          <button key={mode} onClick={() => setLensMode(mode)}
+                            style={{ padding: "5px 12px", background: active ? "var(--cyan)" : "transparent", color: active ? "var(--bg-0)" : "var(--ink-2)", border: "none", borderLeft: i ? "1px solid var(--line-2)" : "none", cursor: "pointer" }}>
+                            <span className="mono" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em" }}>{label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1208,7 +1250,8 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                 xabcdData={xabcdData} xabcdLoading={xabcdLoading}
                 showSMC={showSMC} setShowSMC={() => {}}
                 showGH={showGH} setShowGH={() => {}}
-                showXABCD={showXABCD} setShowXABCD={() => {}} />
+                showXABCD={showXABCD} setShowXABCD={() => {}}
+                lensMode={lensMode} />
             </div>
           </div>
         )}
