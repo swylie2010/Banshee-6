@@ -1428,8 +1428,46 @@ class AIBriefingRequest(BaseModel):
 
 @app.post("/ai/briefing", response_class=PlainTextResponse)
 def route_ai_briefing(req: AIBriefingRequest):
-    """Generate an AI synthesis briefing for the Nexus tab."""
-    mode           = MODE_ALIASES.get(req.mode.lower(), "swing")
+    """Generate an AI synthesis briefing for the React UI tabs."""
+    mode = MODE_ALIASES.get(req.mode.lower(), "swing")
+
+    providers = load_providers()
+    cfg       = providers.get("AI_API")
+    if not cfg or not cfg.get("key"):
+        return "No AI key configured. Add one in ⚙️ Settings."
+
+    # ── SMC tab: dedicated dual-TF pathway (same engine as V4 Streamlit) ──────
+    if req.tab == "smc":
+        htf_tf = "1d" if mode == "swing" else "4h"
+        ltf_tf = "4h" if mode == "swing" else "1h"
+
+        ltf_df, ltf_err = _fetch_smc_df(req.symbol, ltf_tf)
+        if ltf_err or ltf_df is None or (hasattr(ltf_df, "empty") and ltf_df.empty):
+            return f"SMC data unavailable ({ltf_tf}): {ltf_err or 'empty'}"
+        ltf_smc = smc_engine.run(ltf_df)
+        if "error" in ltf_smc:
+            return f"SMC engine error ({ltf_tf}): {ltf_smc['error']}"
+
+        htf_df, htf_err = _fetch_smc_df(req.symbol, htf_tf)
+        if htf_err or htf_df is None or (hasattr(htf_df, "empty") and htf_df.empty):
+            return f"SMC data unavailable ({htf_tf}): {htf_err or 'empty'}"
+        htf_smc = smc_engine.run(htf_df)
+        if "error" in htf_smc:
+            return f"SMC engine error ({htf_tf}): {htf_smc['error']}"
+
+        _htf_all     = smc_engine.load_htf_levels()
+        _sym_key     = req.symbol.split("/")[0].upper()
+        asset_levels = _htf_all.get(_sym_key)
+        flat_levels  = smc_engine.flatten_levels(asset_levels) if asset_levels else []
+
+        return banshee_ai.smc_analysis(
+            symbol=req.symbol,
+            htf_tf=htf_tf, htf_df=htf_df, htf_smc=htf_smc,
+            ltf_tf=ltf_tf, ltf_df=ltf_df, ltf_smc=ltf_smc,
+            cfg=cfg, flat_levels=flat_levels,
+        )
+
+    # ── GH + Nexus tabs: macro/micro synthesis pathway ────────────────────────
     mac_data, _src = _get_sensors()
     cached         = _load_macro_cache()
     news_lines     = cached.get("news_lines", []) if cached else []
@@ -1451,13 +1489,19 @@ def route_ai_briefing(req: AIBriefingRequest):
     if "error" in mic_data:
         return f"Micro analysis error: {mic_data['error']}"
 
+    # GH always needs 1d data — fetch separately when not present (e.g. sniper mode)
+    def _get_1d_df():
+        df = tfs.get("1d")
+        if df is not None and not df.empty:
+            return df
+        df2, _ = _fetch_smc_df(req.symbol, "1d")
+        return df2
+
     geo_harmonic_context = ""
     try:
         import geometric_harmonic as gh
         _bias_sym = {"floor": "▲", "ceiling": "▼", "mixed": "◈"}
-        _gh_df = tfs.get("1d") or next(
-            (v for v in tfs.values() if isinstance(v, pd.DataFrame) and not v.empty), None
-        )
+        _gh_df = _get_1d_df()
         if _gh_df is not None and not _gh_df.empty:
             _gh_result = gh.run(_gh_df, multi_window=True)
             _zones = _gh_result.get("hot_zones", [])[:5]
@@ -1477,19 +1521,10 @@ def route_ai_briefing(req: AIBriefingRequest):
     except Exception:
         pass
 
-    providers = load_providers()
-    cfg       = providers.get("AI_API")
-    if not cfg or not cfg.get("key"):
-        return "No AI key configured. Add one in ⚙️ Settings."
-
-    # for GH tab, also inject XABCD pattern context
-    xabcd_context = ""
     if req.tab == "gh":
         try:
             import xabcd_scanner as _xabcd
-            _xabcd_df = tfs.get("1d") or next(
-                (v for v in tfs.values() if isinstance(v, pd.DataFrame) and not v.empty), None
-            )
+            _xabcd_df = _get_1d_df()
             if _xabcd_df is not None and not _xabcd_df.empty:
                 _patterns = _xabcd.scan(_xabcd_df)
                 if _patterns:
@@ -1500,10 +1535,9 @@ def route_ai_briefing(req: AIBriefingRequest):
                             f"  {p['pattern']} ({status}) — PRZ: ${p.get('prz_lo', 0):,.2f}–${p.get('prz_hi', 0):,.2f}"
                         )
                     xabcd_context = "XABCD Harmonic Patterns:\n" + "\n".join(_lines)
+                    geo_harmonic_context = (geo_harmonic_context + "\n\n" + xabcd_context).strip()
         except Exception:
             pass
-        if xabcd_context:
-            geo_harmonic_context = (geo_harmonic_context + "\n\n" + xabcd_context).strip()
 
     prompt = banshee_ai.build_banshee_prompt(
         mac_data, mic_data, news_lines, req.manual_stories, include_macro=True,
