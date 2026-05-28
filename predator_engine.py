@@ -830,6 +830,8 @@ def _format_events_for_prompt(events: list[dict], label: str, cap: int = 12) -> 
 
 def _attach_urls(items: list[dict], raw_events: list[dict]) -> None:
     """Attach source-matched URLs from raw intake events to briefing items in-place."""
+    if not items or not raw_events:
+        return
     source_urls: dict[str, list[str]] = {}
     for ev in raw_events:
         key = (ev.get("source") or "").lower().strip()
