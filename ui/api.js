@@ -324,4 +324,32 @@ async function fetchFeedbackSynthesis() {
   } catch (err) { return { error: err.message }; }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, coreSymbol };
+/* fetch the latest Predator briefing */
+async function fetchPredatorBriefing() {
+  try {
+    const res = await fetch(`${API_BASE}/predator/briefing`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] fetchPredatorBriefing:", err.message);
+    return null;
+  }
+}
+
+/* trigger the Daily Predator pipeline; resolves when complete (2-3 min) */
+async function runPredator(force = true) {
+  try {
+    const res = await fetch(`${API_BASE}/predator/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ watchlist: [], force }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] runPredator:", err.message);
+    return null;
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, coreSymbol };
