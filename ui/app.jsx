@@ -2906,7 +2906,7 @@ function NewsPage({ onBack }) {
               padding: "10px 14px", background: "var(--bg2)", borderRadius: 4, flexWrap: "wrap" }}>
               <button onClick={handleRun} disabled={running}
                 style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em",
-                  background: running ? "var(--bg3)" : "var(--amber)", color: running ? "var(--ink-4)" : "#000",
+                  background: "var(--amber)", color: "#000",
                   border: "none", padding: "6px 14px", borderRadius: 3, cursor: running ? "default" : "pointer" }}>
                 {running ? "◌ RUNNING PIPELINE…" : "▶ RUN DAILY PREDATOR"}
               </button>
