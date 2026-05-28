@@ -828,6 +828,22 @@ def _format_events_for_prompt(events: list[dict], label: str, cap: int = 12) -> 
     return "\n".join(lines)
 
 
+def _attach_urls(items: list[dict], raw_events: list[dict]) -> None:
+    """Attach source-matched URLs from raw intake events to briefing items in-place."""
+    source_urls: dict[str, list[str]] = {}
+    for ev in raw_events:
+        key = (ev.get("source") or "").lower().strip()
+        url = (ev.get("url") or "").strip()
+        if key and url:
+            source_urls.setdefault(key, [])
+            if url not in source_urls[key]:
+                source_urls[key].append(url)
+    for item in items:
+        key = (item.get("source") or "").lower().strip()
+        urls = source_urls.get(key, [])
+        item["url"] = urls[0] if urls else None
+
+
 def run_engine(
     bounced: dict,
     config: dict,
@@ -925,6 +941,9 @@ OUTPUT ONLY THE JSON OBJECT — no markdown, no explanation:
             "macro_tone":  "NEUTRAL",
             "risk_level":  3,
         }
+
+    _attach_urls(structured.get("watchlist_events", []), watchlist_events)
+    _attach_urls(structured.get("discovered_signals", []), discovered_events)
 
     briefing = {
         "date":               datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
