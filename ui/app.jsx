@@ -2954,7 +2954,7 @@ function NewsPage({ onBack }) {
 /* ── ManualPage — in-app reference guide (Page 8) ──────────── */
 function ManualPage({ onBack }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)", color: "var(--ink)", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-1)", color: "var(--ink)", overflow: "hidden" }}>
       <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
         <div>
@@ -2966,7 +2966,7 @@ function ManualPage({ onBack }) {
         <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.12em", textAlign: "center", marginTop: 40 }}>
           ◌ MANUAL — COMING SOON
         </div>
-        <div className="mono" style={{ fontSize: 13, color: "var(--ink-5)", letterSpacing: "0.08em", textAlign: "center", marginTop: 12, lineHeight: 1.8 }}>
+        <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.08em", textAlign: "center", marginTop: 12, lineHeight: 1.8 }}>
           This page will cover the SMC Optometry lenses · GH arc reading<br/>
           XABCD patterns · macro sensors · signal checklist · glossary
         </div>
