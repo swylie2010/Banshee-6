@@ -73,7 +73,10 @@ const SENSOR_EXPLAIN = {
   btc:     "Bitcoin 7-Day — crypto risk canary. BTC drops >5% over 7 days signal broad risk-off in digital assets. BTC moves 24/7 with no circuit breakers — often leads TradFi risk-off by 1–3 weeks. Treat as global liquidity sensor, not crypto-specific noise.",
   eth_btc: "ETH vs BTC 7-Day Relative — risk appetite within crypto. ETH outperforming BTC = risk-on, altcoin season. ETH lagging = BTC dominance rising, defensive rotation. Leading indicator for altcoin headwinds even if BTC is stable.",
   xle:     "XLE Energy Sector vs SPY — defensive rotation signal. Energy outpacing the broad market = rotation into hard assets — classic late-cycle or stagflation signal. Institutions repositioning into commodity-linked inflation hedges.",
-  copper:  "Copper 5-Day — global growth proxy ('Dr. Copper'). Used in virtually every industrial and construction process. Below -3% over 5 days signals contracting global economic activity. Leading indicator for earnings revisions and GDP downgrades.",
+  copper:    "Copper 5-Day — global growth proxy ('Dr. Copper'). Used in virtually every industrial and construction process. Below -3% over 5 days signals contracting global economic activity. Leading indicator for earnings revisions and GDP downgrades.",
+  gold:      "GLD 5-Day — safe-haven demand signal. Gold rising fast (>1% over 5 days) indicates institutional flight to safety. Unlike stocks, gold has no counterparty risk — it is the asset of last resort in geopolitical crises, currency collapses, and sovereign debt panics. Gold AND crypto both rising = broad risk-off rotation. Gold rising while equities hold = defensive hedging, not full panic.",
+  liquidity: "Federal Reserve Balance Sheet 60-Day Change — net liquidity injection or drain. When the Fed's balance sheet shrinks below -2% over 60 days, it is actively removing dollars from the financial system, tightening conditions across all risk assets simultaneously. Most dangerous when combined with rising rates — a double liquidity drain. Requires a FRED API key in Settings to activate.",
+  rotation:  "Sector Rotation Signal — Utilities (XLU), Financials (XLF), Technology (XLK), Energy (XLE) vs broad market (SPY) over 5 days. Utilities outrunning SPY (DEFENSIVE FLIGHT) = late-cycle fear trade — institutions hiding in regulated, dividend-paying assets. Technology outrunning SPY (RISK-ON) = growth expectations intact, beta-chasing phase. MIXED = rotational churn, no clear institutional thesis forming. The first defensive shift almost always shows up in XLU.",
 };
 
 /* ── Top bar ───────────────────────────────────────────────── */
@@ -122,9 +125,9 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
             <span className="mono" style={{
               fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--ink)",
             }}>BANSHEE</span>
-            <span className="mono" style={{ fontSize: 9, color: "var(--cyan)", letterSpacing: "0.18em" }}>v5.0</span>
+            <span className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.18em" }}>v5.0</span>
           </div>
-          <div className="mono" style={{ fontSize: 8, color: "var(--ink-3)", letterSpacing: "0.18em" }}>
+          <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.18em" }}>
             MACRO TRADING TERMINAL
           </div>
         </div>
@@ -187,13 +190,13 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
                   boxShadow: "0 8px 32px rgba(0,0,0,0.7)",
                   pointerEvents: "none",
                 }}>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--cyan)", letterSpacing: "0.18em", marginBottom: 8 }}>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.18em", marginBottom: 8 }}>
                     {explain.full}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
                     {explain.desc}
                   </div>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em", marginTop: 8 }}>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.14em", marginTop: 8 }}>
                     CURRENT · <span style={{ color: c }}>{f.v}</span>
                     {" — "}<span style={{ color: c }}>{f.st.toUpperCase()}</span>
                   </div>
@@ -215,7 +218,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
           borderLeft: "1px solid var(--line)",
           color: "var(--ink-3)",
           cursor: "pointer",
-          fontSize: 10, letterSpacing: "0.18em", fontWeight: 600,
+          fontSize: 13, letterSpacing: "0.18em", fontWeight: 600,
           transition: "color 120ms, background 120ms",
         }}
         onMouseEnter={e => { e.currentTarget.style.color = "var(--cyan)"; e.currentTarget.style.background = "rgba(56,189,248,0.05)"; }}
@@ -242,7 +245,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
-function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, currentPage }) {
+function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, currentPage }) {
   const [searchVal, setSearchVal] = useState("");
   const wl = window.WATCHLISTS.find(w => w.id === watchlist);
   const symAssets = wl.syms
@@ -284,7 +287,7 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
                 flex: 1,
                 background: "var(--bg-3)", border: "1px solid var(--line-2)",
                 color: "var(--ink)", padding: "5px 8px",
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 13,
                 letterSpacing: "0.08em", outline: "none",
               }}
             />
@@ -293,7 +296,7 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
               background: "var(--cyan)", color: "var(--bg-0)",
               border: "none", cursor: "pointer",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10, fontWeight: 700, letterSpacing: "0.14em",
+              fontSize: 13, fontWeight: 700, letterSpacing: "0.14em",
             }}>GO</button>
           </form>
         </div>
@@ -318,14 +321,14 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
                     cursor: "pointer", textAlign: "left",
                   }}>
                   <span className="mono" style={{
-                    fontSize: 8, color: active ? "var(--cyan)" : "var(--ink-4)", letterSpacing: "0.18em",
+                    fontSize: 11, color: active ? "var(--cyan)" : "var(--ink-4)", letterSpacing: "0.18em",
                   }}>{w.tag}</span>
                   <span className="mono" style={{
-                    fontSize: 11, color: active ? "var(--ink)" : "var(--ink-2)", letterSpacing: "0.1em",
+                    fontSize: 13, color: active ? "var(--ink)" : "var(--ink-2)", letterSpacing: "0.1em",
                     fontWeight: active ? 600 : 400,
                   }}>{w.name}</span>
                   <span className="num" style={{
-                    marginLeft: "auto", fontSize: 10,
+                    marginLeft: "auto", fontSize: 13,
                     color: active ? "var(--cyan)" : "var(--ink-3)",
                   }}>{w.syms.length}</span>
                 </button>
@@ -337,7 +340,7 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
         {/* symbol pills */}
         <div style={{ padding: "12px 14px 8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <window.Label>SYMBOLS · {symAssets.length}</window.Label>
-          <span className="mono" style={{ fontSize: 8, color: "var(--ink-4)", letterSpacing: "0.16em" }}>{wl.tag}</span>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.16em" }}>{wl.tag}</span>
         </div>
         <div style={{
           padding: "0 14px 14px 14px",
@@ -364,18 +367,18 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
               >
                 <window.Dot color={c.fg} size={6} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, letterSpacing: "0.04em" }}>
+                  <span className="mono" style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600, letterSpacing: "0.04em" }}>
                     {a.sym}
                   </span>
-                  <span className="mono" style={{ fontSize: 8, color: "var(--ink-3)", letterSpacing: "0.12em" }}>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.12em" }}>
                     {a.cls} · E{a.edge}
                   </span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
-                  <span className="num" style={{ fontSize: 10, color: "var(--ink-2)" }}>
+                  <span className="num" style={{ fontSize: 13, color: "var(--ink-2)" }}>
                     {a.price < 100 ? a.price.toFixed(2) : a.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </span>
-                  <span className="num" style={{ fontSize: 9, color: a.chg >= 0 ? "var(--buy)" : "var(--sell)" }}>
+                  <span className="num" style={{ fontSize: 12, color: a.chg >= 0 ? "var(--buy)" : "var(--sell)" }}>
                     {a.chg >= 0 ? "+" : ""}{a.chg.toFixed(2)}%
                   </span>
                 </div>
@@ -386,17 +389,18 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
 
         {/* nav buttons */}
         <div style={{ borderTop: "1px solid var(--line)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2 }}>
-          <div className="mono" style={{ fontSize: 8, color: "var(--ink-4)", letterSpacing: "0.18em", padding: "2px 4px 6px 4px" }}>NAVIGATE</div>
+          <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.18em", padding: "2px 4px 6px 4px" }}>NAVIGATE</div>
           {[
             { id: "macro",    label: "MACRO WEATHER",  icon: "◈" },
             { id: "news",     label: "PREDATOR NEWS",  icon: "◉" },
-            { id: "lab",      label: "SIGNAL LAB",     icon: "◬" },
             { id: "risk",     label: "RISK DESK",      icon: "⚖" },
             { id: "journal",  label: "TRADE JOURNAL",  icon: "◎" },
+            { id: "lab",      label: "SIGNAL LAB",     icon: "◬" },
             { id: "settings", label: "SETTINGS",       icon: "⚙" },
+            { id: "manual",   label: "MANUAL",         icon: "◌" },
           ].map(({ id, label, icon }) => {
             const active = currentPage === id;
-            const HANDLERS = { macro: onMacro, news: onNews, lab: onLab, risk: onRisk, journal: onJournal, settings: onSettings };
+            const HANDLERS = { macro: onMacro, news: onNews, lab: onLab, risk: onRisk, journal: onJournal, settings: onSettings, manual: onManual };
             const handler = HANDLERS[id];
             return (
               <button key={id} onClick={handler}
@@ -412,8 +416,8 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
                 onMouseEnter={e => { if (!active) { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; e.currentTarget.style.borderLeftColor = "var(--line-2)"; }}}
                 onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent"; }}}
               >
-                <span className="mono" style={{ fontSize: 11, color: active ? "var(--cyan)" : "var(--ink-3)" }}>{icon}</span>
-                <span className="mono" style={{ fontSize: 10, color: active ? "var(--ink)" : "var(--ink-2)", letterSpacing: "0.1em", fontWeight: active ? 600 : 400 }}>{label}</span>
+                <span className="mono" style={{ fontSize: 13, color: active ? "var(--cyan)" : "var(--ink-3)" }}>{icon}</span>
+                <span className="mono" style={{ fontSize: 13, color: active ? "var(--ink)" : "var(--ink-2)", letterSpacing: "0.1em", fontWeight: active ? 600 : 400 }}>{label}</span>
               </button>
             );
           })}
@@ -427,11 +431,11 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <window.Dot color="var(--buy)" blink />
-            <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.16em" }}>
+            <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.16em" }}>
               FEED · LIVE
             </span>
           </div>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em" }}>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.16em" }}>
             42ms
           </span>
         </div>
@@ -487,22 +491,22 @@ function AssetGrid({ watchlist, focusedSym, onOpen, radarData, radarLoading }) {
         flex: "0 0 auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span className="mono" style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, letterSpacing: "0.16em" }}>
+          <span className="mono" style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600, letterSpacing: "0.16em" }}>
             {wl.name}
           </span>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.18em" }}>· {wl.tag}</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.18em" }}>· {wl.tag}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {[["BUY", buy, "var(--buy)"], ["SELL", sell, "var(--sell)"], ["WAIT", wait, "var(--wait)"]].map(([lbl, n, c]) => (
             <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <window.Dot color={c} size={5} />
-              <span className="mono" style={{ fontSize: 10, color: "var(--ink-2)", letterSpacing: "0.14em" }}>{lbl} · {n}</span>
+              <span className="mono" style={{ fontSize: 13, color: "var(--ink-2)", letterSpacing: "0.14em" }}>{lbl} · {n}</span>
             </div>
           ))}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.16em" }}>SORT · EDGE↓</span>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.16em" }}>VIEW · GRID</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.16em" }}>SORT · EDGE↓</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.16em" }}>VIEW · GRID</span>
         </div>
       </div>
 
@@ -556,7 +560,7 @@ function Ticker({ radarData = {} }) {
         clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 100%, 0 100%)",
         paddingRight: 22,
       }}>
-        <span className="mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", color: anyLive ? "var(--bg-0)" : "var(--ink-3)" }}>
+        <span className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: anyLive ? "var(--bg-0)" : "var(--ink-3)" }}>
           {anyLive ? "◆ TAPE · LIVE" : "◇ TAPE · MOCK"}
         </span>
       </div>
@@ -566,11 +570,11 @@ function Ticker({ radarData = {} }) {
         }}>
           {items.map((a, i) => (
             <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="mono" style={{ fontSize: 10, color: a.live ? "var(--ink)" : "var(--ink-4)", letterSpacing: "0.1em" }}>{a.sym}</span>
-              <span className="num" style={{ fontSize: 10, color: "var(--ink)" }}>
+              <span className="mono" style={{ fontSize: 13, color: a.live ? "var(--ink)" : "var(--ink-4)", letterSpacing: "0.1em" }}>{a.sym}</span>
+              <span className="num" style={{ fontSize: 13, color: "var(--ink)" }}>
                 {a.price < 100 ? a.price.toFixed(2) : a.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
-              <span className="num" style={{ fontSize: 10, color: a.chg >= 0 ? "var(--buy)" : "var(--sell)" }}>
+              <span className="num" style={{ fontSize: 13, color: a.chg >= 0 ? "var(--buy)" : "var(--sell)" }}>
                 {a.chg >= 0 ? "▲" : "▼"} {Math.abs(a.chg).toFixed(2)}%
               </span>
             </span>
@@ -597,8 +601,8 @@ const MODE_TF = {
 function Stat({ k, v, c = "var(--ink)" }) {
   return (
     <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-      <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.18em" }}>{k}</span>
-      <span className="num" style={{ fontSize: 11, color: c }}>{v}</span>
+      <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.18em" }}>{k}</span>
+      <span className="num" style={{ fontSize: 13, color: c }}>{v}</span>
     </div>
   );
 }
@@ -618,7 +622,7 @@ function MetricTile({ k, v, suffix = "", color = "var(--cyan)", bar = null, text
         ) : (
           <>
             <span className="num" style={{ fontSize: 18, color, fontWeight: 600, lineHeight: 1 }}>{v}</span>
-            <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.12em" }}>{suffix}</span>
+            <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.12em" }}>{suffix}</span>
           </>
         )}
       </div>
@@ -634,7 +638,7 @@ function Level({ k, v, c }) {
       padding: "6px 10px", background: "var(--bg-1)",
       borderLeft: `2px solid ${c}`,
     }}>
-      <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.18em" }}>{k}</span>
+      <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.18em" }}>{k}</span>
       <span className="num" style={{ fontSize: 14, color: c, fontWeight: 600 }}>{v}</span>
     </div>
   );
@@ -835,8 +839,8 @@ function DeepDiveCard({ icon, title, sub, accent, onDeepDive }) {
         }}>
         <span style={{ fontSize: 15, color: accent, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
         <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-          <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)", letterSpacing: "0.1em" }}>{title}</span>
-          <span className="mono" style={{ fontSize: 8, color: "var(--ink-4)", letterSpacing: "0.1em" }}>DEEP DIVE →</span>
+          <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", letterSpacing: "0.1em" }}>{title}</span>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>DEEP DIVE →</span>
         </div>
       </button>
       {hov && sub && (
@@ -846,7 +850,7 @@ function DeepDiveCard({ icon, title, sub, accent, onDeepDive }) {
           padding: "10px 12px", pointerEvents: "none",
           boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
         }}>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", lineHeight: 1.6, letterSpacing: "0.06em" }}>{sub}</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6, letterSpacing: "0.06em" }}>{sub}</span>
         </div>
       )}
     </div>
@@ -885,13 +889,13 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
       <div style={{ height: 56, padding: "0 18px", flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 18, background: "var(--bg-2)" }}>
         <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", border: "1px solid var(--line-2)", color: "var(--ink-2)", cursor: "pointer", clipPath: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" }}>
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M7 1 L3 5 L7 9" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
-          <span className="mono" style={{ fontSize: 10, letterSpacing: "0.16em" }}>GRID</span>
+          <span className="mono" style={{ fontSize: 13, letterSpacing: "0.16em" }}>GRID</span>
         </button>
         <div style={{ width: 1, height: 28, background: "var(--line)" }} />
         <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
           <span className="mono" style={{ fontSize: 22, fontWeight: 700, letterSpacing: "0.06em", color: "var(--ink)" }}>{asset.sym}</span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.12em" }}>{asset.name} · {asset.pair}</span>
-          <window.Tag border="var(--line-2)" style={{ fontSize: 9 }}>{asset.cls}</window.Tag>
+          <span className="mono" style={{ fontSize: 13, color: "var(--ink-3)", letterSpacing: "0.12em" }}>{asset.name} · {asset.pair}</span>
+          <window.Tag border="var(--line-2)" style={{ fontSize: 12 }}>{asset.cls}</window.Tag>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginLeft: "auto" }}>
           <span className="num" style={{ fontSize: 24, fontWeight: 600, color: "var(--ink)", lineHeight: 1 }}>{fmt(asset.price)}</span>
@@ -920,8 +924,8 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
                 const active = mode === m.id;
                 return (
                   <button key={m.id} onClick={() => setMode(m.id)} style={{ padding: "7px 14px", background: active ? "var(--cyan)" : "transparent", color: active ? "var(--bg-0)" : "var(--ink-2)", border: "none", borderLeft: i ? "1px solid var(--line-2)" : "none", cursor: "pointer", display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
-                    <span className="mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.16em" }}>{m.name}</span>
-                    <span className="mono" style={{ fontSize: 7, opacity: 0.7, letterSpacing: "0.1em" }}>{m.sub}</span>
+                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.16em" }}>{m.name}</span>
+                    <span className="mono" style={{ fontSize: 11, opacity: 0.7, letterSpacing: "0.1em" }}>{m.sub}</span>
                   </button>
                 );
               })}
@@ -934,7 +938,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
                 const active = tf === t;
                 return (
                   <button key={t} onClick={() => enabled && setTf(t)} disabled={!enabled} style={{ padding: "6px 10px", background: active ? "var(--cyan)" : "transparent", color: active ? "var(--bg-0)" : enabled ? "var(--ink-2)" : "var(--ink-4)", border: "none", borderLeft: i ? "1px solid var(--line-2)" : "none", cursor: enabled ? "pointer" : "not-allowed", opacity: enabled ? 1 : 0.4 }}>
-                    <span className="mono" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em" }}>{t}</span>
+                    <span className="mono" style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.1em" }}>{t}</span>
                   </button>
                 );
               })}
@@ -966,11 +970,11 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
           <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)", background: `linear-gradient(180deg, ${c.bg}, transparent)`, flex: "0 0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <window.Label color={c.fg}>TRADE RECOMMENDATION</window.Label>
-              <window.Tag border={`${c.fg}40`} color={c.fg} style={{ fontSize: 8 }}>{mode.toUpperCase()}</window.Tag>
+              <window.Tag border={`${c.fg}40`} color={c.fg} style={{ fontSize: 11 }}>{mode.toUpperCase()}</window.Tag>
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: c.fg, letterSpacing: "0.1em" }}>{action}</span>
-              <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", letterSpacing: "0.14em" }}>· {horizon}</span>
+              <span className="mono" style={{ fontSize: 13, color: "var(--ink-3)", letterSpacing: "0.14em" }}>· {horizon}</span>
             </div>
           </div>
           <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--line)", flex: "0 0 auto" }}>
@@ -996,10 +1000,10 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
               { ok: true,                               t: "Liquidity sufficient · L1 spread tight" },
             ].map((row, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 14, height: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${row.ok ? "var(--buy)" : "var(--ink-4)"}`, color: row.ok ? "var(--buy)" : "var(--ink-4)", fontSize: 9 }}>
+                <span style={{ width: 14, height: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${row.ok ? "var(--buy)" : "var(--ink-4)"}`, color: row.ok ? "var(--buy)" : "var(--ink-4)", fontSize: 12 }}>
                   {row.ok ? "✓" : "·"}
                 </span>
-                <span className="mono" style={{ fontSize: 10, color: row.ok ? "var(--ink)" : "var(--ink-3)", letterSpacing: "0.06em" }}>{row.t}</span>
+                <span className="mono" style={{ fontSize: 13, color: row.ok ? "var(--ink)" : "var(--ink-3)", letterSpacing: "0.06em" }}>{row.t}</span>
               </div>
             ))}
           </div>
@@ -1156,7 +1160,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
         <div style={{ display: "flex", alignItems: "center", padding: "0 16px", borderRight: "1px solid var(--line)" }}>
           <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", border: "1px solid var(--line-2)", color: "var(--ink-2)", cursor: "pointer" }}>
             <svg width="10" height="10" viewBox="0 0 10 10"><path d="M7 1 L3 5 L7 9" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
-            <span className="mono" style={{ fontSize: 10, letterSpacing: "0.16em" }}>{asset.sym}</span>
+            <span className="mono" style={{ fontSize: 13, letterSpacing: "0.16em" }}>{asset.sym}</span>
           </button>
         </div>
 
@@ -1173,7 +1177,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                   color: active ? t.accent : "var(--ink-4)",
                   cursor: "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10, fontWeight: active ? 700 : 400,
+                  fontSize: 13, fontWeight: active ? 700 : 400,
                   letterSpacing: "0.16em",
                   transition: "all 140ms",
                 }}>
@@ -1188,7 +1192,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
           <span className="num" style={{ fontSize: 12, color: up ? "var(--buy)" : "var(--sell)" }}>{up ? "▲" : "▼"} {Math.abs(asset.chg).toFixed(2)}%</span>
           <div style={{ padding: "4px 10px", display: "flex", alignItems: "center", gap: 6, background: c.bg, border: `1px solid ${c.fg}50` }}>
             <window.Dot color={c.fg} size={5} blink={asset.verdict !== "WAIT"} />
-            <span className="mono" style={{ fontSize: 10, color: c.fg, fontWeight: 600, letterSpacing: "0.14em" }}>{asset.verdict}</span>
+            <span className="mono" style={{ fontSize: 13, color: c.fg, fontWeight: 600, letterSpacing: "0.14em" }}>{asset.verdict}</span>
           </div>
         </div>
       </div>
@@ -1207,7 +1211,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                   const active = tf === t;
                   return (
                     <button key={t} onClick={() => setTf(t)} style={{ padding: "5px 12px", background: active ? activeTabCfg.accent : "transparent", color: active ? "var(--bg-0)" : "var(--ink-2)", border: "none", borderLeft: i ? "1px solid var(--line-2)" : "none", cursor: "pointer" }}>
-                      <span className="mono" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em" }}>{t}</span>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.1em" }}>{t}</span>
                     </button>
                   );
                 })}
@@ -1229,7 +1233,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                         return (
                           <button key={mode} onClick={() => setLensMode(mode)}
                             style={{ padding: "5px 12px", background: active ? "var(--cyan)" : "transparent", color: active ? "var(--bg-0)" : "var(--ink-2)", border: "none", borderLeft: i ? "1px solid var(--line-2)" : "none", cursor: "pointer" }}>
-                            <span className="mono" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em" }}>{label}</span>
+                            <span className="mono" style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.1em" }}>{label}</span>
                           </button>
                         );
                       })}
@@ -1298,7 +1302,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
           <div style={{ padding: "14px 14px 0 14px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <window.Label>ALERTS & EXCEPTIONS</window.Label>
-              <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{allWarnings.length} ACTIVE</span>
+              <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{allWarnings.length} ACTIVE</span>
             </div>
             <window.AlertStrip warnings={allWarnings} />
           </div>
@@ -1310,7 +1314,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <window.Label color={activeTabCfg.accent}>AI ANALYSIS</window.Label>
-                <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 4, letterSpacing: "0.1em" }}>
+                <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 4, letterSpacing: "0.1em" }}>
                   {activeTabCfg.label} · {asset.sym}
                 </div>
               </div>
@@ -1322,23 +1326,23 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                   color: aiLoading ? "var(--wait)" : "var(--amber)",
                   cursor: aiLoading ? "default" : "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11, letterSpacing: "0.16em", fontWeight: 700,
+                  fontSize: 13, letterSpacing: "0.16em", fontWeight: 700,
                 }}>
                 {aiLoading ? "◇ ANALYZING…" : aiText ? "◆ REFRESH" : "◆ GENERATE BRIEFING"}
               </button>
             </div>
             <div style={{ padding: "16px 18px", minHeight: 80 }}>
-              {aiError && <div style={{ fontSize: 11, color: "var(--sell)", letterSpacing: "0.06em", marginBottom: 8 }}>⚠ {aiError}</div>}
+              {aiError && <div style={{ fontSize: 13, color: "var(--sell)", letterSpacing: "0.06em", marginBottom: 8 }}>⚠ {aiError}</div>}
               {aiText ? (
                 <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.75, whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em" }}>
                   {aiText}
                 </div>
               ) : !aiLoading ? (
-                <div style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em", lineHeight: 1.6 }}>
+                <div style={{ fontSize: 13, color: "var(--ink-4)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em", lineHeight: 1.6 }}>
                   Click GENERATE BRIEFING for a focused {activeTabCfg.label} analysis from Banshee's AI co-pilot. Incorporates live overlay data, alerts, and macro context.
                 </div>
               ) : (
-                <div style={{ fontSize: 11, color: "var(--wait)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em" }} className="blink">
+                <div style={{ fontSize: 13, color: "var(--wait)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em" }} className="blink">
                   ◇ Synthesizing {activeTabCfg.label} context…
                 </div>
               )}
@@ -1357,7 +1361,7 @@ const INPUT_STYLE = {
   width: "100%", boxSizing: "border-box",
   background: "var(--bg-3)", border: "1px solid var(--line-2)",
   color: "var(--ink)", padding: "7px 10px",
-  fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+  fontFamily: "'JetBrains Mono', monospace", fontSize: 13,
   letterSpacing: "0.06em", outline: "none",
 };
 
@@ -1373,7 +1377,7 @@ const SELECT_STYLE = {
 function SettingsSection({ title, children }) {
   return (
     <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: "20px 24px" }}>
-      <div className="mono" style={{ fontSize: 9, color: "var(--cyan)", letterSpacing: "0.22em", fontWeight: 700, marginBottom: 18 }}>
+      <div className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.22em", fontWeight: 700, marginBottom: 18 }}>
         {title}
       </div>
       {children}
@@ -1386,7 +1390,7 @@ function SettingsField({ label, hint, children }) {
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
         <window.Label>{label}</window.Label>
-        {hint && <span className="mono" style={{ fontSize: 8, color: "var(--ink-4)", letterSpacing: "0.12em" }}>{hint}</span>}
+        {hint && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.12em" }}>{hint}</span>}
       </div>
       {children}
     </div>
@@ -1400,10 +1404,10 @@ function SaveRow({ onSave, status }) {
       <button onClick={onSave} style={{
         padding: "7px 18px", background: "var(--cyan)", color: "var(--bg-0)",
         border: "none", cursor: "pointer",
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.18em",
       }}>SAVE</button>
       {status && (
-        <span className="mono" style={{ fontSize: 10, color, letterSpacing: "0.14em" }}>
+        <span className="mono" style={{ fontSize: 13, color, letterSpacing: "0.14em" }}>
           {status === "saved" ? "✓ SAVED" : status === "saving" ? "SAVING…" : `✗ ${status}`}
         </span>
       )}
@@ -1484,10 +1488,10 @@ function SettingsPage({ onBack }) {
       <div style={{ height: 52, padding: "0 18px", flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 18, background: "var(--bg-2)" }}>
         <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", border: "1px solid var(--line-2)", color: "var(--ink-2)", cursor: "pointer" }}>
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M7 1 L3 5 L7 9" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
-          <span className="mono" style={{ fontSize: 10, letterSpacing: "0.16em" }}>BACK</span>
+          <span className="mono" style={{ fontSize: 13, letterSpacing: "0.16em" }}>BACK</span>
         </button>
         <span className="mono" style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>SETTINGS</span>
-        <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em" }}>BANSHEE 5 CONFIGURATION</span>
+        <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.14em" }}>BANSHEE 5 CONFIGURATION</span>
       </div>
 
       {/* scrollable content */}
@@ -1496,7 +1500,7 @@ function SettingsPage({ onBack }) {
         {/* API KEYS */}
         <SettingsSection title="▸ API KEYS">
           {!loaded ? (
-            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>LOADING…</span>
+            <span className="mono" style={{ fontSize: 13, color: "var(--ink-4)" }}>LOADING…</span>
           ) : (<>
             <SettingsField label="FRED API KEY" hint="macroeconomic data">
               <input
@@ -1518,7 +1522,7 @@ function SettingsPage({ onBack }) {
               />
             </SettingsField>
             <div style={{ padding: "10px 12px", background: "rgba(56,189,248,0.04)", border: "1px solid var(--line)", marginBottom: 16 }}>
-              <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.12em", lineHeight: 1.6 }}>
+              <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.12em", lineHeight: 1.6 }}>
                 CRYPTO FEEDS — auto via CCXT (no key needed)<br/>
                 EQUITY FEEDS — via Alpaca key above<br/>
                 MACRO — via FRED key above
@@ -1531,7 +1535,7 @@ function SettingsPage({ onBack }) {
         {/* AI BRAIN */}
         <SettingsSection title="▸ AI BRAIN">
           {!loaded ? (
-            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>LOADING…</span>
+            <span className="mono" style={{ fontSize: 13, color: "var(--ink-4)" }}>LOADING…</span>
           ) : (<>
             <SettingsField label="PROVIDER">
               <select value={aiType} onChange={e => { setAiType(e.target.value); setAiModel(DEFAULT_MODELS[e.target.value] || ""); }} style={SELECT_STYLE}>
@@ -1569,13 +1573,13 @@ function SettingsPage({ onBack }) {
                 background: testing ? "var(--bg-3)" : "rgba(56,189,248,0.12)",
                 color: testing ? "var(--ink-4)" : "var(--cyan)",
                 border: "1px solid var(--cyan)", cursor: testing ? "default" : "pointer",
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.18em",
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.18em",
               }}>
                 {testing ? "TESTING…" : "TEST CONNECTION"}
               </button>
               {testStatus && (
                 <span className="mono" style={{
-                  fontSize: 10, letterSpacing: "0.1em",
+                  fontSize: 13, letterSpacing: "0.1em",
                   color: testStatus.status === "ok" ? "var(--buy)" : "var(--sell)",
                 }}>
                   {testStatus.status === "ok" ? `✓ OK — ${testStatus.message}` : `✗ ${testStatus.message}`}
@@ -1603,12 +1607,17 @@ const MACRO_SENSOR_ROWS = [
   [
     { key: "dxy",     label: "DXY DOLLAR 5D",       unit: "%" },
     { key: "curve",   label: "YIELD CURVE 10Y-3M",  unit: "%" },
-    { key: "btc",     label: "BTC 7D CANARY",        unit: "%" },
+    { key: "btc",     label: "BTC 7D CANARY",       unit: "%" },
     { key: "eth_btc", label: "ETH/BTC CRYPTO RISK", unit: "%" },
   ],
   [
-    { key: "xle",    label: "XLE DEFENSIVE ROT.",   unit: "%" },
-    { key: "copper", label: "COPPER 5D",            unit: "%" },
+    { key: "xle",    label: "XLE DEFENSIVE ROT.", unit: "%" },
+    { key: "copper", label: "COPPER 5D",          unit: "%" },
+    { key: "gold",   label: "GOLD 5D (GLD)",      unit: "%" },
+  ],
+  [
+    { key: "liquidity", label: "FED LIQUIDITY 60D", unit: "%" },
+    { key: "rotation",  label: "SECTOR ROTATION",   unit: "%" },
   ],
 ];
 
@@ -1625,7 +1634,7 @@ function MacroPage({ macroData, onBack }) {
 
   function handleMacroAI() {
     setAiLoading(true); setAiText(null); setAiError(null);
-    window.API.fetchAIBriefing("MACRO", "swing").then(r => {
+    window.API.fetchAIBriefing("MACRO", "swing", "macro").then(r => {
       setAiLoading(false);
       if (r.error) setAiError(r.error);
       else setAiText(r.text);
@@ -1639,7 +1648,7 @@ function MacroPage({ macroData, onBack }) {
       <div style={{ height: 52, padding: "0 18px", flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 18, background: "var(--bg-2)", position: "sticky", top: 0, zIndex: 5 }}>
         <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", border: "1px solid var(--line-2)", color: "var(--ink-2)", cursor: "pointer" }}>
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M7 1 L3 5 L7 9" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
-          <span className="mono" style={{ fontSize: 10, letterSpacing: "0.16em" }}>BACK</span>
+          <span className="mono" style={{ fontSize: 13, letterSpacing: "0.16em" }}>BACK</span>
         </button>
         <span className="mono" style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>MACRO WEATHER</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1649,9 +1658,9 @@ function MacroPage({ macroData, onBack }) {
           </span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.14em" }}>RISK SCORE</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.14em" }}>RISK SCORE</span>
           <span className="num" style={{ fontSize: 18, color: riskColor, fontWeight: 700 }}>{Math.round(riskScore)}</span>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)" }}>/100</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)" }}>/100</span>
         </div>
       </div>
 
@@ -1705,7 +1714,7 @@ function MacroPage({ macroData, onBack }) {
           <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <window.Label color="var(--amber)">AI MACRO COMMENTARY</window.Label>
-              <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 4, letterSpacing: "0.08em" }}>
+              <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 4, letterSpacing: "0.08em" }}>
                 Regime analysis · Sensor synthesis · Risk assessment
               </div>
             </div>
@@ -1717,23 +1726,23 @@ function MacroPage({ macroData, onBack }) {
                 color: aiLoading ? "var(--wait)" : "var(--amber)",
                 cursor: aiLoading ? "default" : "pointer",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11, letterSpacing: "0.16em", fontWeight: 700,
+                fontSize: 13, letterSpacing: "0.16em", fontWeight: 700,
               }}>
               {aiLoading ? "◇ ANALYZING…" : aiText ? "◆ REFRESH" : "◆ GENERATE BRIEFING"}
             </button>
           </div>
           <div style={{ padding: "16px 18px", minHeight: 80 }}>
-            {aiError && <div style={{ fontSize: 11, color: "var(--sell)", marginBottom: 8 }}>⚠ {aiError}</div>}
+            {aiError && <div style={{ fontSize: 13, color: "var(--sell)", marginBottom: 8 }}>⚠ {aiError}</div>}
             {aiText ? (
               <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.75, whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em" }}>
                 {aiText}
               </div>
             ) : !aiLoading ? (
-              <div style={{ fontSize: 11, color: "var(--ink-4)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em", lineHeight: 1.6 }}>
+              <div style={{ fontSize: 13, color: "var(--ink-4)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em", lineHeight: 1.6 }}>
                 Click GENERATE BRIEFING for an AI macro regime analysis based on all current sensor readings.
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: "var(--wait)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em" }} className="blink">
+              <div style={{ fontSize: 13, color: "var(--wait)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em" }} className="blink">
                 ◇ Synthesizing macro environment…
               </div>
             )}
@@ -1783,8 +1792,8 @@ function LabPage({ onBack }) {
   const selData = selected ? strategies[selected] : null;
   const selStats = selData?.stats || {};
 
-  const COL_STYLE = { fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.06em", padding: "5px 10px", borderBottom: "1px solid var(--line)" };
-  const HDR_STYLE = { ...COL_STYLE, fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em", textTransform: "uppercase" };
+  const COL_STYLE = { fontFamily: "'JetBrains Mono', monospace", fontSize: 13, letterSpacing: "0.06em", padding: "5px 10px", borderBottom: "1px solid var(--line)" };
+  const HDR_STYLE = { ...COL_STYLE, fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.14em", textTransform: "uppercase" };
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "var(--bg-0)", zIndex: 20, overflowY: "auto", display: "flex", flexDirection: "column" }}>
@@ -1794,13 +1803,13 @@ function LabPage({ onBack }) {
           <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
           <div>
             <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>◬ SIGNAL LAB</div>
-            <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Saved backtest results · Run new tests in Strategy Lab</div>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Saved backtest results · Run new tests in Strategy Lab</div>
           </div>
         </div>
         <button
           onClick={() => window.open("http://localhost:8501", "_blank")}
           className="mono"
-          style={{ padding: "8px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid var(--amber)", color: "var(--amber)", cursor: "pointer", fontSize: 10, letterSpacing: "0.14em", fontWeight: 700 }}
+          style={{ padding: "8px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid var(--amber)", color: "var(--amber)", cursor: "pointer", fontSize: 13, letterSpacing: "0.14em", fontWeight: 700 }}
         >
           OPEN STRATEGY LAB →
         </button>
@@ -1808,12 +1817,12 @@ function LabPage({ onBack }) {
 
       <div style={{ padding: "16px 24px", flex: 1 }}>
         {loading ? (
-          <div className="mono" style={{ color: "var(--ink-4)", fontSize: 11 }}>◇ Loading…</div>
+          <div className="mono" style={{ color: "var(--ink-4)", fontSize: 13 }}>◇ Loading…</div>
         ) : entries.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
             <div className="mono" style={{ color: "var(--ink-4)", fontSize: 12, marginBottom: 16 }}>No saved backtest results yet.</div>
             <button onClick={() => window.open("http://localhost:8501", "_blank")} className="mono"
-              style={{ padding: "9px 18px", background: "rgba(245,158,11,0.1)", border: "1px solid var(--amber)", color: "var(--amber)", cursor: "pointer", fontSize: 10, letterSpacing: "0.14em", fontWeight: 700 }}>
+              style={{ padding: "9px 18px", background: "rgba(245,158,11,0.1)", border: "1px solid var(--amber)", color: "var(--amber)", cursor: "pointer", fontSize: 13, letterSpacing: "0.14em", fontWeight: 700 }}>
               OPEN STRATEGY LAB →
             </button>
           </div>
@@ -1823,17 +1832,17 @@ function LabPage({ onBack }) {
             <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
               <input value={symFilter} onChange={e => setSymFilter(e.target.value)} placeholder="Filter symbol…"
                 className="mono"
-                style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "5px 10px", fontSize: 10, letterSpacing: "0.08em", outline: "none", width: 140 }} />
+                style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "5px 10px", fontSize: 13, letterSpacing: "0.08em", outline: "none", width: 140 }} />
               <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
                 className="mono"
-                style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "5px 10px", fontSize: 10, letterSpacing: "0.08em", outline: "none" }}>
+                style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "5px 10px", fontSize: 13, letterSpacing: "0.08em", outline: "none" }}>
                 {types.map(t => <option key={t}>{t}</option>)}
               </select>
-              <label className="mono" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--ink-3)", cursor: "pointer" }}>
+              <label className="mono" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink-3)", cursor: "pointer" }}>
                 <input type="checkbox" checked={hideThin} onChange={e => setHideThin(e.target.checked)} />
                 Hide thin samples (&lt;15 trades)
               </label>
-              <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{filtered.length} result(s)</span>
+              <span className="mono" style={{ fontSize: 13, color: "var(--ink-4)" }}>{filtered.length} result(s)</span>
             </div>
 
             {/* table */}
@@ -1866,7 +1875,7 @@ function LabPage({ onBack }) {
             {/* inspect panel */}
             {selData && (
               <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: 18 }}>
-                <div className="mono" style={{ fontSize: 10, color: "var(--cyan)", letterSpacing: "0.14em", marginBottom: 12 }}>{selected}</div>
+                <div className="mono" style={{ fontSize: 13, color: "var(--cyan)", letterSpacing: "0.14em", marginBottom: 12 }}>{selected}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
                   {[
                     ["Return",   String(selStats.total_return ?? selData.total_return ?? "—")],
@@ -1879,7 +1888,7 @@ function LabPage({ onBack }) {
                     ["Pre-Sig",  String(selStats.presignal_count ?? "—")],
                   ].map(([k, v]) => (
                     <div key={k} style={{ background: "var(--bg-3)", padding: "8px 12px" }}>
-                      <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em" }}>{k}</div>
+                      <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em" }}>{k}</div>
                       <div className="mono" style={{ fontSize: 13, color: colorVal(v), fontWeight: 700, marginTop: 2 }}>{v}</div>
                     </div>
                   ))}
@@ -1898,7 +1907,7 @@ function LabPage({ onBack }) {
 function NumInput({ label, value, onChange, step = 1 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{label}</div>
+      <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{label}</div>
       <input
         type="number" step={step}
         value={value}
@@ -1960,7 +1969,7 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
         <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
         <div>
           <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>⚖ RISK DESK</div>
-          <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>
+          <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>
             Position size · Margin · R-multiples{openSym ? ` · Auto-filled from ${openSym}` : ""}
           </div>
         </div>
@@ -1976,20 +1985,20 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
         </div>
 
         {/* conflicted checkbox */}
-        <label className="mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, color: conflicted ? conflictClr : "var(--ink-3)", cursor: "pointer", marginBottom: 20 }}>
+        <label className="mono" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: conflicted ? conflictClr : "var(--ink-3)", cursor: "pointer", marginBottom: 20 }}>
           <input type="checkbox" checked={conflicted} onChange={e => setConflicted(e.target.checked)} />
           ⚠ SMC CONFLICTED — halve position size (HTF/LTF structure disagrees)
         </label>
 
         {calcError && (
-          <div style={{ color: "var(--sell)", fontSize: 11, padding: "4px 0" }}>
+          <div style={{ color: "var(--sell)", fontSize: 13, padding: "4px 0" }}>
             {calcError}
           </div>
         )}
 
         {/* calculating state */}
         {calculating && (
-          <div className="mono blink" style={{ fontSize: 11, color: "var(--wait)", marginBottom: 16, letterSpacing: "0.1em" }}>◇ CALCULATING…</div>
+          <div className="mono blink" style={{ fontSize: 13, color: "var(--wait)", marginBottom: 16, letterSpacing: "0.1em" }}>◇ CALCULATING…</div>
         )}
 
         {/* results */}
@@ -1997,41 +2006,41 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
           <>
             {plan.confidence_note && (
               <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid var(--sell)", padding: "10px 16px", marginBottom: 16 }}>
-                <span className="mono" style={{ fontSize: 11, color: "var(--sell)" }}>⚠ {plan.confidence_note}</span>
+                <span className="mono" style={{ fontSize: 13, color: "var(--sell)" }}>⚠ {plan.confidence_note}</span>
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
               {/* panel 1: position size */}
               <div style={{ background: "var(--bg-2)", border: `2px solid ${conflicted ? conflictClr : dirColor}`, padding: 20 }}>
-                <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 8 }}>
+                <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 8 }}>
                   {conflicted ? "UNITS TO BUY — 50% (CONFLICTED)" : "UNITS TO BUY"}
                 </div>
                 <div className="mono" style={{ fontSize: 28, fontWeight: 800, color: conflicted ? conflictClr : dirColor }}>
                   {Number(plan.position_size).toLocaleString(undefined, { maximumFractionDigits: 4 })}
                 </div>
-                <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", marginTop: 8 }}>
+                <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 8 }}>
                   Risking: ${Number(plan.max_risk_dollars).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </div>
-                <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4 }}>
+                <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 4 }}>
                   Position value: ${Number(plan.position_value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </div>
               </div>
 
               {/* panel 2: capital efficiency */}
               <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: 20 }}>
-                <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 12 }}>CAPITAL EFFICIENCY</div>
+                <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 12 }}>CAPITAL EFFICIENCY</div>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      <th className="mono" style={{ fontSize: 9, color: "var(--ink-4)", textAlign: "left", paddingBottom: 6, letterSpacing: "0.1em" }}>LEVERAGE</th>
-                      <th className="mono" style={{ fontSize: 9, color: "var(--ink-4)", textAlign: "right", paddingBottom: 6, letterSpacing: "0.1em" }}>MARGIN REQ.</th>
+                      <th className="mono" style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "left", paddingBottom: 6, letterSpacing: "0.1em" }}>LEVERAGE</th>
+                      <th className="mono" style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "right", paddingBottom: 6, letterSpacing: "0.1em" }}>MARGIN REQ.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(plan.capital_efficiency || []).map(row => (
                       <tr key={row.leverage} style={{ borderTop: "1px solid var(--line)" }}>
-                        <td className="mono" style={{ fontSize: 11, color: "var(--ink)", padding: "5px 0", fontWeight: 700 }}>{row.leverage}x</td>
-                        <td className="mono" style={{ fontSize: 11, color: "var(--ink-2)", textAlign: "right", padding: "5px 0" }}>
+                        <td className="mono" style={{ fontSize: 13, color: "var(--ink)", padding: "5px 0", fontWeight: 700 }}>{row.leverage}x</td>
+                        <td className="mono" style={{ fontSize: 13, color: "var(--ink-2)", textAlign: "right", padding: "5px 0" }}>
                           ${Number(row.margin_required).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -2042,13 +2051,13 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
 
               {/* panel 3: exit targets */}
               <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: 20 }}>
-                <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 12 }}>EXIT TARGETS</div>
+                <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.16em", marginBottom: 12 }}>EXIT TARGETS</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(plan.targets || []).map(tgt => (
                     <div key={tgt.r_multiple} style={{ background: isLong ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.06)", border: `1px solid ${dirColor}`, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
-                        <div className="mono" style={{ fontSize: 9, color: dirColor, letterSpacing: "0.12em", fontWeight: 700 }}>{tgt.r_multiple}:1 REWARD</div>
-                        <div className="mono" style={{ fontSize: 10, color: dirColor, marginTop: 2 }}>+${Number(tgt.profit).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                        <div className="mono" style={{ fontSize: 12, color: dirColor, letterSpacing: "0.12em", fontWeight: 700 }}>{tgt.r_multiple}:1 REWARD</div>
+                        <div className="mono" style={{ fontSize: 13, color: dirColor, marginTop: 2 }}>+${Number(tgt.profit).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                       </div>
                       <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: dirColor }}>
                         ${Number(tgt.price).toLocaleString(undefined, { maximumFractionDigits: 4 })}
@@ -2060,7 +2069,7 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
             </div>
           </>
         ) : !calculating && !plan ? (
-          <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.08em" }}>
+          <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.08em" }}>
             Enter trade parameters above to calculate position size.
           </div>
         ) : null}
@@ -2192,7 +2201,7 @@ function JournalPage({ radarData, onBack }) {
     overflow: "hidden",
   };
   const sectionHeaderStyle = {
-    fontSize: 10,
+    fontSize: 13,
     color: "var(--ink-3)",
     letterSpacing: "0.14em",
     fontVariant: "small-caps",
@@ -2214,7 +2223,7 @@ function JournalPage({ radarData, onBack }) {
     border: "none",
     cursor: "pointer",
     padding: "6px 14px",
-    fontSize: 11,
+    fontSize: 13,
     borderRadius: 4,
     letterSpacing: "0.08em",
   };
@@ -2225,7 +2234,7 @@ function JournalPage({ radarData, onBack }) {
     border: "none",
     cursor: "pointer",
     padding: "6px 14px",
-    fontSize: 11,
+    fontSize: 13,
     borderRadius: 4,
     letterSpacing: "0.08em",
   };
@@ -2234,7 +2243,7 @@ function JournalPage({ radarData, onBack }) {
     border: "1px solid var(--line-2)",
     color: "var(--ink)",
     padding: "6px 10px",
-    fontSize: 11,
+    fontSize: 13,
     outline: "none",
     width: "100%",
     boxSizing: "border-box",
@@ -2258,7 +2267,7 @@ function JournalPage({ radarData, onBack }) {
           <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
           <div>
             <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>◎ TRADE JOURNAL</div>
-            <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Paper trade log · Outcome tracking</div>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Paper trade log · Outcome tracking</div>
           </div>
         </div>
         <button
@@ -2276,7 +2285,7 @@ function JournalPage({ radarData, onBack }) {
       <div style={{ padding: "20px 24px", flex: 1 }}>
         {/* error state */}
         {error && (
-          <div className="mono" style={{ color: "var(--sell)", fontSize: 11, marginBottom: 16 }}>
+          <div className="mono" style={{ color: "var(--sell)", fontSize: 13, marginBottom: 16 }}>
             ⚠ {error} — <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={loadTrades}>retry</span>
           </div>
         )}
@@ -2285,29 +2294,29 @@ function JournalPage({ radarData, onBack }) {
         {stats.total > 0 && (
           <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
             <div style={metricTileStyle}>
-              <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>CLOSED TRADES</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>CLOSED TRADES</div>
               <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{stats.total ?? "—"}</div>
             </div>
             <div style={metricTileStyle}>
-              <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>WIN RATE</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>WIN RATE</div>
               <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>
                 {stats.win_rate != null ? (stats.win_rate * 100).toFixed(0) + "%" : "—"}
               </div>
             </div>
             <div style={metricTileStyle}>
-              <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>AVG P&amp;L</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>AVG P&amp;L</div>
               <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: stats.avg_pnl != null ? (stats.avg_pnl >= 0 ? "var(--buy)" : "var(--sell)") : "var(--ink-4)" }}>
                 {stats.avg_pnl != null ? stats.avg_pnl.toFixed(1) + "%" : "—"}
               </div>
             </div>
             <div style={metricTileStyle}>
-              <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>BEST</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>BEST</div>
               <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--buy)" }}>
                 {stats.best != null ? stats.best.toFixed(1) + "%" : "—"}
               </div>
             </div>
             <div style={metricTileStyle}>
-              <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>WORST</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>WORST</div>
               <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--sell)" }}>
                 {stats.worst != null ? stats.worst.toFixed(1) + "%" : "—"}
               </div>
@@ -2341,11 +2350,11 @@ function JournalPage({ radarData, onBack }) {
                     style={{ padding: "12px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, userSelect: "none" }}
                   >
                     <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", minWidth: 60 }}>{t.symbol}</span>
-                    <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: dirColor, background: `${dirColor}22`, padding: "2px 7px", borderRadius: 3 }}>
+                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dirColor, background: `${dirColor}22`, padding: "2px 7px", borderRadius: 3 }}>
                       {t.direction ? t.direction.toUpperCase() : "—"}
                     </span>
-                    <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", flex: 1 }}>{t.verdict || ""}</span>
-                    <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{fmtDatetime(t.opened_at || t.created_at)}</span>
+                    <span className="mono" style={{ fontSize: 13, color: "var(--ink-3)", flex: 1 }}>{t.verdict || ""}</span>
+                    <span className="mono" style={{ fontSize: 13, color: "var(--ink-4)" }}>{fmtDatetime(t.opened_at || t.created_at)}</span>
                     <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: pnlColor, minWidth: 64, textAlign: "right" }}>{pnlText}</span>
                     <span style={{ color: "var(--ink-4)", fontSize: 12 }}>{isExpanded ? "▲" : "▼"}</span>
                   </div>
@@ -2363,7 +2372,7 @@ function JournalPage({ radarData, onBack }) {
                           { label: "R:R",     val: calcRR(t) ?? "—" },
                         ].map(m => (
                           <div key={m.label} style={{ ...metricTileStyle, flex: 1 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>{m.label}</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>{m.label}</div>
                             <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{m.val}</div>
                           </div>
                         ))}
@@ -2371,10 +2380,10 @@ function JournalPage({ radarData, onBack }) {
 
                       {/* edit levels form */}
                       <div style={{ background: "var(--bg-3)", border: "1px solid var(--line)", borderRadius: 6, padding: "12px 14px", marginBottom: 12 }}>
-                        <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 10 }}>EDIT LEVELS</div>
+                        <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 10 }}>EDIT LEVELS</div>
                         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
                           <div style={{ flex: 1 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>NEW STOP</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>NEW STOP</div>
                             <input
                               type="number"
                               step="any"
@@ -2389,7 +2398,7 @@ function JournalPage({ radarData, onBack }) {
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>NEW TARGET</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>NEW TARGET</div>
                             <input
                               type="number"
                               step="any"
@@ -2419,10 +2428,10 @@ function JournalPage({ radarData, onBack }) {
 
                       {/* close trade form */}
                       <div style={{ background: "rgba(239,68,68,0.05)", border: "1px solid var(--sell)", borderRadius: 6, padding: "12px 14px" }}>
-                        <div className="mono" style={{ fontSize: 9, color: "var(--sell)", letterSpacing: "0.12em", marginBottom: 10 }}>CLOSE TRADE</div>
+                        <div className="mono" style={{ fontSize: 12, color: "var(--sell)", letterSpacing: "0.12em", marginBottom: 10 }}>CLOSE TRADE</div>
                         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                           <div style={{ minWidth: 120 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>EXIT PRICE</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>EXIT PRICE</div>
                             <input
                               type="number"
                               step="any"
@@ -2436,7 +2445,7 @@ function JournalPage({ radarData, onBack }) {
                             />
                           </div>
                           <div style={{ minWidth: 150 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>EXIT REASON</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>EXIT REASON</div>
                             <select
                               value={cf.exitReason}
                               onChange={e => setCloseForm(prev => {
@@ -2450,7 +2459,7 @@ function JournalPage({ radarData, onBack }) {
                             </select>
                           </div>
                           <div style={{ flex: 1, minWidth: 160 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>NOTES</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>NOTES</div>
                             <textarea
                               rows={2}
                               value={cf.notes}
@@ -2510,11 +2519,11 @@ function JournalPage({ radarData, onBack }) {
                   >
                     <span className="mono" style={{ fontSize: 13, color: pnlColor }}>{icon}</span>
                     <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", minWidth: 60 }}>{t.symbol}</span>
-                    <span className="mono" style={{ fontSize: 10, fontWeight: 700, color: dirColor, background: `${dirColor}22`, padding: "2px 7px", borderRadius: 3 }}>
+                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: dirColor, background: `${dirColor}22`, padding: "2px 7px", borderRadius: 3 }}>
                       {t.direction ? t.direction.toUpperCase() : "—"}
                     </span>
                     <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: pnlColor, flex: 1 }}>{pnlText}</span>
-                    <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{fmtDate(t.closed_at)}</span>
+                    <span className="mono" style={{ fontSize: 13, color: "var(--ink-4)" }}>{fmtDate(t.closed_at)}</span>
                     <span style={{ color: "var(--ink-4)", fontSize: 12 }}>{isExpanded ? "▲" : "▼"}</span>
                   </div>
 
@@ -2530,7 +2539,7 @@ function JournalPage({ radarData, onBack }) {
                           { label: "TARGET", val: t.target_price != null ? t.target_price.toFixed(4) : "—" },
                         ].map(m => (
                           <div key={m.label} style={{ ...metricTileStyle, flex: 1 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>{m.label}</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>{m.label}</div>
                             <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{m.val}</div>
                           </div>
                         ))}
@@ -2539,12 +2548,12 @@ function JournalPage({ radarData, onBack }) {
                       {/* P&L metrics */}
                       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
                         <div style={{ ...metricTileStyle, flex: 1 }}>
-                          <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>P&amp;L %</div>
+                          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>P&amp;L %</div>
                           <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: pnlColor }}>{pnlText}</div>
                         </div>
                         {t.pnl_dollars != null && (
                           <div style={{ ...metricTileStyle, flex: 1 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>P&amp;L $</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>P&amp;L $</div>
                             <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: pnlColor }}>
                               {t.pnl_dollars >= 0 ? "+" : ""}${t.pnl_dollars.toFixed(2)}
                             </div>
@@ -2562,8 +2571,8 @@ function JournalPage({ radarData, onBack }) {
                             { label: "MODE",   val: t.signal_mode  || "—" },
                           ].map(ctx => (
                             <div key={ctx.label}>
-                              <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.1em" }}>{ctx.label}: </span>
-                              <span className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{ctx.val}</span>
+                              <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em" }}>{ctx.label}: </span>
+                              <span className="mono" style={{ fontSize: 13, color: "var(--ink-2)" }}>{ctx.val}</span>
                             </div>
                           ))}
                         </div>
@@ -2571,10 +2580,10 @@ function JournalPage({ radarData, onBack }) {
 
                       {/* outcome quality sub-panel */}
                       <div style={{ background: "var(--bg-3)", border: "1px solid var(--line)", borderRadius: 6, padding: "12px 14px", marginBottom: 10 }}>
-                        <div className="mono" style={{ fontSize: 9, color: "var(--amber)", letterSpacing: "0.14em", marginBottom: 12 }}>OUTCOME QUALITY</div>
+                        <div className="mono" style={{ fontSize: 12, color: "var(--amber)", letterSpacing: "0.14em", marginBottom: 12 }}>OUTCOME QUALITY</div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                           <div style={{ flex: 1, minWidth: 150 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>WAS DIRECTION CORRECT?</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>WAS DIRECTION CORRECT?</div>
                             <select
                               value={of_.directionVal}
                               onChange={e => setOutcomeForm(prev => {
@@ -2588,7 +2597,7 @@ function JournalPage({ radarData, onBack }) {
                             </select>
                           </div>
                           <div style={{ flex: 1, minWidth: 150 }}>
-                            <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>EXIT REASON</div>
+                            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>EXIT REASON</div>
                             <select
                               value={of_.exitReason}
                               onChange={e => setOutcomeForm(prev => {
@@ -2603,7 +2612,7 @@ function JournalPage({ radarData, onBack }) {
                           </div>
                         </div>
                         <div style={{ marginBottom: 10 }}>
-                          <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 4 }}>ANNOTATION NOTES</div>
+                          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 4 }}>ANNOTATION NOTES</div>
                           <textarea
                             rows={2}
                             value={of_.noteVal}
@@ -2631,11 +2640,11 @@ function JournalPage({ radarData, onBack }) {
                       {/* annotation log */}
                       {t.annotations && t.annotations.length > 0 && (
                         <div style={{ marginTop: 8 }}>
-                          <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 6 }}>ANNOTATION LOG</div>
+                          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 6 }}>ANNOTATION LOG</div>
                           {t.annotations.map((ann, i) => (
                             <div key={i} style={{ borderLeft: "2px solid var(--line)", paddingLeft: 10, marginBottom: 6 }}>
-                              <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginBottom: 2 }}>{fmtDatetime(ann.timestamp)}</div>
-                              <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>{ann.note}</div>
+                              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginBottom: 2 }}>{fmtDatetime(ann.timestamp)}</div>
+                              <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)" }}>{ann.note}</div>
                             </div>
                           ))}
                         </div>
@@ -2650,7 +2659,7 @@ function JournalPage({ radarData, onBack }) {
 
         {/* no trades state */}
         {!loading && trades.length === 0 && !error && (
-          <div className="mono" style={{ color: "var(--ink-4)", fontSize: 11, textAlign: "center", marginTop: 60, letterSpacing: "0.08em" }}>
+          <div className="mono" style={{ color: "var(--ink-4)", fontSize: 13, textAlign: "center", marginTop: 60, letterSpacing: "0.08em" }}>
             No trades logged yet. Open a paper trade from the analysis view.
           </div>
         )}
@@ -2675,7 +2684,7 @@ function JournalPage({ radarData, onBack }) {
         </button>
 
         {feedbackLoading && (
-          <div className="mono blink" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 12, letterSpacing: "0.1em" }}>◇ LOADING…</div>
+          <div className="mono blink" style={{ fontSize: 13, color: "var(--ink-4)", marginTop: 12, letterSpacing: "0.1em" }}>◇ LOADING…</div>
         )}
 
         {feedbackResult && !feedbackLoading && (
@@ -2684,15 +2693,15 @@ function JournalPage({ radarData, onBack }) {
             {(feedbackResult.judged_trades != null || feedbackResult.briefings_matched != null || feedbackResult.trades_analyzed != null) && (
               <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
                 <div style={metricTileStyle}>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>JUDGED TRADES</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>JUDGED TRADES</div>
                   <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{feedbackResult.judged_trades ?? "—"}</div>
                 </div>
                 <div style={metricTileStyle}>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>BRIEFINGS MATCHED</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>BRIEFINGS MATCHED</div>
                   <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{feedbackResult.briefings_matched ?? "—"}</div>
                 </div>
                 <div style={metricTileStyle}>
-                  <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>TRADES ANALYZED</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.12em", marginBottom: 4 }}>TRADES ANALYZED</div>
                   <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{feedbackResult.trades_analyzed ?? "—"}</div>
                 </div>
               </div>
@@ -2704,7 +2713,7 @@ function JournalPage({ radarData, onBack }) {
                 border: "1px solid var(--line)",
                 borderRadius: 6,
                 padding: "14px 16px",
-                fontSize: 11,
+                fontSize: 13,
                 color: "var(--ink-2)",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
@@ -2714,10 +2723,253 @@ function JournalPage({ radarData, onBack }) {
               </pre>
             )}
             {feedbackResult.error && (
-              <div className="mono" style={{ color: "var(--sell)", fontSize: 11, marginTop: 8 }}>⚠ {feedbackResult.error}</div>
+              <div className="mono" style={{ color: "var(--sell)", fontSize: 13, marginTop: 8 }}>⚠ {feedbackResult.error}</div>
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── PredatorCard — story card for watchlist events & discovered signals ── */
+function PredatorCard({ headline, lede, source, url, impact_score, symbols = [], accentColor }) {
+  const impactBg = impact_score >= 8 ? "var(--red)" : impact_score >= 5 ? "var(--amber)" : "var(--ink-5)";
+  return (
+    <div style={{ borderLeft: `3px solid ${accentColor}`, background: "var(--bg2)", padding: "10px 14px", marginBottom: 8, borderRadius: "0 4px 4px 0" }}>
+      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>{headline}</div>
+      <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5, marginBottom: 8,
+        display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+        {lede}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {url
+          ? <a href={url} target="_blank" rel="noreferrer" className="mono"
+              style={{ fontSize: 11, background: "var(--bg3)", color: "var(--ink-3)", padding: "1px 6px",
+                borderRadius: 3, textDecoration: "none", border: "1px solid var(--line)" }}>
+              {source}
+            </a>
+          : <span className="mono" style={{ fontSize: 11, background: "var(--bg3)", color: "var(--ink-4)",
+              padding: "1px 6px", borderRadius: 3, border: "1px solid var(--line)" }}>{source}</span>
+        }
+        <span className="mono" style={{ fontSize: 11, background: impactBg, color: "#fff",
+          padding: "1px 6px", borderRadius: 3 }}>{impact_score}/10</span>
+        {symbols.map(s => (
+          <span key={s} className="mono" style={{ fontSize: 10, color: "var(--ink-4)",
+            background: "var(--bg3)", padding: "1px 5px", borderRadius: 3 }}>{s}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── FollowupCard — compact card for yesterday's followup items ─────────── */
+function FollowupCard({ original, status, update }) {
+  const STATUS_COLOR = { escalated: "var(--red)", resolved: "var(--teal)", developing: "var(--amber)", new: "var(--cyan, #00e5ff)" };
+  const pillColor = STATUS_COLOR[(status || "").toLowerCase()] || "var(--ink-4)";
+  return (
+    <div style={{ background: "var(--bg2)", borderLeft: "3px solid var(--line)", padding: "8px 14px", marginBottom: 6, borderRadius: "0 4px 4px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <span className="mono" style={{ fontSize: 10, background: pillColor, color: "#fff",
+          padding: "1px 7px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          {status || "?"}
+        </span>
+        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--fg)" }}>{original}</span>
+      </div>
+      <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>{update}</div>
+    </div>
+  );
+}
+
+/* ── NewsPage — Daily Predator intelligence briefing (Page 9) ───────────── */
+function NewsPage({ onBack }) {
+  const [briefing, setBriefing]   = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [running, setRunning]     = useState(false);
+  const [runError, setRunError]   = useState(null);
+  const [expanded, setExpanded]   = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    window.API.fetchPredatorBriefing().then(b => { setBriefing(b); setLoading(false); });
+  };
+
+  React.useEffect(load, []);
+
+  const handleRun = async () => {
+    setRunning(true); setRunError(null);
+    const result = await window.API.runPredator(true);
+    setRunning(false);
+    if (!result) { setRunError("Pipeline failed — check Core logs."); return; }
+    setBriefing(result);
+  };
+
+  const ageLabel = () => {
+    if (!briefing?.generated_at) return "No briefing today — run the pipeline";
+    const diffMs = Date.now() - new Date(briefing.generated_at).getTime();
+    const h = Math.floor(diffMs / 3600000);
+    const m = Math.floor((diffMs % 3600000) / 60000);
+    return h > 0 ? `Generated ${h}h ${m}m ago` : `Generated ${m}m ago`;
+  };
+
+  const TONE_COLOR = { BULLISH: "var(--teal)", BEARISH: "var(--red)", NEUTRAL: "var(--ink-4)", MIXED: "var(--amber)" };
+  const toneColor = TONE_COLOR[briefing?.macro_tone] || "var(--ink-4)";
+
+  const riskDots = (level) => {
+    const colors = ["#4caf50","#8bc34a","var(--amber)","#ff9800","var(--red)"];
+    return Array.from({ length: 5 }, (_, i) => (
+      <span key={i} style={{ color: i < level ? colors[Math.min(level - 1, 4)] : "var(--line)", fontSize: 12 }}>●</span>
+    ));
+  };
+
+  const SectionHeader = ({ label, count, extra }) => (
+    <div className="mono" style={{ fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-4)",
+      borderBottom: "1px solid var(--line)", paddingBottom: 6, marginBottom: 10, marginTop: 20,
+      display: "flex", alignItems: "center", gap: 8 }}>
+      {label}
+      {count != null && <span style={{ background: "var(--bg3)", padding: "0 6px", borderRadius: 3, fontSize: 10 }}>{count}</span>}
+      {extra && <span style={{ color: "var(--amber)" }}>{extra}</span>}
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)", color: "var(--ink)", overflow: "hidden" }}>
+      {/* Back nav */}
+      <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
+        <div>
+          <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--fg)" }}>◉ PREDATOR NEWS</div>
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Daily intelligence briefing · Market signals · Discovered catalysts</div>
+        </div>
+      </div>
+
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+        {loading ? (
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", marginTop: 40 }}>◌ LOADING BRIEFING…</div>
+        ) : !briefing ? (
+          /* Empty state */
+          <div style={{ textAlign: "center", marginTop: 60 }}>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16 }}>No briefing yet for today.</div>
+            <button onClick={handleRun} disabled={running}
+              style={{ fontFamily: "inherit", fontSize: 12, letterSpacing: "0.12em", background: "var(--amber)",
+                color: "#000", border: "none", padding: "8px 18px", borderRadius: 4, cursor: "pointer" }}>
+              {running ? "◌ RUNNING PIPELINE…" : "▶ RUN DAILY PREDATOR"}
+            </button>
+            {running && <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 8 }}>This takes 2–3 minutes</div>}
+            {runError && <div className="mono" style={{ fontSize: 11, color: "var(--red)", marginTop: 8 }}>{runError}</div>}
+          </div>
+        ) : (
+          <>
+            {/* Masthead */}
+            <div style={{ textAlign: "center", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
+              <div className="mono" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3em", color: "var(--fg)" }}>THE DAILY PREDATOR</div>
+              <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4, letterSpacing: "0.1em" }}>
+                {briefing.date} · Powered by Banshee 5
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 8 }}>
+                <span className="mono" style={{ fontSize: 11, background: toneColor, color: "#fff",
+                  padding: "2px 8px", borderRadius: 3 }}>{briefing.macro_tone || "NEUTRAL"}</span>
+                <span style={{ display: "flex", gap: 3 }}>{riskDots(briefing.risk_level || 3)}</span>
+              </div>
+            </div>
+
+            {/* Top Story */}
+            {briefing.top_story && (
+              <div style={{ background: "var(--bg2)", borderLeft: "3px solid var(--amber)",
+                padding: "12px 16px", borderRadius: "0 4px 4px 0", marginBottom: 14 }}>
+                <div className="mono" style={{ fontSize: 10, letterSpacing: "0.18em", color: "var(--amber)", marginBottom: 6 }}>TOP STORY</div>
+                <div className="mono" style={{ fontSize: 14, color: "var(--fg)", lineHeight: 1.6 }}>{briefing.top_story}</div>
+              </div>
+            )}
+
+            {/* Collapsible full briefing */}
+            {briefing.ai_narrative && (
+              <div style={{ marginBottom: 14 }}>
+                <button onClick={() => setExpanded(e => !e)}
+                  style={{ background: "none", border: "1px solid var(--line)", color: "var(--ink-3)", cursor: "pointer",
+                    fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", padding: "4px 10px", borderRadius: 3 }}>
+                  {expanded ? "▲ COLLAPSE" : "▼ EXPAND FULL BRIEFING"}
+                </button>
+                {expanded && (
+                  <div style={{ marginTop: 8, background: "var(--bg2)", padding: "12px 14px", borderRadius: 4,
+                    maxHeight: 300, overflowY: "auto", fontSize: 12, lineHeight: 1.7,
+                    color: "var(--ink-3)", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
+                    {briefing.ai_narrative}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action bar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
+              padding: "10px 14px", background: "var(--bg2)", borderRadius: 4, flexWrap: "wrap" }}>
+              <button onClick={handleRun} disabled={running}
+                style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em",
+                  background: running ? "var(--bg3)" : "var(--amber)", color: running ? "var(--ink-4)" : "#000",
+                  border: "none", padding: "6px 14px", borderRadius: 3, cursor: running ? "default" : "pointer" }}>
+                {running ? "◌ RUNNING PIPELINE…" : "▶ RUN DAILY PREDATOR"}
+              </button>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{ageLabel()}</span>
+              {running && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>This takes 2–3 minutes</span>}
+              {runError && <span className="mono" style={{ fontSize: 11, color: "var(--red)" }}>{runError}</span>}
+            </div>
+
+            {/* Watchlist Events */}
+            {(briefing.watchlist_events || []).length > 0 && (
+              <>
+                <SectionHeader label="WATCHLIST EVENTS" count={briefing.watchlist_events.length} />
+                {briefing.watchlist_events.map((ev, i) => (
+                  <PredatorCard key={i} {...ev} accentColor="var(--teal)" symbols={ev.symbols || []} />
+                ))}
+              </>
+            )}
+
+            {/* Discovered Signals */}
+            {(briefing.discovered_signals || []).length > 0 && (
+              <>
+                <SectionHeader label="DISCOVERED SIGNALS" count={briefing.discovered_signals.length} extra="◉ DISCOVER" />
+                {briefing.discovered_signals.map((ev, i) => (
+                  <PredatorCard key={i} {...ev} accentColor="var(--amber)" symbols={ev.symbols || []} />
+                ))}
+              </>
+            )}
+
+            {/* Yesterday Followups */}
+            {(briefing.yesterday_followups || []).length > 0 && (
+              <>
+                <SectionHeader label="YESTERDAY — FOLLOWUPS" count={briefing.yesterday_followups.length} />
+                {briefing.yesterday_followups.map((fu, i) => (
+                  <FollowupCard key={i} {...fu} />
+                ))}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── ManualPage — in-app reference guide (Page 8) ──────────── */
+function ManualPage({ onBack }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)", color: "var(--ink)", overflow: "hidden" }}>
+      <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
+        <div>
+          <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>◌ MANUAL</div>
+          <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>How to read overlays · SMC lenses · Glossary · System guide</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "32px 24px" }}>
+        <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.12em", textAlign: "center", marginTop: 40 }}>
+          ◌ MANUAL — COMING SOON
+        </div>
+        <div className="mono" style={{ fontSize: 13, color: "var(--ink-5)", letterSpacing: "0.08em", textAlign: "center", marginTop: 12, lineHeight: 1.8 }}>
+          This page will cover the SMC Optometry lenses · GH arc reading<br/>
+          XABCD patterns · macro sensors · signal checklist · glossary
+        </div>
       </div>
     </div>
   );
@@ -2729,7 +2981,7 @@ function App() {
   const [watchlist, setWatchlist]     = useState("all");
   const [focusedSym, setFocusedSym]   = useState(null);
   const [openSym, setOpenSym]         = useState(null);
-  const [page, setPage]               = useState("grid");   // "grid" | "hub" | "analysis" | "macro" | "settings" | "lab" | "risk" | "journal"
+  const [page, setPage]               = useState("grid");   // "grid" | "hub" | "analysis" | "macro" | "settings" | "lab" | "risk" | "journal" | "manual"
   const [analysisTab, setAnalysisTab] = useState("smc");
   const [radarData, setRadarData]     = useState({});
   const [radarLoading, setRadarLoading] = useState(() => new Set(window.ASSETS.map(a => a.sym)));
@@ -2742,7 +2994,7 @@ function App() {
       if (e.key === "Escape") {
         if (page === "analysis") { setPage("hub"); return; }
         if (page === "hub")      { setOpenSym(null); setCustomAsset(null); setPage("grid"); return; }
-        if (["macro", "settings", "lab", "risk", "journal"].includes(page)) { setPage("grid"); return; }
+        if (["macro", "settings", "lab", "risk", "journal", "manual"].includes(page)) { setPage("grid"); return; }
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
@@ -2815,7 +3067,7 @@ function App() {
   function goBack() {
     if (page === "analysis") setPage("hub");
     else if (page === "hub") { setOpenSym(null); setCustomAsset(null); setPage("grid"); }
-    else if (["macro", "settings", "lab", "risk", "journal"].includes(page)) setPage("grid");
+    else if (["macro", "settings", "lab", "risk", "journal", "manual"].includes(page)) setPage("grid");
   }
 
   const liveAsset = openSym
@@ -2847,6 +3099,7 @@ function App() {
           onLab={() => setPage("lab")}
           onRisk={() => setPage("risk")}
           onJournal={() => setPage("journal")}
+          onManual={() => setPage("manual")}
           currentPage={page}
         />
         <AssetGrid
@@ -2886,6 +3139,9 @@ function App() {
         )}
         {page === "journal" && (
           <JournalPage radarData={radarData} onBack={goBack} />
+        )}
+        {page === "manual" && (
+          <ManualPage onBack={goBack} />
         )}
       </div>
     </div>
