@@ -2816,7 +2816,7 @@ function NewsPage({ onBack }) {
   const toneColor = TONE_COLOR[briefing?.macro_tone] || "var(--ink-4)";
 
   const riskDots = (level) => {
-    const colors = ["#4caf50","#8bc34a","var(--amber)","#ff9800","var(--red)"];
+    const colors = ["#4caf50","#8bc34a","var(--amber)","#ff9800","var(--sell)"];
     return Array.from({ length: 5 }, (_, i) => (
       <span key={i} style={{ color: i < level ? colors[Math.min(level - 1, 4)] : "var(--line)", fontSize: 12 }}>●</span>
     ));
@@ -2920,7 +2920,7 @@ function NewsPage({ onBack }) {
               <>
                 <SectionHeader label="WATCHLIST EVENTS" count={briefing.watchlist_events.length} />
                 {briefing.watchlist_events.map((ev, i) => (
-                  <PredatorCard key={i} {...ev} accentColor="var(--teal)" symbols={ev.symbols || []} />
+                  <PredatorCard key={i} {...ev} accentColor="var(--buy)" symbols={ev.symbols || []} />
                 ))}
               </>
             )}
