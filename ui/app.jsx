@@ -2994,7 +2994,7 @@ function App() {
       if (e.key === "Escape") {
         if (page === "analysis") { setPage("hub"); return; }
         if (page === "hub")      { setOpenSym(null); setCustomAsset(null); setPage("grid"); return; }
-        if (["macro", "settings", "lab", "risk", "journal", "manual"].includes(page)) { setPage("grid"); return; }
+        if (["macro", "settings", "lab", "risk", "journal", "manual", "news"].includes(page)) { setPage("grid"); return; }
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
@@ -3067,7 +3067,7 @@ function App() {
   function goBack() {
     if (page === "analysis") setPage("hub");
     else if (page === "hub") { setOpenSym(null); setCustomAsset(null); setPage("grid"); }
-    else if (["macro", "settings", "lab", "risk", "journal", "manual"].includes(page)) setPage("grid");
+    else if (["macro", "settings", "lab", "risk", "journal", "manual", "news"].includes(page)) setPage("grid");
   }
 
   const liveAsset = openSym
@@ -3095,7 +3095,7 @@ function App() {
           onSearch={handleSymbolSearch}
           onSettings={() => setPage("settings")}
           onMacro={() => setPage("macro")}
-          onNews={() => {}}
+          onNews={() => setPage("news")}
           onLab={() => setPage("lab")}
           onRisk={() => setPage("risk")}
           onJournal={() => setPage("journal")}
@@ -3142,6 +3142,9 @@ function App() {
         )}
         {page === "manual" && (
           <ManualPage onBack={goBack} />
+        )}
+        {page === "news" && (
+          <NewsPage onBack={goBack} />
         )}
       </div>
     </div>
