@@ -2734,10 +2734,10 @@ function JournalPage({ radarData, onBack }) {
 
 /* ── PredatorCard — story card for watchlist events & discovered signals ── */
 function PredatorCard({ headline, lede, source, url, impact_score, symbols = [], accentColor }) {
-  const impactBg = impact_score >= 8 ? "var(--red)" : impact_score >= 5 ? "var(--amber)" : "var(--ink-5)";
+  const impactBg = impact_score >= 8 ? "var(--sell)" : impact_score >= 5 ? "var(--amber)" : "var(--ink-4)";
   return (
-    <div style={{ borderLeft: `3px solid ${accentColor}`, background: "var(--bg2)", padding: "10px 14px", marginBottom: 8, borderRadius: "0 4px 4px 0" }}>
-      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>{headline}</div>
+    <div style={{ borderLeft: `3px solid ${accentColor}`, background: "var(--bg-2)", padding: "10px 14px", marginBottom: 8, borderRadius: "0 4px 4px 0" }}>
+      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>{headline}</div>
       <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5, marginBottom: 8,
         display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
         {lede}
@@ -2745,18 +2745,18 @@ function PredatorCard({ headline, lede, source, url, impact_score, symbols = [],
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
         {url
           ? <a href={url} target="_blank" rel="noreferrer" className="mono"
-              style={{ fontSize: 11, background: "var(--bg3)", color: "var(--ink-3)", padding: "1px 6px",
+              style={{ fontSize: 11, background: "var(--bg-3)", color: "var(--ink-3)", padding: "1px 6px",
                 borderRadius: 3, textDecoration: "none", border: "1px solid var(--line)" }}>
               {source}
             </a>
-          : <span className="mono" style={{ fontSize: 11, background: "var(--bg3)", color: "var(--ink-4)",
+          : <span className="mono" style={{ fontSize: 11, background: "var(--bg-3)", color: "var(--ink-4)",
               padding: "1px 6px", borderRadius: 3, border: "1px solid var(--line)" }}>{source}</span>
         }
         <span className="mono" style={{ fontSize: 11, background: impactBg, color: "#fff",
           padding: "1px 6px", borderRadius: 3 }}>{impact_score}/10</span>
         {symbols.map(s => (
           <span key={s} className="mono" style={{ fontSize: 10, color: "var(--ink-4)",
-            background: "var(--bg3)", padding: "1px 5px", borderRadius: 3 }}>{s}</span>
+            background: "var(--bg-3)", padding: "1px 5px", borderRadius: 3 }}>{s}</span>
         ))}
       </div>
     </div>
@@ -2765,16 +2765,16 @@ function PredatorCard({ headline, lede, source, url, impact_score, symbols = [],
 
 /* ── FollowupCard — compact card for yesterday's followup items ─────────── */
 function FollowupCard({ original, status, update }) {
-  const STATUS_COLOR = { escalated: "var(--red)", resolved: "var(--teal)", developing: "var(--amber)", new: "var(--cyan, #00e5ff)" };
+  const STATUS_COLOR = { escalated: "var(--sell)", resolved: "var(--buy)", developing: "var(--amber)", new: "var(--cyan, #00e5ff)" };
   const pillColor = STATUS_COLOR[(status || "").toLowerCase()] || "var(--ink-4)";
   return (
-    <div style={{ background: "var(--bg2)", borderLeft: "3px solid var(--line)", padding: "8px 14px", marginBottom: 6, borderRadius: "0 4px 4px 0" }}>
+    <div style={{ background: "var(--bg-2)", borderLeft: "3px solid var(--line)", padding: "8px 14px", marginBottom: 6, borderRadius: "0 4px 4px 0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <span className="mono" style={{ fontSize: 10, background: pillColor, color: "#fff",
           padding: "1px 7px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.1em" }}>
           {status || "?"}
         </span>
-        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--fg)" }}>{original}</span>
+        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{original}</span>
       </div>
       <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>{update}</div>
     </div>
@@ -2812,7 +2812,7 @@ function NewsPage({ onBack }) {
     return h > 0 ? `Generated ${h}h ${m}m ago` : `Generated ${m}m ago`;
   };
 
-  const TONE_COLOR = { BULLISH: "var(--teal)", BEARISH: "var(--red)", NEUTRAL: "var(--ink-4)", MIXED: "var(--amber)" };
+  const TONE_COLOR = { BULLISH: "var(--buy)", BEARISH: "var(--sell)", NEUTRAL: "var(--ink-4)", MIXED: "var(--amber)" };
   const toneColor = TONE_COLOR[briefing?.macro_tone] || "var(--ink-4)";
 
   const riskDots = (level) => {
@@ -2827,18 +2827,18 @@ function NewsPage({ onBack }) {
       borderBottom: "1px solid var(--line)", paddingBottom: 6, marginBottom: 10, marginTop: 20,
       display: "flex", alignItems: "center", gap: 8 }}>
       {label}
-      {count != null && <span style={{ background: "var(--bg3)", padding: "0 6px", borderRadius: 3, fontSize: 10 }}>{count}</span>}
+      {count != null && <span style={{ background: "var(--bg-3)", padding: "0 6px", borderRadius: 3, fontSize: 10 }}>{count}</span>}
       {extra && <span style={{ color: "var(--amber)" }}>{extra}</span>}
     </div>
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)", color: "var(--ink)", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-1)", color: "var(--ink)", overflow: "hidden" }}>
       {/* Back nav */}
       <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
         <div>
-          <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--fg)" }}>◉ PREDATOR NEWS</div>
+          <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>◉ PREDATOR NEWS</div>
           <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Daily intelligence briefing · Market signals · Discovered catalysts</div>
         </div>
       </div>
@@ -2850,20 +2850,20 @@ function NewsPage({ onBack }) {
         ) : !briefing ? (
           /* Empty state */
           <div style={{ textAlign: "center", marginTop: 60 }}>
-            <div className="mono" style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 16 }}>No briefing yet for today.</div>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", marginBottom: 16 }}>No briefing yet for today.</div>
             <button onClick={handleRun} disabled={running}
               style={{ fontFamily: "inherit", fontSize: 12, letterSpacing: "0.12em", background: "var(--amber)",
                 color: "#000", border: "none", padding: "8px 18px", borderRadius: 4, cursor: "pointer" }}>
               {running ? "◌ RUNNING PIPELINE…" : "▶ RUN DAILY PREDATOR"}
             </button>
             {running && <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 8 }}>This takes 2–3 minutes</div>}
-            {runError && <div className="mono" style={{ fontSize: 11, color: "var(--red)", marginTop: 8 }}>{runError}</div>}
+            {runError && <div className="mono" style={{ fontSize: 11, color: "var(--sell)", marginTop: 8 }}>{runError}</div>}
           </div>
         ) : (
           <>
             {/* Masthead */}
             <div style={{ textAlign: "center", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
-              <div className="mono" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3em", color: "var(--fg)" }}>THE DAILY PREDATOR</div>
+              <div className="mono" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3em", color: "var(--ink)" }}>THE DAILY PREDATOR</div>
               <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4, letterSpacing: "0.1em" }}>
                 {briefing.date} · Powered by Banshee 5
               </div>
@@ -2876,10 +2876,10 @@ function NewsPage({ onBack }) {
 
             {/* Top Story */}
             {briefing.top_story && (
-              <div style={{ background: "var(--bg2)", borderLeft: "3px solid var(--amber)",
+              <div style={{ background: "var(--bg-2)", borderLeft: "3px solid var(--amber)",
                 padding: "12px 16px", borderRadius: "0 4px 4px 0", marginBottom: 14 }}>
                 <div className="mono" style={{ fontSize: 10, letterSpacing: "0.18em", color: "var(--amber)", marginBottom: 6 }}>TOP STORY</div>
-                <div className="mono" style={{ fontSize: 14, color: "var(--fg)", lineHeight: 1.6 }}>{briefing.top_story}</div>
+                <div className="mono" style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.6 }}>{briefing.top_story}</div>
               </div>
             )}
 
@@ -2892,7 +2892,7 @@ function NewsPage({ onBack }) {
                   {expanded ? "▲ COLLAPSE" : "▼ EXPAND FULL BRIEFING"}
                 </button>
                 {expanded && (
-                  <div style={{ marginTop: 8, background: "var(--bg2)", padding: "12px 14px", borderRadius: 4,
+                  <div style={{ marginTop: 8, background: "var(--bg-2)", padding: "12px 14px", borderRadius: 4,
                     maxHeight: 300, overflowY: "auto", fontSize: 12, lineHeight: 1.7,
                     color: "var(--ink-3)", whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
                     {briefing.ai_narrative}
@@ -2903,7 +2903,7 @@ function NewsPage({ onBack }) {
 
             {/* Action bar */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
-              padding: "10px 14px", background: "var(--bg2)", borderRadius: 4, flexWrap: "wrap" }}>
+              padding: "10px 14px", background: "var(--bg-2)", borderRadius: 4, flexWrap: "wrap" }}>
               <button onClick={handleRun} disabled={running}
                 style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em",
                   background: "var(--amber)", color: "#000",
@@ -2912,7 +2912,7 @@ function NewsPage({ onBack }) {
               </button>
               <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{ageLabel()}</span>
               {running && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>This takes 2–3 minutes</span>}
-              {runError && <span className="mono" style={{ fontSize: 11, color: "var(--red)" }}>{runError}</span>}
+              {runError && <span className="mono" style={{ fontSize: 11, color: "var(--sell)" }}>{runError}</span>}
             </div>
 
             {/* Watchlist Events */}
