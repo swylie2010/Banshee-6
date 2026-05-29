@@ -473,6 +473,77 @@ def get_geo_harmonic(symbol: str, n_local: int = 233) -> str:
         return raw
 
 
+@mcp.tool()
+def generate_gh_pine(symbol: str, arithmetic_mid: bool = False) -> str:
+    """
+    Generate a paste-ready Pine Script v5 indicator that draws Banshee's
+    Geo Harmonic Fibonacci arc circles on a TradingView 1D chart.
+
+    Draws all GH circles at 6 Fib levels (0.382, 0.5, 0.618, 0.786, 1.0, 1.618)
+    as 60-point polylines. Teal = floor support, red = ceiling resistance.
+    Macro anchors (ATL/ATH) at 20% transparency, local ZigZag pivots at 60%.
+
+    Paste the returned script into TradingView's Pine Editor and run it on a 1D
+    chart. Log scale is recommended. Values are baked in — re-run after
+    significant price moves.
+
+    Args:
+        symbol:         Ticker — crypto 'BTC/USD', stocks 'NVDA', futures 'GC=F'.
+        arithmetic_mid: Use (ATH+ATL)/2 as radius endpoint instead of sqrt(ATH*ATL).
+
+    Returns: Complete Pine Script v5 string ready to paste into TradingView.
+    """
+    import json
+    raw = _get("/geo-harmonic/pine", symbol=symbol, arithmetic_mid=arithmetic_mid)
+    try:
+        data = json.loads(raw)
+        if "error" in data:
+            return f"GH PINE ERROR: {data['error']}"
+        return data.get("pine_script", raw)
+    except Exception:
+        return raw
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# XABCD HARMONIC SCANNER
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def scan_xabcd(symbol: str, pct: float = 0.03) -> str:
+    """
+    XABCD Harmonic Pattern Scanner — Gartley, Bat, Butterfly, Crab, Shark, 5-0.
+
+    Builds a ZigZag swing structure and validates every 5-point sequence against
+    Scott Carney's Fibonacci ratio tables (±5% tolerance). Also detects *forming*
+    patterns where only X, A, B, C exist and projects the Potential Reversal Zone
+    (PRZ) price range where D is expected to complete the pattern.
+
+    Use when:
+    - You want to know if a harmonic pattern is currently forming or just completed.
+    - Cross-checking a PRZ against SMC OBs/FVGs or Geo Harmonic hot zones.
+    - Looking for high-probability reversal zones backed by Fibonacci geometry.
+
+    Args:
+        symbol: Ticker — crypto 'BTC/USD', stocks 'NVDA', futures 'GC=F'.
+        pct:    ZigZag reversal threshold as a decimal (default 0.03 = 3%).
+                Lower values find more pivots (noisier); higher values = fewer, cleaner.
+
+    Returns: Confirmed patterns (with D PRZ and confidence score) and forming
+             patterns (with projected PRZ range to watch).
+    """
+    import json
+    raw = _get("/xabcd", symbol=symbol, pct=pct)
+    try:
+        data = json.loads(raw)
+        if "error" in data:
+            return f"XABCD SCANNER ERROR: {data['error']}"
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import xabcd_scanner as xs
+        return xs.format_human(data, symbol=symbol)
+    except Exception:
+        return raw
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
