@@ -1436,6 +1436,18 @@ def route_ai_briefing(req: AIBriefingRequest):
     if not cfg or not cfg.get("key"):
         return "No AI key configured. Add one in ⚙️ Settings."
 
+    # ── Macro tab: macro-environment-only briefing, no OHLCV needed ───────────
+    if req.tab == "macro":
+        mac_data, _src = _get_sensors()
+        cached         = _load_macro_cache()
+        news_lines     = cached.get("news_lines", []) if cached else []
+        predator_brief = predator_engine.load_latest_briefing()
+        predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
+        if predator_lines:
+            news_lines = [predator_lines] + news_lines
+        prompt = banshee_ai.build_macro_prompt(mac_data, news_lines)
+        return banshee_ai.call_ai(cfg, prompt)
+
     # ── SMC tab: dedicated dual-TF pathway (same engine as V4 Streamlit) ──────
     if req.tab == "smc":
         htf_tf = "1d" if mode == "swing" else "4h"
@@ -1934,6 +1946,34 @@ def route_geo_harmonic(
     if "error" not in result:
         _RESP_CACHE[_ghkey] = {"ts": time.time(), "res": result}
     return JSONResponse(content=result)
+
+
+@app.get("/geo-harmonic/pine")
+def route_geo_harmonic_pine(
+    symbol:         str  = Query(...),
+    arithmetic_mid: bool = Query(False),
+    multi_window:   bool = Query(True),
+):
+    """
+    Generate a paste-ready Pine Script v5 indicator for GH circles.
+    Returns {"symbol": ..., "pine_script": "..."}.
+    Paste the pine_script into TradingView's Pine Editor on a 1D chart.
+    """
+    import geometric_harmonic as gh
+    tfs = _get_ohlcv_cached(symbol, "swing")
+    if not tfs or "error" in tfs:
+        return JSONResponse(content={"error": f"Failed to load data for {symbol}"})
+    df = tfs.get("1d")
+    if df is None or (hasattr(df, "empty") and df.empty):
+        valid = [k for k, v in tfs.items() if isinstance(v, pd.DataFrame) and not v.empty]
+        if not valid:
+            return JSONResponse(content={"error": f"No data for {symbol}"})
+        df = tfs[valid[0]]
+    result = gh.run(df, arithmetic_mid=arithmetic_mid, multi_window=multi_window)
+    if "error" in result:
+        return JSONResponse(content={"error": result["error"]})
+    pine = gh.generate_pine_script(result, symbol=symbol)
+    return JSONResponse(content={"symbol": symbol, "pine_script": pine})
 
 
 @app.get("/xabcd")

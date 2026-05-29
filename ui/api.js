@@ -149,6 +149,19 @@ async function fetchGH(sym) {
   }
 }
 
+/* generate Pine Script v5 indicator for GH circles — returns {pine_script: "..."} */
+async function fetchGHPine(sym) {
+  const pair = coreSymbol(sym);
+  try {
+    const res = await fetch(`${API_BASE}/geo-harmonic/pine?symbol=${encodeURIComponent(pair)}&multi_window=true`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn(`[api] GH Pine fallback for ${sym}:`, err.message);
+    return { error: err.message };
+  }
+}
+
 /* request an AI synthesis briefing for a symbol — POSTs to /ai/briefing
  * tab: "nexus" | "smc" | "gh" — controls prompt focus and format
  * signal: optional AbortSignal to cancel a stale in-flight request
@@ -352,4 +365,4 @@ async function runPredator(force = true) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, coreSymbol };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, coreSymbol };
