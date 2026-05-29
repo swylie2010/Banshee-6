@@ -1040,6 +1040,9 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   const [smcLoading, setSmcLoading] = useState(false);
   const [ghData, setGhData]         = useState(null);
   const [ghLoading, setGhLoading]   = useState(false);
+  const [pineScript, setPineScript]   = useState(null);
+  const [pineLoading, setPineLoading] = useState(false);
+  const [pineError, setPineError]     = useState(null);
   const [xabcdData, setXabcdData]   = useState(null);
   const [xabcdLoading, setXabcdLoading] = useState(false);
   const [aiText, setAiText]   = useState(null);
@@ -1056,6 +1059,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   useEffect(() => {
     cancelAI();
     setSmcData(null); setGhData(null); setXabcdData(null);
+    setPineScript(null); setPineLoading(false); setPineError(null);
     setAiText(null); setAiLoading(false); setAiError(null);
     setLensMode(1);
   }, [asset.sym]);
@@ -1262,6 +1266,80 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
 
         {/* SMC key — full legend below chart on SMC tab */}
         {tab === "smc" && smcData && !smcData.error && <window.SMCLegend />}
+
+        {/* GH tab: Pine Script generator panel */}
+        {tab === "gh" && (
+          <div style={{ padding: "14px 14px 0 14px" }}>
+            <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderLeft: "3px solid var(--amber)" }}>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <window.Label color="var(--amber)">PINE SCRIPT GENERATOR</window.Label>
+                <button
+                  onClick={() => {
+                    if (pineLoading) return;
+                    setPineLoading(true); setPineError(null); setPineScript(null);
+                    window.API.fetchGHPine(asset.sym)
+                      .then(d => {
+                        if (d.error) { setPineError(d.error); }
+                        else { setPineScript(d.pine_script); }
+                      })
+                      .catch(e => setPineError(e.message))
+                      .finally(() => setPineLoading(false));
+                  }}
+                  disabled={pineLoading}
+                  style={{
+                    padding: "7px 16px",
+                    background: pineScript ? "rgba(245,158,11,0.1)" : "transparent",
+                    border: "1px solid " + (pineScript ? "var(--amber)" : "var(--line-2)"),
+                    color: pineLoading ? "var(--wait)" : "var(--amber)",
+                    cursor: pineLoading ? "default" : "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 12, letterSpacing: "0.16em", fontWeight: 700,
+                  }}>
+                  {pineLoading ? "◇ GENERATING…" : pineScript ? "◆ REGENERATE" : "◆ GENERATE PINE SCRIPT"}
+                </button>
+              </div>
+              {(pineScript || pineError) && (
+                <div style={{ padding: "12px 16px" }}>
+                  {pineError && (
+                    <div style={{ fontSize: 12, color: "var(--sell)", letterSpacing: "0.06em" }}>⚠ {pineError}</div>
+                  )}
+                  {pineScript && (
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>
+                          PASTE INTO TRADINGVIEW PINE EDITOR · 1D CHART ONLY
+                        </span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(pineScript)}
+                          style={{
+                            padding: "4px 12px",
+                            background: "var(--bg-3)",
+                            border: "1px solid var(--line-2)",
+                            color: "var(--ink-2)",
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 11, letterSpacing: "0.12em",
+                          }}>
+                          COPY
+                        </button>
+                      </div>
+                      <pre style={{
+                        margin: 0, padding: "10px 12px",
+                        background: "var(--bg-3)", border: "1px solid var(--line-2)",
+                        fontSize: 11, color: "var(--ink-2)",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        lineHeight: 1.6, overflowX: "auto",
+                        maxHeight: 280, overflowY: "auto", whiteSpace: "pre",
+                      }}>
+                        {pineScript}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* NEXUS tab: compact chart + trade rec side by side */}
         {tab === "nexus" && (
