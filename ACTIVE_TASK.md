@@ -1,4 +1,93 @@
-# Active Task: ✅ Trade Journal UI "Feedback Analysis" Button — DONE
+# Active Task: Banshee 5 — React UI Phase 6 (next)
+
+**✅ Phase 1 complete (2026-05-12):**
+- `ui/` directory created in Banshee_5 — canonical home for all React UI files
+- `index.html` — Lightweight Charts CDN added, `api.js` wired in
+- `api.js` — fetch client: real Core calls with mock fallback, symbol normalisation (BTC→BTC/USD), TF mapping (1H→1h)
+- `parts.jsx` — SVG Chart replaced with Lightweight Charts canvas. Shows ◆ LIVE / ◇ MOCK badge. Real OHLCV candles from Core working.
+- `banshee_core.py` — CORS middleware + `/ui` StaticFiles mount. Version bumped to 5.0.
+- `launch_banshee.bat` — updated to open `http://localhost:8765/ui/` instead of Streamlit
+- Streamlit (`app.py`) kept intact as fallback — run manually if needed
+
+**✅ Phase 2 complete (2026-05-13):**
+- `micro_engine.py` — payload now includes `rsi` (float) and `chg_pct` (24h % from last 2 closes on fast TF)
+- `banshee_core.py` — `/radar?output_mode=full` now returns `rsi`, `chg_pct`, `bias` (↑ STRONG/↑ MILD/→ FLAT/↓ MILD/↓ STRONG derived from trends dict); `_compute_bias()` helper added
+- `app.jsx` — `App` fetches radar for all 20 assets on mount (parallel, swing mode); `radarData` state keyed by sym; `mergeRadar()` merges live fields (price, chg, verdict, edge, bias, rsi, atr); `AssetGrid` + `Sidebar` both receive live data; `DetailView` opens with merged asset
+- `parts.jsx` — `AssetCard` shows dimmed loading overlay + blinking "◇ LOADING…" badge while pending; top stripe goes grey during load; "◆ LIVE" badge (green) replaces HUD ID once live data arrives
+
+**UI lives at:** `http://localhost:8765/ui/`
+**Restart Core** before testing to pick up micro_engine.py + banshee_core.py changes.
+
+**✅ Phase 3 complete (2026-05-13): SMC Overlay on the chart**
+- `SMCZoneRenderer` / `SMCZonePaneView` / `SMCZonePrimitive` — LW Charts v4.2 primitive classes in `parts.jsx`
+- `smcToZones()` — parses `/smc/json` response: active OBs (solid fill, dashed if gate_passed=false) + active/partial FVGs (lighter fill) + skips mitigated/filled
+- `Chart` component — accepts `smcData` + `smcLoading` props; attaches/detaches primitive on data change; SMC toggle button (top-right: "SMC ◇" loading → "SMC ◆/○" on/off)
+- HTF key levels rendered as dotted amber price lines (up to 25 levels from `flat_levels`)
+- `DetailView` — fetches SMC via `window.API.fetchSMC(sym, tf)` on symbol/tf change (cancellable); passes data + loading state to Chart
+- `api.js` — `fetchSMC` now accepts UI tf format ("4H") and maps to core format ("4h") internally
+
+**✅ Phase 4 complete (2026-05-14):**
+- `api.js` — `fetchGH(sym)` + `fetchXABCD(sym)` added; both exported on `window.API`
+- `parts.jsx` — `XABCDPrimitive` / `XABCDPaneView` / `XABCDRenderer`: canvas primitive draws XABCD leg polylines (dashed for forming, solid for confirmed) + PRZ shaded band (forming) or dotted D-level line (confirmed), point labels (X/A/B/C/D); `GHLevelsPrimitive` renders up to 12 hot zones as dashed price lines color-coded by bias (teal=floor, red=ceiling, amber=mixed; weight→opacity/thickness); Chart accepts `ghData/ghLoading` + `xabcdData/xabcdLoading`; toggle badges stacked: SMC ◆ (cyan) / GH ◆ (magenta) / XABCD ◆ (amber)
+- `app.jsx` — `DetailView` fetches both GH and XABCD on symbol change (not tf); passes all to Chart
+
+**✅ Phase 5 complete (2026-05-15):**
+- `parts.jsx` — `SMCMarkersRenderer` / `SMCMarkersPaneView` / `SMCMarkersPrimitive`: canvas primitive draws swing labels (HH/LH/HL/LL triangles, last 14 labeled swings) + BOS/CHoCH text markers with dashed tick at break level; teal=bullish, red=bearish; attached alongside zone primitive, tied to same SMC toggle
+- `parts.jsx` — EQH/EQL unswept liquidity pools as dotted `createPriceLine` calls (red=EQH resting sell stops, teal=EQL resting buy stops); swept pools skipped; managed via `eqlLinesRef`
+- `app.jsx` — `sensorsToTopBar()` maps `/macro/sensors` response to TopBar shape: short regime label, dynamic regime color (green/yellow/red via `regime_level`), 6 live flag rows (VIX/SKEW/10Y/CREDIT/DXY 5D/CURVE); defensive try-catch + `Number()` coercion guards against bad sensor values
+- `app.jsx` — `App` fetches macro on mount; TopBar regime dot/label color reflect live `regime_level`; `DetailView` + `RecBox` use live `risk_score` for PowerBar + signal checklist
+- `app.jsx` — radar fetch skips VIX/DXY/TLT (macro reference symbols that don't have a trading radar profile); eliminates console warnings for those symbols
+
+**✅ Phase 6 complete — UX Polish (2026-05-16):**
+- Version badge: `v3.42` → `v5.0`
+- Overlay toggles: added `zIndex: 10` to SMC/GH/XABCD buttons (LW Charts canvas was intercepting clicks)
+- Ticker tape: wired to live `radarData`; `◆ TAPE · LIVE` / `◇ TAPE · MOCK` badge
+- Timeframes: removed `1m`/`5m` (always mock); sniper mode now offers `15m`/`1H`
+- Macro flags: click any flag (VIX/SKEW/10Y/CREDIT/DXY 5D/CURVE) → floating explanation panel
+- Sidebar search: type any ticker → fetches Core radar, opens DetailView (handles custom symbols via `customAsset` state)
+- AI Analysis: `◆ AI ANALYSIS` button in RecBox → calls `POST /ai/briefing`, shows text inline; resets on asset change
+
+**✅ Phase 6 complete (2026-05-20):** V4 Streamlit feature audit done — 8 gaps identified, captured as Phase 7 backlog below.
+
+---
+
+# Active Task: Banshee 5 — Phase 7 (React UI — Missing Features)
+
+**Next up: #12b Hover composite (Lens 4 SNIPER)**
+
+---
+
+## Phase 7 Backlog (ordered)
+
+1. ✅ V4 feature audit — done
+2. ✅ **GH Arc Renderer** — DONE (2026-05-20). Canvas ellipses in pixel space via `GHArcPrimitive`. Teal=floor, red=ceiling, 6 Fib levels. Works correctly on 1D. Sub-daily TFs show circles at wrong horizontal positions (bar-index mismatch) — known limitation, fixable later with timestamp-based centering.
+3. ✅ **Warning/exception boxes** — DONE (2026-05-24). `computeWarnings()` + `WarnPanel` in original `app.jsx`. Then superseded by full UX redesign (see item 3b below).
+3b. ✅ **Multi-page architecture + full UX redesign** — DONE (2026-05-25). Complete rewrite of `app.jsx` (~1800 lines) + new components in `parts.jsx`. Replaces cramped RecBox/WarnPanel with 4-page routing: Grid → AssetHub → AnalysisPage (SMC/GH/NEXUS tabs) → MacroPage. `AlertCard`/`AlertStrip` for full-width V4-style alert banners. `MacroSensorCard` for expandable sensor cards. `DeepDiveCard` for navigation. `SENSOR_EXPLAIN` dict. Full-width AI panels per tab.
+4. ✅ **Settings page** — DONE (2026-05-25). Sidebar nav button + full-page layout. Two sections: API Keys (FRED, Alpaca key+secret) and AI Brain (provider dropdown: Gemini/OpenAI/Anthropic/Ollama/Custom, model, key, URL for Ollama/Tailscale, Test Connection button). Keys masked on load, server merges on save. Ollama over Tailscale confirmed working.
+5. ✅ **SMC display refinement — DONE (2026-05-27).** V4 color scheme restored, inducement borders, PD zone gradients, OTE axis labels, FVG markers, full legend below chart. SMC AI pipeline fixed (now uses smc_analysis() dual-TF pathway). Optometry UI built: four named lenses (ALL/BATTLEFIELD/FOOTPRINTS/SNIPER) on TF bar with hotkeys 1–4. Hover composite deferred to backlog (see item 12b). Spec + plan at docs/superpowers/.
+6. ✅ **Per-tab AI briefings** — DONE (2026-05-25). Each tab (SMC/GH/Nexus) now sends its `tab` param to `/ai/briefing`. `build_banshee_prompt()` has tab-specific format instructions: GH=zone status+harmonics+key levels+bias; SMC=structure+zones+liquidity+setup; Nexus=full cross-system synthesis. GH tab also injects XABCD pattern context. AbortController cancels stale in-flight requests on tab/symbol change.
+6b. ✅ **AI button recolor** — DONE (2026-05-26). All AI analysis buttons now amber (`var(--amber)`).
+6. ✅ **Risk Desk (interactive)** — DONE (2026-05-26). Full reactive position sizing calculator. 4 inputs → debounced POST to `/execution-plan` → 3 result panels (position size, capital efficiency 1x-5x leverage table, exit targets 1R/2R/3R). Auto-populates from focused symbol on mount. SMC conflicted checkbox halves size.
+7. ✅ **Trading Journal** — DONE (2026-05-26). Full React port: open trades with live P&L from radarData, edit levels / close trade forms. Closed trades with outcome quality panel and annotation log. Feedback analysis button. Two backend bugs fixed (signal_correct str vs bool, update-levels optional fields).
+8. ✅ **Signal Lab** — DONE (2026-05-26). Saved backtest results viewer with filter row + results table + inspect panel. "OPEN STRATEGY LAB →" button links out to Streamlit at localhost:8501. Option C approach (saved viewer + link-out, not iframe).
+9. ✅ **Macro Deep-Dive sidebar panel — DONE (2026-05-28).** MacroPage was already the deep-dive page. Completed it: added 3 missing sensors (gold=GLD 5D, liquidity=Fed balance 60D, rotation=XLU/XLF/XLK/XLE vs SPY) with full SENSOR_EXPLAIN entries. MACRO_SENSOR_ROWS restructured: row 3=xle/copper/gold, row 4=liquidity/rotation. Macro AI briefing fixed (was broken — `fetchAIBriefing("MACRO")` hit OHLCV fetch → error every time) and given a dedicated `tab="macro"` pathway. New `build_macro_prompt()` in `banshee_ai.py`: macro-only briefing (no per-asset data), format: Regime Read → Sensors in Focus → What to Watch → Positioning Implications. Genuinely different from Nexus: macro briefing is environment-wide, Nexus is per-asset.
+10. ✅ **News / Predator sidebar panel — DONE (2026-05-28).** Full-page NewsPage component: masthead (macro_tone badge + risk dots), top story block, collapsible ai_narrative, Run Daily Predator button with pipeline progress, Watchlist Events / Discovered Signals / Yesterday Followups card sections. PredatorCard (clickable source link when URL present, impact badge) + FollowupCard (status pill). Backend: `_attach_urls()` in `predator_engine.py` threads source-matched URLs from raw intake events into briefing JSON. CSS var naming fixed sitewide (all components now use established --bg-1, --bg-2, --bg-3, --ink, --buy, --sell). 9 commits on main.
+11. ✅ **Pine Script generator for GH — DONE (2026-05-29).** `generate_pine_script()` in `geometric_harmonic.py` — 8 circles × 6 Fib levels as 60-pt polylines in normalized log space, teal=floor/red=ceiling, macro 20% transp/local 60% transp. `GET /geo-harmonic/pine` endpoint + `generate_gh_pine` MCP tool + PINE SCRIPT GENERATOR amber panel on GH tab (scrollable code block + COPY button). Spec + plan at docs/superpowers/. 64/64 tests green.
+12b. **Hover composite (Lens 4 SNIPER)** — hovering an OB in SNIPER lens briefly reveals nearest FVG or OTE line. Deferred from Optometry UI build. Requires mouse-position tracking against chart canvas + temporary primitive state.
+12. **Banshee Manual sidebar panel** — ◌ MANUAL nav link + stub page added (2026-05-28). Navigable, shows placeholder content. Actual content (SMC lenses, GH arcs, XABCD, Optometry guide, glossary) is future work. Sidebar nav also reordered this session: MACRO WEATHER → PREDATOR NEWS → RISK DESK → TRADE JOURNAL → SIGNAL LAB → SETTINGS → MANUAL.
+
+**Trigger phrase:** "Banshee React UI wiring session"
+
+**Context (carry forward):**
+- Banshee 5 = asset-centric visual platform. Click asset → unified chart with toggleable overlays.
+- Babel standalone for now; esbuild migration after all overlays are working.
+- Signal Lab / Trade Journal keep their Streamlit tabs; link to them from React UI.
+- Diagnostic badge on Chart (⚠ / ◆ LIVE / ◇ MOCK) — keep while debugging, remove when stable.
+
+**Trigger phrase:** "Banshee React UI wiring session"
+
+---
+# Previously Completed: ✅ Trade Journal UI "Feedback Analysis" Button — DONE
 
 **Context:**
 The `get_feedback_synthesis` MCP tool and `GET /journal/feedback-synthesis` Core endpoint both exist and work. The endpoint cross-references judged closed trades with `daily_briefings.jsonl` via AI synthesis to surface recurring patterns. It is not yet exposed in the Streamlit UI.
@@ -75,11 +164,10 @@ Trigger phrase for build session: "Geometric Harmonic build session"
 2. ✅ **Directional bias per level** — `origin` tracked per circle (floor/ceiling); propagated through arc_levels → singularities → all_points → hot_zones via 65% weighted majority vote; ▼/▲/◈ symbols in chart labels, table, and MCP text (2026-05-07)
 3. ✅ **Arithmetic midpoint mode toggle** — `arithmetic_mid` param on `run()`, Core route, and UI checkbox; uses `(ATH+ATL)/2` as radius endpoint instead of `√(ATH×ATL)` (2026-05-07)
 4. ✅ **Multi-window confluence filter** — `multi_window=True` default; all 3 ZigZag windows generate circles; `source` tracked per circle (`macro_atl`, `macro_ath`, `local_144/233/377`); DBSCAN clusters filtered to 2+ distinct sources; `sources` list exposed per hot zone; UI checkbox replaces n_local selector as primary control (2026-05-07)
-5. **XABCD harmonic pattern scanner** — Gartley, Bat, Butterfly, Crab, Shark, 5-0 ratio validation. Trigger phrase: "Geo Harmonic XABCD session"
+5. ✅ **XABCD harmonic pattern scanner** — `xabcd_scanner.py` built; `GET /xabcd` Core endpoint; `scan_xabcd` MCP tool; XABCD section added to Geo Harmonic tab in `app.py`. Gartley, Bat, Alt Bat, Butterfly, Crab, Deep Crab, Shark, 5-0. ZigZag pct-reversal, ±5% ratio tolerance, confirmed + forming patterns with PRZ. (2026-05-12)
 
-**Phase 3 — Pine Script Generator:**
-Banshee computes the exact anchor parameters and outputs them as Pine Script input values. User pastes into TradingView → circles render correctly with proper log-space scaling. Division of labor: Banshee is the brain (math + coordinates), Pine is the renderer (visual). This closes the gap between text reporting and the visual information the arcs carry as price approaches them in real time.
-Trigger phrase: "Geo Harmonic Pine Script session"
+**Phase 3 — Pine Script Generator: ✅ DONE (2026-05-29)**
+`generate_pine_script()` in `geometric_harmonic.py`. Paste-ready Pine Script v5 — circles drawn as 60-pt polylines in normalized log-space (same math as engine). 1D chart only. Values baked in at generation time.
 
 ---
 ## Ops Notes (from Linux session 2026-05-08)
