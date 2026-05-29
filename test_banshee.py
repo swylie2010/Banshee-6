@@ -597,6 +597,64 @@ def _test_update_trade_levels_unknown_id():
 _test("update_trade_levels unknown id", _test_update_trade_levels_unknown_id)
 
 
+
+# --- 6. generate_pine_script ------------------------------------------------
+
+print("\n--- 6. generate_pine_script -------------------------------------------------")
+
+def _pine_valid_result():
+    import geometric_harmonic as gh
+    import numpy as np
+    import pandas as pd
+    np.random.seed(42)
+    n = 200
+    p = 10000.0 * np.cumprod(1 + np.random.normal(0, 0.01, n))
+    p[50]  = p[:50].min()  * 0.85
+    p[150] = p[100:].max() * 1.15
+    df = pd.DataFrame({
+        "timestamp": pd.date_range("2021-01-01", periods=n, freq="D"),
+        "open":  p, "high": p * 1.01, "low": p * 0.99,
+        "close": p, "volume": np.ones(n) * 1000,
+    })
+    result = gh.run(df, multi_window=True)
+    assert "error" not in result, f"run() failed: {result}"
+    script = gh.generate_pine_script(result, symbol="TEST/USD")
+    assert isinstance(script, str)
+    assert script.startswith("//@version=5")
+    assert "TEST/USD" in script
+    assert str(result["sc_macro"]) in script
+    assert "barstate.islast" in script
+    n_calls = script.count("    draw_circle(")  # 4-space indent = call site, not definition
+    assert n_calls == len(result["gh_circles"]), \
+        f"expected {len(result['gh_circles'])} draw_circle calls, got {n_calls}"
+    assert "polyline.new(" in script
+
+def _pine_error_result():
+    import geometric_harmonic as gh
+    script = gh.generate_pine_script({"error": "No data"})
+    assert script.startswith("//@version=5")
+    assert 'runtime.error("No data")' in script
+
+def _pine_no_symbol():
+    import geometric_harmonic as gh
+    import numpy as np, pandas as pd
+    np.random.seed(7)
+    n = 150
+    p = 100.0 * np.cumprod(1 + np.random.normal(0, 0.01, n))
+    df = pd.DataFrame({
+        "timestamp": pd.date_range("2022-01-01", periods=n, freq="D"),
+        "open": p, "high": p*1.01, "low": p*0.99,
+        "close": p, "volume": np.ones(n)*1000,
+    })
+    result = gh.run(df, multi_window=True)
+    script = gh.generate_pine_script(result)
+    assert "UNKNOWN" in script
+
+_test("pine: valid result -> correct Pine structure",  _pine_valid_result)
+_test("pine: error result -> error Pine script",        _pine_error_result)
+_test("pine: no symbol -> UNKNOWN in title",            _pine_no_symbol)
+
+
 # --- Summary ------------------------------------------------------------------
 
 total  = len(_results)

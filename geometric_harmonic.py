@@ -15,7 +15,7 @@ Phase 2 additions:
   - arithmetic_mid: toggle to use (ATH+ATL)/2 instead of √(ATH×ATL) as radius endpoint
   - multi_window: run all 3 ZigZag windows; hot zones require 2+ distinct source confluence
 
-Design spec: ~/AntiEverything/Banshee_Pro_4/ACTIVE_TASK.md (Geometric Harmonic section)
+Design spec: ~/AntiEverything/Banshee_5/ACTIVE_TASK.md (Geometric Harmonic section)
 """
 
 import numpy as np
@@ -335,6 +335,17 @@ def run(df: pd.DataFrame, n_local: int = 233,
         },
         "arc_levels_at_now":   sorted(arc_levels, key=lambda a: abs(a["dist_pct"]))[:24],
         "hot_zones":           hot_zones[:15],
+        "gh_circles": [
+            {
+                "cx_bar":       round(c["cx"], 2),
+                "center_price": round(dp(c["cy"]), 4),
+                "r_base":       round(float(np.hypot(mid_x - c["cx"], mid_y - c["cy"])), 4),
+                "origin":       c["origin"],
+                "source":       c["source"],
+                "label":        c["label"],
+            }
+            for c in circles
+        ],
         "zigzag":              zigzag_records,
         "total_circles":       len(circles),
         "total_singularities": len(raw_singularities),
@@ -402,3 +413,88 @@ def format_human(result: dict, symbol: str = "") -> str:
         f"Circles: {result.get('total_circles', 0)}",
     ]
     return "\n".join(lines)
+
+
+def generate_pine_script(result: dict, symbol: str = "") -> str:
+    """
+    Generate a paste-ready Pine Script v5 indicator that draws Banshee's GH
+    Fibonacci arc circles on a TradingView 1D chart as polylines.
+
+    6 Fib levels: 0.382, 0.500, 0.618, 0.786, 1.000, 1.618.
+    60 points per arc. Teal = floor support, red = ceiling resistance.
+    Macro anchors at 20% transparency, local ZigZag pivots at 60%.
+
+    WARNING: 1D chart only. Bar-index math assumes daily spacing.
+    Re-generate after significant price moves.
+    """
+    if "error" in result:
+        err = result["error"].replace('"', '\\"')
+        return (
+            "//@version=5\n"
+            'indicator("Banshee GH — ERROR", overlay=true)\n'
+            f'runtime.error("{err}")\n'
+        )
+
+    from datetime import date as _date
+
+    sc_macro  = result["sc_macro"]
+    t_now     = result["radius_endpoint"]["bar"]
+    circles   = result.get("gh_circles", [])
+    anchors   = result.get("anchors", {})
+    atl       = anchors.get("ATL", {})
+    ath       = anchors.get("ATH", {})
+    sym_label = (symbol or "UNKNOWN").replace('"', '\\"')
+    today     = _date.today().isoformat()
+
+    call_lines: list = []
+    for c in circles:
+        bars_ago = int(round(t_now - c["cx_bar"]))
+        cp       = c["center_price"]
+        r_base   = c["r_base"]
+        clr      = "color.teal" if c["origin"] == "floor" else "color.red"
+        transp   = "20" if "macro" in c["source"] else "60"
+        label    = c["label"]
+        call_lines.append(
+            f'    draw_circle({bars_ago}, {cp}, {r_base}, {clr}, {transp})  // {label}'
+        )
+
+    calls = "\n".join(call_lines) if call_lines else "    // no circles computed"
+
+    return "\n".join([
+        "//@version=5",
+        f'indicator("Banshee GH — {sym_label}", overlay=true, max_polylines_count=100)',
+        f"// Generated: {today} | Symbol: {sym_label}",
+        f"// ATL: {str(atl.get('ts', '?'))[:10]} @ {atl.get('price', 0)}"
+        f"  |  ATH: {str(ath.get('ts', '?'))[:10]} @ {ath.get('price', 0)}",
+        "// WARNING: 1D CHART ONLY — log scale recommended",
+        "",
+        "// Hardcoded parameters — regenerate from Banshee when price moves significantly",
+        f"SC_MACRO   = float({sc_macro})",
+        "FIB_RATIOS = array.from(0.382, 0.500, 0.618, 0.786, 1.000, 1.618)",
+        "N_PTS      = 60",
+        "",
+        "// bars_ago: daily bars before today the anchor sits",
+        "// cp: anchor price | r_base: base radius in normalized log space",
+        "// clr: teal=floor support, red=ceiling resistance",
+        "// transp: 20=macro anchor, 60=local ZigZag pivot",
+        "draw_circle(int bars_ago, float cp, float r_base, color clr, int transp) =>",
+        "    cy_norm = math.log(cp) / SC_MACRO",
+        "    for fi = 0 to array.size(FIB_RATIOS) - 1",
+        "        fib   = array.get(FIB_RATIOS, fi)",
+        "        r_fib = r_base * fib",
+        "        pts   = array.new<chart.point>()",
+        "        for i = 0 to N_PTS - 1",
+        "            theta  = float(i) / float(N_PTS) * 2.0 * math.pi",
+        "            x_abs  = int(math.round(float(bar_index - bars_ago) + r_fib * math.cos(theta)))",
+        "            y_norm = cy_norm + r_fib * math.sin(theta)",
+        "            price  = math.exp(y_norm * SC_MACRO)",
+        "            if x_abs >= 0 and price > 0.0",
+        "                array.push(pts, chart.point.from_index(x_abs, price))",
+        "        if array.size(pts) > 1",
+        "            polyline.new(pts, curved=false,",
+        "                         line_color=color.new(clr, transp),",
+        "                         line_width=1)",
+        "",
+        "if barstate.islast",
+        calls,
+    ]) + "\n"
