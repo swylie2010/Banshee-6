@@ -1043,6 +1043,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   const [pineScript, setPineScript]   = useState(null);
   const [pineLoading, setPineLoading] = useState(false);
   const [pineError, setPineError]     = useState(null);
+  const [pineOpen, setPineOpen]       = useState(false);
   const [xabcdData, setXabcdData]   = useState(null);
   const [xabcdLoading, setXabcdLoading] = useState(false);
   const [aiText, setAiText]   = useState(null);
@@ -1050,6 +1051,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   const [aiError, setAiError]   = useState(null);
   const aiAbortRef = useRef(null);
   const [lensMode, setLensMode] = useState(1);
+  const [hoveredElement, setHoveredElement] = useState(null);
 
   function cancelAI() {
     if (aiAbortRef.current) { aiAbortRef.current.abort(); aiAbortRef.current = null; }
@@ -1259,7 +1261,9 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                 showSMC={showSMC} setShowSMC={() => {}}
                 showGH={showGH} setShowGH={() => {}}
                 showXABCD={showXABCD} setShowXABCD={() => {}}
-                lensMode={lensMode} />
+                lensMode={lensMode}
+                currentPrice={asset.price}
+                onHover={setHoveredElement} />
             </div>
           </div>
         )}
@@ -1267,76 +1271,41 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
         {/* SMC key — full legend below chart on SMC tab */}
         {tab === "smc" && smcData && !smcData.error && <window.SMCLegend />}
 
-        {/* GH tab: Pine Script generator panel */}
-        {tab === "gh" && (
+        {/* GH tab: circle coordinate table for TV Fib Circles placement */}
+        {tab === "gh" && ghData && !ghData.error && Array.isArray(ghData.gh_circles) && ghData.gh_circles.length > 0 && (
           <div style={{ padding: "14px 14px 0 14px" }}>
-            <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderLeft: "3px solid var(--amber)" }}>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <window.Label color="var(--amber)">PINE SCRIPT GENERATOR</window.Label>
-                <button
-                  onClick={() => {
-                    if (pineLoading) return;
-                    setPineLoading(true); setPineError(null); setPineScript(null);
-                    window.API.fetchGHPine(asset.sym)
-                      .then(d => {
-                        if (d.error) { setPineError(d.error); }
-                        else { setPineScript(d.pine_script); }
-                      })
-                      .catch(e => setPineError(e.message))
-                      .finally(() => setPineLoading(false));
-                  }}
-                  disabled={pineLoading}
-                  style={{
-                    padding: "7px 16px",
-                    background: pineScript ? "rgba(245,158,11,0.1)" : "transparent",
-                    border: "1px solid " + (pineScript ? "var(--amber)" : "var(--line-2)"),
-                    color: pineLoading ? "var(--wait)" : "var(--amber)",
-                    cursor: pineLoading ? "default" : "pointer",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 12, letterSpacing: "0.16em", fontWeight: 700,
-                  }}>
-                  {pineLoading ? "◇ GENERATING…" : pineScript ? "◆ REGENERATE" : "◆ GENERATE PINE SCRIPT"}
-                </button>
-              </div>
-              {(pineScript || pineError) && (
-                <div style={{ padding: "12px 16px" }}>
-                  {pineError && (
-                    <div style={{ fontSize: 12, color: "var(--sell)", letterSpacing: "0.06em" }}>⚠ {pineError}</div>
-                  )}
-                  {pineScript && (
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>
-                          PASTE INTO TRADINGVIEW PINE EDITOR · 1D CHART ONLY
-                        </span>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(pineScript)}
-                          style={{
-                            padding: "4px 12px",
-                            background: "var(--bg-3)",
-                            border: "1px solid var(--line-2)",
-                            color: "var(--ink-2)",
-                            cursor: "pointer",
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 11, letterSpacing: "0.12em",
-                          }}>
-                          COPY
-                        </button>
-                      </div>
-                      <pre style={{
-                        margin: 0, padding: "10px 12px",
-                        background: "var(--bg-3)", border: "1px solid var(--line-2)",
-                        fontSize: 11, color: "var(--ink-2)",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        lineHeight: 1.6, overflowX: "auto",
-                        maxHeight: 280, overflowY: "auto", whiteSpace: "pre",
-                      }}>
-                        {pineScript}
-                      </pre>
-                    </div>
-                  )}
+            <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderLeft: "3px solid var(--magenta)" }}>
+              <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)" }}>
+                <window.Label color="var(--magenta)">CIRCLE COORDINATES · TV FIB CIRCLES</window.Label>
+                <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4, letterSpacing: "0.08em" }}>
+                  Place 2 concurrent Fib Circles in TradingView: one ATL → Radius Endpoint, one ATH → Radius Endpoint
                 </div>
-              )}
+              </div>
+              <div style={{ padding: "10px 16px", overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
+                      {["CIRCLE", "ORIGIN", "ANCHOR DATE", "ANCHOR PRICE", "RADIUS ENDPOINT DATE", "RADIUS ENDPOINT PRICE"].map(h => (
+                        <th key={h} style={{ padding: "4px 10px", textAlign: "left", color: "var(--ink-4)", letterSpacing: "0.1em", fontWeight: 700, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ghData.gh_circles.map((c, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid var(--bg-3)" }}>
+                        <td style={{ padding: "5px 10px", color: "var(--ink)", letterSpacing: "0.06em" }}>{c.label}</td>
+                        <td style={{ padding: "5px 10px", color: c.origin === "floor" ? "var(--buy)" : "var(--sell)", letterSpacing: "0.06em" }}>
+                          {c.origin === "floor" ? "▲ FLOOR" : "▼ CEIL"}
+                        </td>
+                        <td style={{ padding: "5px 10px", color: "var(--cyan)", letterSpacing: "0.06em" }}>{c.cx_ts || "—"}</td>
+                        <td style={{ padding: "5px 10px", color: "var(--ink-2)", letterSpacing: "0.06em" }}>{c.center_price?.toLocaleString()}</td>
+                        <td style={{ padding: "5px 10px", color: "var(--ink-2)", letterSpacing: "0.06em" }}>{ghData.radius_endpoint?.ts || "—"}</td>
+                        <td style={{ padding: "5px 10px", color: "var(--ink-2)", letterSpacing: "0.06em" }}>{ghData.radius_endpoint?.price?.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -1387,7 +1356,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
         )}
 
         {/* AI Analysis panel */}
-        <div style={{ padding: "14px 14px 20px 14px" }}>
+        <div style={{ padding: "14px 14px 0 14px" }}>
           <div style={{ background: "var(--bg-2)", border: `1px solid ${activeTabCfg.hex}30`, borderLeft: `3px solid ${activeTabCfg.accent}` }}>
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
@@ -1427,6 +1396,96 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
             </div>
           </div>
         </div>
+
+        {/* GH tab: Pine Script generator panel (collapsible, below AI analysis) */}
+        {tab === "gh" && (
+          <div style={{ padding: "14px 14px 20px 14px" }}>
+            <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderLeft: "3px solid var(--amber)" }}>
+              <div style={{ padding: "12px 16px", borderBottom: pineOpen ? "1px solid var(--line)" : "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <button onClick={() => setPineOpen(o => !o)}
+                  style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                  <window.Label color="var(--amber)">PINE SCRIPT GENERATOR</window.Label>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--amber)", letterSpacing: "0.1em" }}>{pineOpen ? "▲" : "▼"}</span>
+                </button>
+                {pineOpen && (
+                  <button
+                    onClick={() => {
+                      if (pineLoading) return;
+                      setPineLoading(true); setPineError(null); setPineScript(null);
+                      window.API.fetchGHPine(asset.sym)
+                        .then(d => {
+                          if (d.error) { setPineError(d.error); }
+                          else { setPineScript(d.pine_script); }
+                        })
+                        .catch(e => setPineError(e.message))
+                        .finally(() => setPineLoading(false));
+                    }}
+                    disabled={pineLoading}
+                    style={{
+                      padding: "7px 16px",
+                      background: pineScript ? "rgba(245,158,11,0.1)" : "transparent",
+                      border: "1px solid " + (pineScript ? "var(--amber)" : "var(--line-2)"),
+                      color: pineLoading ? "var(--wait)" : "var(--amber)",
+                      cursor: pineLoading ? "default" : "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 12, letterSpacing: "0.16em", fontWeight: 700,
+                    }}>
+                    {pineLoading ? "◇ GENERATING…" : pineScript ? "◆ REGENERATE" : "◆ GENERATE PINE SCRIPT"}
+                  </button>
+                )}
+              </div>
+              {pineOpen && (pineScript || pineError) && (
+                <div style={{ padding: "12px 16px" }}>
+                  {pineError && (
+                    <div style={{ fontSize: 12, color: "var(--sell)", letterSpacing: "0.06em" }}>⚠ {pineError}</div>
+                  )}
+                  {pineScript && (
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>
+                          PASTE INTO TRADINGVIEW PINE EDITOR · 1D CHART ONLY
+                        </span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(pineScript)}
+                          style={{
+                            padding: "4px 12px",
+                            background: "var(--bg-3)",
+                            border: "1px solid var(--line-2)",
+                            color: "var(--ink-2)",
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 11, letterSpacing: "0.12em",
+                          }}>
+                          COPY
+                        </button>
+                      </div>
+                      <pre style={{
+                        margin: 0, padding: "10px 12px",
+                        background: "var(--bg-3)", border: "1px solid var(--line-2)",
+                        fontSize: 11, color: "var(--ink-2)",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        lineHeight: 1.6, overflowX: "auto",
+                        maxHeight: 280, overflowY: "auto", whiteSpace: "pre",
+                      }}>
+                        {pineScript}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+              {pineOpen && !pineScript && !pineError && !pineLoading && (
+                <div style={{ padding: "12px 16px" }}>
+                  <div style={{ fontSize: 12, color: "var(--ink-4)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em" }}>
+                    Generates a paste-ready Pine Script v5 with all GH circles as polylines. 1D chart only.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Bottom padding for non-GH tabs */}
+        {tab !== "gh" && <div style={{ paddingBottom: 20 }} />}
       </div>
     </div>
   );
@@ -2833,7 +2892,7 @@ function PredatorCard({ headline, lede, source, url, impact_score, symbols = [],
         <span className="mono" style={{ fontSize: 11, background: impactBg, color: "#fff",
           padding: "1px 6px", borderRadius: 3 }}>{impact_score}/10</span>
         {symbols.map(s => (
-          <span key={s} className="mono" style={{ fontSize: 10, color: "var(--ink-4)",
+          <span key={s} className="mono" style={{ fontSize: 11, color: "var(--ink-4)",
             background: "var(--bg-3)", padding: "1px 5px", borderRadius: 3 }}>{s}</span>
         ))}
       </div>
@@ -2848,7 +2907,7 @@ function FollowupCard({ original, status, update }) {
   return (
     <div style={{ background: "var(--bg-2)", borderLeft: "3px solid var(--line)", padding: "8px 14px", marginBottom: 6, borderRadius: "0 4px 4px 0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <span className="mono" style={{ fontSize: 10, background: pillColor, color: "#fff",
+        <span className="mono" style={{ fontSize: 11, background: pillColor, color: "#fff",
           padding: "1px 7px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.1em" }}>
           {status || "?"}
         </span>
@@ -2905,7 +2964,7 @@ function NewsPage({ onBack }) {
       borderBottom: "1px solid var(--line)", paddingBottom: 6, marginBottom: 10, marginTop: 20,
       display: "flex", alignItems: "center", gap: 8 }}>
       {label}
-      {count != null && <span style={{ background: "var(--bg-3)", padding: "0 6px", borderRadius: 3, fontSize: 10 }}>{count}</span>}
+      {count != null && <span style={{ background: "var(--bg-3)", padding: "0 6px", borderRadius: 3, fontSize: 11 }}>{count}</span>}
       {extra && <span style={{ color: "var(--amber)" }}>{extra}</span>}
     </div>
   );
@@ -2956,7 +3015,7 @@ function NewsPage({ onBack }) {
             {briefing.top_story && (
               <div style={{ background: "var(--bg-2)", borderLeft: "3px solid var(--amber)",
                 padding: "12px 16px", borderRadius: "0 4px 4px 0", marginBottom: 14 }}>
-                <div className="mono" style={{ fontSize: 10, letterSpacing: "0.18em", color: "var(--amber)", marginBottom: 6 }}>TOP STORY</div>
+                <div className="mono" style={{ fontSize: 11, letterSpacing: "0.18em", color: "var(--amber)", marginBottom: 6 }}>TOP STORY</div>
                 <div className="mono" style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.6 }}>{briefing.top_story}</div>
               </div>
             )}

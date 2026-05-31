@@ -327,9 +327,21 @@ class SMCZoneRenderer {
         const rawTop = series.priceToCoordinate(z.top);
         const rawBot = series.priceToCoordinate(z.bottom);
         if (rawTop === null && rawBot === null) continue;
+        const currentPrice = this._source._currentPrice;
+        const lensMode     = this._source._lensMode;
         const topPx = Math.max(0, Math.min(rawTop ?? 0, rawBot ?? bh / vr) * vr);
         const botPx = Math.min(bh, Math.max(rawTop ?? 0, rawBot ?? bh / vr) * vr);
         const h = Math.max(1, botPx - topPx);
+
+        /* Dynamic visual weight */
+        let dynMult = 1.0;
+        if (currentPrice && currentPrice > 0) {
+          const mid = (z.top + z.bottom) / 2;
+          const pct = Math.abs(mid - currentPrice) / currentPrice;
+          if (pct > 0.03) {
+            dynMult = lensMode === 4 ? 0.40 : 0.35;
+          }
+        }
 
         /* Spec color system — direct hex, no CSS vars */
         const OB_FILL   = { bullish: "#1565C0", bearish: "#B71C1C" };
@@ -354,8 +366,8 @@ class SMCZoneRenderer {
           ? (z.status === "partial" ? 0.25 : 0.55)
           : (z.dashed ? 0.06 : 0.22);
         const bordAlp = z.dashed ? 0.28 : 0.75;
-        const toFill  = (a) => Math.round(a * z.opacity * statusMult * 255).toString(16).padStart(2, "0");
-        const toBord  = (a) => Math.round(a * z.opacity * statusMult * 255).toString(16).padStart(2, "0");
+        const toFill  = (a) => Math.round(a * z.opacity * statusMult * dynMult * 255).toString(16).padStart(2, "0");
+        const toBord  = (a) => Math.round(a * z.opacity * statusMult * dynMult * 255).toString(16).padStart(2, "0");
 
         ctx.fillStyle = fillBase + toFill(fillAlp);
         ctx.fillRect(0, topPx, bw, h);
@@ -409,13 +421,13 @@ class SMCZoneRenderer {
           ctx.textAlign = "right";
           if (badge) {
             ctx.font      = `${fSize}px sans-serif`;
-            ctx.fillStyle = badgeColor + Math.round(z.opacity * 220).toString(16).padStart(2, "0");
+            ctx.fillStyle = badgeColor + Math.round(z.opacity * dynMult * 220).toString(16).padStart(2, "0");
             ctx.fillText(badge, curX, baseY);
             curX -= 14 * hr;
           }
           if (hasConf) {
             ctx.font      = `bold ${fSize}px sans-serif`;
-            ctx.fillStyle = "#FFFFFF" + Math.round(z.opacity * 220).toString(16).padStart(2, "0");
+            ctx.fillStyle = "#FFFFFF" + Math.round(z.opacity * dynMult * 220).toString(16).padStart(2, "0");
             ctx.fillText("★", curX, baseY);
           }
         }
@@ -432,11 +444,13 @@ class SMCZonePaneView {
 }
 
 class SMCZonePrimitive {
-  constructor(zones, chart) {
-    this._zones     = zones;
-    this._chart     = chart || null;
-    this._series    = null;
-    this._paneViews = [new SMCZonePaneView(this)];
+  constructor(zones, chart, lensMode = 1, currentPrice = null) {
+    this._zones        = zones;
+    this._chart        = chart || null;
+    this._lensMode     = lensMode;
+    this._currentPrice = currentPrice;
+    this._series       = null;
+    this._paneViews    = [new SMCZonePaneView(this)];
   }
   attached({ series }) { this._series = series; }
   detached()           { this._series = null; }
@@ -1030,13 +1044,13 @@ function SMCLegend() {
   );
 }
 
-function filterZonesForLens(zones, lensMode) {
+function filterZonesForLens(zones, lensMode, currentPrice) {
   if (lensMode === 1) return zones; // ALL — no filter
 
   if (lensMode === 2) return []; // BATTLEFIELD — no OBs or FVGs
 
   if (lensMode === 3) {
-    // FOOTPRINTS: FVGs + inducement-pending OBs + candidate OBs
+    // FOOTPRINTS: FVGs + inducement-pending OBs
     return zones.filter(z => {
       if (z.type === "fvg") return true;
       if (z.type === "ob") return z.has_pending_inducement || !z.gate_passed;
@@ -1045,21 +1059,21 @@ function filterZonesForLens(zones, lensMode) {
   }
 
   if (lensMode === 4) {
-    // SNIPER: OBs only (no FVGs), with opacity tiers
-    return zones
-      .filter(z => z.type === "ob" && z.gate_passed) // exclude FVGs + candidates
-      .map(z => {
-        if (z.inducement_swept) return z; // full opacity as-is
-        if (z.has_pending_inducement || z.status === "active") return { ...z, opacity: 0.40 };
-        if (z.status === "touched" || z.status === "degraded")  return { ...z, opacity: 0.20 };
-        return z;
-      });
+    // SNIPER: gate-passed OBs only, nearest = 100%, others = 40%
+    const obs = zones.filter(z => z.type === "ob" && z.gate_passed);
+    if (!currentPrice || !obs.length) return obs;
+    let bestIdx = 0, bestDist = Infinity;
+    obs.forEach((z, i) => {
+      const dist = Math.abs(((z.top + z.bottom) / 2) - currentPrice);
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    });
+    return obs.map((z, i) => ({ ...z, opacity: i === bestIdx ? 1.0 : 0.40 }));
   }
 
-  return zones; // fallback
+  return zones;
 }
 
-function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = null, smcLoading = false, ghData = null, ghLoading = false, xabcdData = null, xabcdLoading = false, showSMC = true, setShowSMC = () => {}, showGH = true, setShowGH = () => {}, showXABCD = true, setShowXABCD = () => {}, lensMode = 1 }) {
+function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = null, smcLoading = false, ghData = null, ghLoading = false, xabcdData = null, xabcdLoading = false, showSMC = true, setShowSMC = () => {}, showGH = true, setShowGH = () => {}, showXABCD = true, setShowXABCD = () => {}, lensMode = 1, currentPrice = null, onHover = null }) {
   const containerRef  = useRef(null);
   const chartRef      = useRef(null);
   const seriesRef     = useRef(null);
@@ -1250,9 +1264,9 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     }
 
     const rawZones = smcToZones(smcData);
-    const zones = filterZonesForLens(rawZones, lensMode).map(z => ({ ...z, opacity: z.opacity * opacityMult }));
+    const zones = filterZonesForLens(rawZones, lensMode, currentPrice).map(z => ({ ...z, opacity: z.opacity * opacityMult }));
     if (zones.length) {
-      const prim = new SMCZonePrimitive(zones, chartRef.current);
+      const prim = new SMCZonePrimitive(zones, chartRef.current, lensMode, currentPrice);
       try {
         series.attachPrimitive(prim);
         primitiveRef.current = prim;
@@ -1285,7 +1299,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     if (showMarkers && chartRef.current) {
       const { swings, events } = smcToMarkers(smcData);
       if (swings.length || events.length) {
-        const mkPrim = new SMCMarkersPrimitive(swings, events, chartRef.current, lensMode, null);
+        const mkPrim = new SMCMarkersPrimitive(swings, events, chartRef.current, lensMode, currentPrice);
         try { series.attachPrimitive(mkPrim); smcMarkersPrimRef.current = mkPrim; } catch {}
       }
     }
@@ -1362,7 +1376,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       });
       oteLinesRef.current = [];
     };
-  }, [smcData, showSMC, opacityMult, lensMode]);
+  }, [smcData, showSMC, opacityMult, lensMode, currentPrice]);
 
   /* GH overlay — arc primitives drawn on canvas */
   useEffect(() => {
