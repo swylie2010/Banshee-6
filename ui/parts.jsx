@@ -322,25 +322,24 @@ class SMCZoneRenderer {
       const bw = bitmapSize.width;
       const bh = bitmapSize.height;
       ctx.save();
+      const currentPrice = this._source._currentPrice;
+      const lensMode     = this._source._lensMode;
 
       for (const z of zones) {
         const rawTop = series.priceToCoordinate(z.top);
         const rawBot = series.priceToCoordinate(z.bottom);
         if (rawTop === null && rawBot === null) continue;
-        const currentPrice = this._source._currentPrice;
-        const lensMode     = this._source._lensMode;
         const topPx = Math.max(0, Math.min(rawTop ?? 0, rawBot ?? bh / vr) * vr);
         const botPx = Math.min(bh, Math.max(rawTop ?? 0, rawBot ?? bh / vr) * vr);
         const h = Math.max(1, botPx - topPx);
 
         /* Dynamic visual weight */
         let dynMult = 1.0;
-        if (currentPrice && currentPrice > 0) {
+        if (lensMode !== 4 && currentPrice && currentPrice > 0) {
+          // SNIPER: filterZonesForLens already handles per-OB opacity; skip dynMult
           const mid = (z.top + z.bottom) / 2;
           const pct = Math.abs(mid - currentPrice) / currentPrice;
-          if (pct > 0.03) {
-            dynMult = lensMode === 4 ? 0.40 : 0.35;
-          }
+          if (pct > 0.03) dynMult = 0.35;
         }
 
         /* Spec color system — direct hex, no CSS vars */
