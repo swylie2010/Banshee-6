@@ -1088,6 +1088,10 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const smcDataRef        = useRef(null);
   const htfLevelDataRef   = useRef([]);
   const eqlDataRef        = useRef([]);
+  const lensModeRef       = useRef(lensMode);
+  const currentPriceRef   = useRef(currentPrice);
+  const zonesForHoverRef  = useRef([]);
+  const swingsForHoverRef = useRef([]);
   const [dataSource,  setDataSource]  = useState("…");
   const [diagMsg,     setDiagMsg]     = useState("");
   const [opacityMult, setOpacityMult] = useState(1.0);
@@ -1128,15 +1132,14 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   function findHoveredElement(mouseX, mouseY) {
     const chart  = chartRef.current;
     const series = seriesRef.current;
-    const smcD   = smcDataRef.current;
-    if (!chart || !series || !smcD) return null;
+    if (!chart || !series || !smcDataRef.current) return null;
 
     const price = series.coordinateToPrice(mouseY);
     if (price === null || price === undefined) return null;
 
     /* Check OBs and FVGs */
-    const rawZones = smcToZones(smcD);
-    const visZones = filterZonesForLens(rawZones, lensMode, currentPrice);
+    const rawZones = zonesForHoverRef.current;
+    const visZones = filterZonesForLens(rawZones, lensModeRef.current, currentPriceRef.current);
     for (const z of visZones) {
       if (price >= z.bottom && price <= z.top) {
         return { elementType: z.type === "fvg" ? "fvg" : "ob", ...z };
@@ -1160,7 +1163,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     }
 
     /* Check swing markers (within 0.5%) */
-    const { swings } = smcToMarkers(smcD);
+    const swings = swingsForHoverRef.current;
     const swingTol = Math.abs(price) * 0.005;
     for (const sw of swings) {
       if (Math.abs(sw.price - price) < swingTol) {
@@ -1170,6 +1173,9 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
 
     return null;
   }
+
+  lensModeRef.current     = lensMode;
+  currentPriceRef.current = currentPrice;
 
   /* create chart once on mount */
   useEffect(() => {
@@ -1218,9 +1224,12 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     chartRef.current  = chart;
     seriesRef.current = series;
 
+    let cachedRect = null;
+
     const ro = new ResizeObserver(() => {
       if (containerRef.current && chartRef.current)
         chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+      cachedRect = null;
     });
     ro.observe(containerRef.current);
 
@@ -1228,21 +1237,24 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     const container = containerRef.current;
     function onMouseMove(e) {
       if (!onHover) return;
-      const rect = container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      if (!cachedRect) cachedRect = container.getBoundingClientRect();
+      const x = e.clientX - cachedRect.left;
+      const y = e.clientY - cachedRect.top;
       const el = findHoveredElement(x, y);
       onHover(el);
     }
     function onMouseLeave() {
       if (onHover) onHover(null);
     }
+    function onScroll() { cachedRect = null; }
     container.addEventListener("mousemove", onMouseMove);
     container.addEventListener("mouseleave", onMouseLeave);
+    window.addEventListener("scroll", onScroll, true);
 
     return () => {
       container.removeEventListener("mousemove", onMouseMove);
       container.removeEventListener("mouseleave", onMouseLeave);
+      window.removeEventListener("scroll", onScroll, true);
       ro.disconnect();
       if (primitiveRef.current) {
         try { series.detachPrimitive(primitiveRef.current); } catch {}
@@ -1294,6 +1306,8 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     smcDataRef.current      = smcData;
     htfLevelDataRef.current = (smcData?.flat_levels || []);
     eqlDataRef.current      = (smcData?.ltf_smc?.liquidity_pools || []).filter(p => !p.swept && p.level);
+    zonesForHoverRef.current  = smcToZones(smcData || {});
+    swingsForHoverRef.current = smcToMarkers(smcData || {}).swings;
 
     /* tear down whatever was attached before */
     if (primitiveRef.current) {
