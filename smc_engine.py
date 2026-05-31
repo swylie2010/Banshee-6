@@ -976,7 +976,7 @@ def run(df: pd.DataFrame) -> dict:
 # ─── HTF LEVEL CONFLUENCE ──────────────────────────────────────────────────────
 
 def load_htf_levels() -> dict:
-    """Load htf_levels.json from the Banshee Pro 3 directory."""
+    """Load htf_levels.json from the Banshee 5 directory."""
     import json, os
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "htf_levels.json")
     if not os.path.exists(path):
@@ -993,6 +993,19 @@ _HTF_SKIP_KEYS = frozenset({
     "extracted_date", "source_symbol", "source_timeframe",
     "price_at_extraction", "_meta",
 })
+
+
+def _classify_level_type(name: str) -> str:
+    n = name.lower()
+    if "yearly" in n or "monthly" in n or "weekly" in n:
+        return "yearly_monthly"
+    if "market_maker" in n or "pd_" in n or "pw_" in n:
+        return "market_maker"
+    if "vwap" in n:
+        return "vwap"
+    if "elliott" in n or "fib_" in n or "impulse" in n or "wave" in n or "correction" in n:
+        return "elliott_wave"
+    return "other"
 
 
 def flatten_levels(asset_dict: dict) -> list:
@@ -1013,7 +1026,7 @@ def flatten_levels(asset_dict: dict) -> list:
                     continue
                 _walk(v, f"{prefix}.{k}" if prefix else k)
         elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
-            result.append({"name": prefix, "price": float(obj)})
+            result.append({"name": prefix, "price": float(obj), "level_type": _classify_level_type(prefix)})
 
     _walk(asset_dict, "")
     result.sort(key=lambda x: x["price"])
