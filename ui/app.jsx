@@ -1263,6 +1263,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
     setPineScript(null); setPineLoading(false); setPineError(null);
     setAiText(null); setAiLoading(false); setAiError(null);
     setLensMode(1);
+    setHoveredElement(null);
   }, [asset.sym]);
 
   /* reset AI on tab change */
