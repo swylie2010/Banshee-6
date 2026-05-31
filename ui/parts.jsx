@@ -481,7 +481,7 @@ function smcToZones(smcData) {
       status:         fvg.status,
       timestamp:      fvg.timestamp     || null,
       dashed:         false,
-      opacity:        fvg.status === "partial" ? 0.55 : 1.0,
+      opacity:        1.0,
       isFVG:          true,
       htf_confluence: fvg.htf_confluence || [],
       fill_pct:       typeof fvg.fill_pct === "number" ? fvg.fill_pct
