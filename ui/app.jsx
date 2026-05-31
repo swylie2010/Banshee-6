@@ -1052,7 +1052,7 @@ function HoverContextCard({ el, lensMode }) {
     color: "#c8d4e0",
   };
   const sectionStyle = { padding: "8px 10px", borderBottom: "1px solid #1c2433" };
-  const labelStyle   = { fontSize: 10, color: "#6c7889", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 };
+  const labelStyle   = { fontSize: 11, color: "#6c7889", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 };
   const valueStyle   = { fontSize: 11, color: "#c8d4e0" };
 
   /* Empty state */
@@ -1090,7 +1090,7 @@ function HoverContextCard({ el, lensMode }) {
           <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>
             {el.kind === "bullish" ? "▲" : "▼"} {el.kind.toUpperCase()} ORDER BLOCK
           </div>
-          <div style={{ marginTop: 3, color: "#FFD600", fontSize: 10 }}>
+          <div style={{ marginTop: 3, color: "#FFD600", fontSize: 11 }}>
             {badge}{hasConf ? "  ★ HTF" : ""}
           </div>
         </div>
@@ -1106,7 +1106,7 @@ function HoverContextCard({ el, lensMode }) {
             {explainByLens[lensMode] || explainByLens[1]}
           </div>
         </div>
-        <div style={{ padding: "6px 10px", color: "#6c7889", fontSize: 10 }}>
+        <div style={{ padding: "6px 10px", color: "#6c7889", fontSize: 11 }}>
           Watch: {el.kind === "bullish" ? `bullish close above ${fmtPrice(el.top)}` : `bearish close below ${fmtPrice(el.bottom)}`}
         </div>
       </div>
@@ -1122,7 +1122,7 @@ function HoverContextCard({ el, lensMode }) {
           <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>
             {el.kind === "bullish" ? "▲" : "▼"} FAIR VALUE GAP
           </div>
-          <div style={{ marginTop: 2, fontSize: 10, color: "#6c7889" }}>
+          <div style={{ marginTop: 2, fontSize: 11, color: "#6c7889" }}>
             {el.status}{el.fill_pct > 0 ? ` · ${el.fill_pct}% filled` : ""}
           </div>
         </div>
@@ -1220,6 +1220,39 @@ function HoverContextCard({ el, lensMode }) {
     );
   }
 
+  /* BOS / CHoCH */
+  if (el.elementType === "bos" || el.elementType === "choch") {
+    const isBull      = el.isBull;
+    const isBOS       = el.isBOS;
+    const accentColor = isBOS
+      ? (isBull ? "#00E676" : "#FF1744")
+      : (isBull ? "#69F0AE" : "#FF5252");
+    const label = `${isBOS ? "BOS" : "CHoCH"} ${isBull ? "▲" : "▼"}`;
+    const explainBOS   = isBull
+      ? "Bullish Break of Structure — a swing high was breached. Structure is now officially bullish. Watch for a pullback into the nearest OB before continuation."
+      : "Bearish Break of Structure — a swing low was breached. Structure is now officially bearish. Watch for a retrace into the nearest OB before continuation.";
+    const explainCHoCH = isBull
+      ? "Change of Character — first bullish break after a downtrend. Potential trend reversal. Needs follow-through above the prior swing high to confirm."
+      : "Change of Character — first bearish break after an uptrend. Potential trend reversal. Needs follow-through below the prior swing low to confirm.";
+    return (
+      <div style={cardStyle}>
+        <div style={{ ...sectionStyle, borderLeft: `3px solid ${accentColor}` }}>
+          <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>{label}</div>
+          <div style={{ marginTop: 2, fontSize: 11, color: "#6c7889" }}>{isBOS ? "Break of Structure" : "Change of Character"}</div>
+        </div>
+        <div style={sectionStyle}>
+          <div style={labelStyle}>Break Level</div>
+          <div style={valueStyle}>{fmtPrice(el.price)}</div>
+        </div>
+        <div style={{ padding: "8px 10px" }}>
+          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
+            {isBOS ? explainBOS : explainCHoCH}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -1264,6 +1297,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
     setAiText(null); setAiLoading(false); setAiError(null);
     setLensMode(1);
     setHoveredElement(null);
+    setPineOpen(false);
   }, [asset.sym]);
 
   /* reset AI on tab change */

@@ -1092,6 +1092,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const currentPriceRef   = useRef(currentPrice);
   const zonesForHoverRef  = useRef([]);
   const swingsForHoverRef = useRef([]);
+  const eventsForHoverRef = useRef([]);
   const [dataSource,  setDataSource]  = useState("…");
   const [diagMsg,     setDiagMsg]     = useState("");
   const [opacityMult, setOpacityMult] = useState(1.0);
@@ -1168,6 +1169,23 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     for (const sw of swings) {
       if (Math.abs(sw.price - price) < swingTol) {
         return { elementType: "swing", ...sw };
+      }
+    }
+
+    /* Check BOS/CHoCH structure events (within 0.3%) */
+    const bosTol = Math.abs(price) * 0.003;
+    for (const ev of eventsForHoverRef.current) {
+      if (Math.abs((ev.price || 0) - price) < bosTol) {
+        const isBOS  = (ev.event_type || "").startsWith("BOS");
+        const isBull = (ev.event_type || "").includes("BULL");
+        return {
+          elementType: isBOS ? "bos" : "choch",
+          event_type:  ev.event_type,
+          price:       ev.price,
+          timestamp:   ev.timestamp,
+          isBull,
+          isBOS,
+        };
       }
     }
 
@@ -1308,6 +1326,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     eqlDataRef.current      = (smcData?.ltf_smc?.liquidity_pools || []).filter(p => !p.swept && p.level);
     zonesForHoverRef.current  = smcToZones(smcData || {});
     swingsForHoverRef.current = smcToMarkers(smcData || {}).swings;
+    eventsForHoverRef.current = smcToMarkers(smcData || {}).events;
 
     /* tear down whatever was attached before */
     if (primitiveRef.current) {
