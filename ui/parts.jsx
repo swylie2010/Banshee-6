@@ -1085,6 +1085,9 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const ghLinesRef        = useRef([]);
   const eqlLinesRef       = useRef([]);
   const oteLinesRef       = useRef([]);
+  const smcDataRef        = useRef(null);
+  const htfLevelDataRef   = useRef([]);
+  const eqlDataRef        = useRef([]);
   const [dataSource,  setDataSource]  = useState("…");
   const [diagMsg,     setDiagMsg]     = useState("");
   const [opacityMult, setOpacityMult] = useState(1.0);
@@ -1120,6 +1123,52 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       lineStyle: LightweightCharts.LineStyle.Dashed
     };
     return { color: "#90A4AE55", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted };
+  }
+
+  function findHoveredElement(mouseX, mouseY) {
+    const chart  = chartRef.current;
+    const series = seriesRef.current;
+    const smcD   = smcDataRef.current;
+    if (!chart || !series || !smcD) return null;
+
+    const price = series.coordinateToPrice(mouseY);
+    if (price === null || price === undefined) return null;
+
+    /* Check OBs and FVGs */
+    const rawZones = smcToZones(smcD);
+    const visZones = filterZonesForLens(rawZones, lensMode, currentPrice);
+    for (const z of visZones) {
+      if (price >= z.bottom && price <= z.top) {
+        return { elementType: z.type === "fvg" ? "fvg" : "ob", ...z };
+      }
+    }
+
+    /* Check HTF lines (within 0.3% of price) */
+    const htfTol = Math.abs(price) * 0.003;
+    for (const lvl of htfLevelDataRef.current) {
+      if (Math.abs((lvl.price || 0) - price) < htfTol) {
+        return { elementType: "htf", ...lvl };
+      }
+    }
+
+    /* Check EQH/EQL (within 0.2%) */
+    const eqlTol = Math.abs(price) * 0.002;
+    for (const pool of eqlDataRef.current) {
+      if (Math.abs((pool.level || 0) - price) < eqlTol) {
+        return { elementType: pool.kind === "eqh" ? "eqh" : "eql", price: pool.level, kind: pool.kind };
+      }
+    }
+
+    /* Check swing markers (within 0.5%) */
+    const { swings } = smcToMarkers(smcD);
+    const swingTol = Math.abs(price) * 0.005;
+    for (const sw of swings) {
+      if (Math.abs(sw.price - price) < swingTol) {
+        return { elementType: "swing", ...sw };
+      }
+    }
+
+    return null;
   }
 
   /* create chart once on mount */
@@ -1175,7 +1224,25 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     });
     ro.observe(containerRef.current);
 
+    /* hover hit-testing */
+    const container = containerRef.current;
+    function onMouseMove(e) {
+      if (!onHover) return;
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const el = findHoveredElement(x, y);
+      onHover(el);
+    }
+    function onMouseLeave() {
+      if (onHover) onHover(null);
+    }
+    container.addEventListener("mousemove", onMouseMove);
+    container.addEventListener("mouseleave", onMouseLeave);
+
     return () => {
+      container.removeEventListener("mousemove", onMouseMove);
+      container.removeEventListener("mouseleave", onMouseLeave);
       ro.disconnect();
       if (primitiveRef.current) {
         try { series.detachPrimitive(primitiveRef.current); } catch {}
@@ -1223,6 +1290,10 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
+
+    smcDataRef.current      = smcData;
+    htfLevelDataRef.current = (smcData?.flat_levels || []);
+    eqlDataRef.current      = (smcData?.ltf_smc?.liquidity_pools || []).filter(p => !p.swept && p.level);
 
     /* tear down whatever was attached before */
     if (primitiveRef.current) {
