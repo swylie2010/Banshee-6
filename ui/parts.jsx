@@ -1061,6 +1061,27 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     return ACCENT_MAP[cssVar.slice(4, -1)] || "#38bdf8";
   }
 
+  function htfLineStyle(lvl) {
+    const t = (lvl.level_type || "other");
+    if (t === "yearly_monthly") return {
+      color: "#FFD60099", lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Solid
+    };
+    if (t === "market_maker")   return {
+      color: "#CE93D888", lineWidth: 1.5,
+      lineStyle: LightweightCharts.LineStyle.Solid
+    };
+    if (t === "vwap")           return {
+      color: "#26C6DA88", lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed
+    };
+    if (t === "elliott_wave")   return {
+      color: "#90A4AE88", lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed
+    };
+    return { color: "#90A4AE55", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted };
+  }
+
   /* create chart once on mount */
   useEffect(() => {
     if (!containerRef.current) { setDiagMsg("no container"); return; }
@@ -1190,7 +1211,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     const showOTE     = lensMode === 1 || lensMode === 2 || lensMode === 4;
     const showHTF     = lensMode === 1 || lensMode === 2;
     const showMarkers = lensMode === 1 || lensMode === 2;
-    const showEQL     = lensMode === 1 || lensMode === 3;
+    const showEQL     = true; // all lenses show EQL — spec requires it for BATTLEFIELD and SNIPER
 
     /* PD zone background — premium/discount/OTE */
     if (showPD) {
@@ -1213,19 +1234,20 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       }
     }
 
-    /* HTF key levels as dotted price lines */
+    /* HTF key levels — 4 colors by level_type */
     if (showHTF) {
       const newLines = [];
       for (const lvl of (smcData.flat_levels || []).slice(0, 25)) {
         if (!lvl.price || isNaN(lvl.price)) continue;
+        const style = htfLineStyle(lvl);
         try {
           newLines.push(series.createPriceLine({
-            price: lvl.price,
-            color: "#f59e0b55",
-            lineWidth: 1,
-            lineStyle: LightweightCharts.LineStyle.Dotted,
+            price:            lvl.price,
+            color:            style.color,
+            lineWidth:        style.lineWidth,
+            lineStyle:        style.lineStyle,
             axisLabelVisible: false,
-            title: "",
+            title:            "",
           }));
         } catch {}
       }
@@ -1276,9 +1298,9 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
         try {
           newEqlLines.push(series.createPriceLine({
             price:            pool.level,
-            color:            pool.kind === "eqh" ? "#ef444460" : "#5eead460",
-            lineWidth:        1,
-            lineStyle:        LightweightCharts.LineStyle.Dotted,
+            color:            pool.kind === "eqh" ? "#FF174455" : "#00E67655",
+            lineWidth:        1.5,
+            lineStyle:        LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: false,
             title:            "",
           }));
