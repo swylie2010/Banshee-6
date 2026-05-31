@@ -331,25 +331,29 @@ class SMCZoneRenderer {
         const botPx = Math.min(bh, Math.max(rawTop ?? 0, rawBot ?? bh / vr) * vr);
         const h = Math.max(1, botPx - topPx);
 
-        /* V4 color scheme: OBs use blue/red; FVGs use teal/red */
+        /* Spec color system — direct hex, no CSS vars */
+        const OB_FILL   = { bullish: "#1565C0", bearish: "#B71C1C" };
+        const OB_BORDER = { bullish: "#42A5F5", bearish: "#EF5350" };
+        const FVG_COLOR = { bullish: "#00BCD4", bearish: "#F44336" };
+
         const fillBase = z.isFVG
-          ? (z.kind === "bullish" ? "#5eead4" : "#ef4444")
-          : (z.kind === "bullish" ? "#3b82f6" : "#ef4444");
+          ? (FVG_COLOR[z.kind] || "#00BCD4")
+          : (z.status === "degraded" ? "#607D8B" : (OB_FILL[z.kind] || "#1565C0"));
 
-        /* Border color encodes inducement state for OBs */
         const bordBase = z.isFVG ? fillBase
-          : z.inducement_swept       ? "#22c55e"
-          : z.has_pending_inducement ? "#f59e0b"
-          : fillBase;
+          : z.inducement_swept       ? "#00E676"
+          : z.has_pending_inducement ? "#FFB300"
+          : (OB_BORDER[z.kind] || "#42A5F5");
 
-        /* Status dims the zone */
         const statusMult = z.isFVG ? 1.0
           : z.status === "degraded" ? 0.50
           : z.status === "touched"  ? 0.75
           : 1.0;
 
-        const fillAlp = z.isFVG ? 0.22 : (z.dashed ? 0.06 : 0.18);
-        const bordAlp = z.dashed ? 0.28 : 0.70;
+        const fillAlp = z.isFVG
+          ? (z.status === "partial" ? 0.25 : 0.55)
+          : (z.dashed ? 0.06 : 0.22);
+        const bordAlp = z.dashed ? 0.28 : 0.75;
         const toFill  = (a) => Math.round(a * z.opacity * statusMult * 255).toString(16).padStart(2, "0");
         const toBord  = (a) => Math.round(a * z.opacity * statusMult * 255).toString(16).padStart(2, "0");
 
@@ -357,7 +361,7 @@ class SMCZoneRenderer {
         ctx.fillRect(0, topPx, bw, h);
 
         ctx.strokeStyle = bordBase + toBord(bordAlp);
-        ctx.lineWidth   = (z.inducement_swept || z.has_pending_inducement ? 1.5 : 1) * hr;
+        ctx.lineWidth   = (z.inducement_swept || z.has_pending_inducement ? 2 : 1) * hr;
         if (z.dashed) ctx.setLineDash([4 * hr, 4 * hr]);
         ctx.strokeRect(0.5 * hr, topPx + 0.5 * vr, bw - hr, h - vr);
         ctx.setLineDash([]);
@@ -387,18 +391,32 @@ class SMCZoneRenderer {
           }
         }
 
-        /* Status icon at right edge */
-        if (!z.isFVG && h > 8 * vr) {
-          const icon = z.inducement_swept       ? "⚡"
-                     : z.has_pending_inducement ? "⌛"
-                     : z.status === "touched"   ? "◑"
-                     : z.status === "degraded"  ? "⚠"
-                     : "";
-          if (icon) {
-            ctx.font      = `${Math.round(9 * Math.min(vr, hr))}px sans-serif`;
-            ctx.fillStyle = bordBase + "cc";
-            ctx.textAlign = "right";
-            ctx.fillText(icon, bw - 4 * hr, topPx + h / 2 + 4 * vr);
+        /* Session weight badges + ★ HTF confluence (OBs only) */
+        if (!z.isFVG && h > 12 * vr) {
+          const sw  = z.session_weight || 1.0;
+          const hasConf = Array.isArray(z.htf_confluence) && z.htf_confluence.length > 0;
+
+          let badge = "", badgeColor = "";
+          if (sw >= 2.0)      { badge = "⚡"; badgeColor = "#FFD600"; }
+          else if (sw >= 1.5) { badge = "◈"; badgeColor = "#FF8F00"; }
+          else if (sw < 1.0)  { badge = "·"; badgeColor = "#607D8B"; }
+
+          const fSize = Math.round(10 * Math.min(vr, hr));
+          const baseX = bw - 5 * hr;
+          const baseY = topPx + 12 * vr;
+          let curX = baseX;
+
+          ctx.textAlign = "right";
+          if (badge) {
+            ctx.font      = `${fSize}px sans-serif`;
+            ctx.fillStyle = badgeColor + Math.round(z.opacity * 220).toString(16).padStart(2, "0");
+            ctx.fillText(badge, curX, baseY);
+            curX -= 14 * hr;
+          }
+          if (hasConf) {
+            ctx.font      = `bold ${fSize}px sans-serif`;
+            ctx.fillStyle = "#FFFFFF" + Math.round(z.opacity * 220).toString(16).padStart(2, "0");
+            ctx.fillText("★", curX, baseY);
           }
         }
       }
