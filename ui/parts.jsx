@@ -520,62 +520,87 @@ class SMCMarkersRenderer {
         return coord === null ? null : Math.round(coord * vr);
       }
 
-      /* swing labels */
-      ctx.font = `${Math.round(8 * hr)}px 'JetBrains Mono', monospace`;
+      /* Swing labels — 16px triangles, spec colors */
+      const lensMode     = this._source._lensMode;
+      const currentPrice = this._source._currentPrice;
+      ctx.font = `${Math.round(9 * hr)}px 'JetBrains Mono', monospace`;
       ctx.textAlign = "center";
       for (const sw of swings) {
         const x = txToX(sw.timestamp);
         const y = priceToY(sw.price);
         if (x === null || y === null) continue;
-        const isHigh   = sw.swing_type === "high";
-        const base     = isHigh ? "#ef4444" : "#5eead4";
-        const label    = sw.label || (isHigh ? "H" : "L");
-        const triSize  = 4 * Math.min(vr, hr);
-        ctx.fillStyle  = base + "bb";
-        if (isHigh) {
-          const tipY = y - 10 * vr;
-          ctx.beginPath();
-          ctx.moveTo(x, tipY);
-          ctx.lineTo(x - triSize, tipY - triSize * 1.5);
-          ctx.lineTo(x + triSize, tipY - triSize * 1.5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = base + "88";
-          ctx.fillText(label, x, tipY - triSize * 1.5 - 3 * vr);
-        } else {
-          const tipY = y + 10 * vr;
-          ctx.beginPath();
-          ctx.moveTo(x, tipY);
-          ctx.lineTo(x - triSize, tipY + triSize * 1.5);
-          ctx.lineTo(x + triSize, tipY + triSize * 1.5);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = base + "88";
-          ctx.fillText(label, x, tipY + triSize * 1.5 + 9 * vr);
+        const isHigh = sw.swing_type === "high";
+        const base   = isHigh ? "#FF6D00" : "#2979FF";
+        const label  = sw.label || (isHigh ? "H" : "L");
+        const triSize = 8 * Math.min(vr, hr);
+
+        let markerAlpha = "cc";
+        if (currentPrice && sw.price) {
+          const hot = Math.abs(sw.price - currentPrice) / currentPrice <= 0.03;
+          if (!hot) markerAlpha = "55";
         }
+
+        ctx.fillStyle = base + markerAlpha;
+        ctx.beginPath();
+        if (isHigh) {
+          ctx.moveTo(x, y - triSize);
+          ctx.lineTo(x - triSize, y);
+          ctx.lineTo(x + triSize, y);
+        } else {
+          ctx.moveTo(x, y + triSize);
+          ctx.lineTo(x - triSize, y);
+          ctx.lineTo(x + triSize, y);
+        }
+        ctx.fill();
+        ctx.font = `${Math.round(9 * hr)}px 'JetBrains Mono', monospace`;
+        ctx.fillStyle = base + markerAlpha;
+        if (isHigh) ctx.fillText(label, x, y - triSize - 4 * vr);
+        else        ctx.fillText(label, x, y + triSize + 10 * vr);
       }
 
-      /* BOS / CHoCH event markers */
-      ctx.font = `bold ${Math.round(8 * hr)}px 'JetBrains Mono', monospace`;
-      ctx.textAlign = "left";
+      /* BOS / CHoCH event markers — colored boxes in BATTLEFIELD, text elsewhere */
+      const isBattlefield = lensMode === 2;
       for (const ev of events) {
         const x = txToX(ev.timestamp);
         const y = priceToY(ev.price);
         if (x === null || y === null) continue;
         const isBull = ev.event_type.includes("BULL");
         const isBOS  = ev.event_type.startsWith("BOS");
-        const base   = isBull ? "#5eead4" : "#ef4444";
-        const lbl    = `${isBOS ? "BOS" : "CHoCH"} ${isBull ? "▲" : "▼"}`;
-        ctx.fillStyle = base + "dd";
-        ctx.fillText(lbl, x + 4 * hr, y - 4 * vr);
-        ctx.strokeStyle = base + "55";
-        ctx.lineWidth = 1 * hr;
-        ctx.setLineDash([3 * hr, 3 * hr]);
+
+        const base = isBOS
+          ? (isBull ? "#00E676" : "#FF1744")
+          : (isBull ? "#69F0AE" : "#FF5252");
+
+        const lbl = `${isBOS ? "BOS" : "CHoCH"} ${isBull ? "▲" : "▼"}`;
+        const fSize = Math.round(9 * hr);
+
+        ctx.strokeStyle = base + "66";
+        ctx.lineWidth   = 1 * hr;
+        ctx.setLineDash(isBOS ? [4 * hr, 3 * hr] : [2 * hr, 3 * hr]);
         ctx.beginPath();
-        ctx.moveTo(x - 10 * hr, y);
-        ctx.lineTo(x + 10 * hr, y);
+        ctx.moveTo(x - 12 * hr, y);
+        ctx.lineTo(x + 12 * hr, y);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        ctx.font = `bold ${fSize}px 'JetBrains Mono', monospace`;
+        if (isBattlefield) {
+          const metrics = ctx.measureText(lbl);
+          const padX = 4 * hr, padY = 3 * vr;
+          const bxW = metrics.width + padX * 2;
+          const bxH = fSize + padY * 2;
+          const bxX = x + 4 * hr;
+          const bxY = y - bxH - 2 * vr;
+          ctx.fillStyle = base + "cc";
+          ctx.fillRect(bxX, bxY, bxW, bxH);
+          ctx.fillStyle = "#000000ee";
+          ctx.textAlign = "left";
+          ctx.fillText(lbl, bxX + padX, bxY + bxH - padY - 1 * vr);
+        } else {
+          ctx.fillStyle = base + "dd";
+          ctx.textAlign = "left";
+          ctx.fillText(lbl, x + 4 * hr, y - 5 * vr);
+        }
       }
 
       ctx.restore();
@@ -590,12 +615,14 @@ class SMCMarkersPaneView {
 }
 
 class SMCMarkersPrimitive {
-  constructor(swings, events, chart) {
-    this._swings    = swings;
-    this._events    = events;
-    this._chart     = chart;
-    this._series    = null;
-    this._paneViews = [new SMCMarkersPaneView(this)];
+  constructor(swings, events, chart, lensMode = 1, currentPrice = null) {
+    this._swings       = swings;
+    this._events       = events;
+    this._chart        = chart;
+    this._lensMode     = lensMode;
+    this._currentPrice = currentPrice;
+    this._series       = null;
+    this._paneViews    = [new SMCMarkersPaneView(this)];
   }
   attached({ series }) { this._series = series; }
   detached()           { this._series = null; }
@@ -1258,7 +1285,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     if (showMarkers && chartRef.current) {
       const { swings, events } = smcToMarkers(smcData);
       if (swings.length || events.length) {
-        const mkPrim = new SMCMarkersPrimitive(swings, events, chartRef.current);
+        const mkPrim = new SMCMarkersPrimitive(swings, events, chartRef.current, lensMode, null);
         try { series.attachPrimitive(mkPrim); smcMarkersPrimRef.current = mkPrim; } catch {}
       }
     }
