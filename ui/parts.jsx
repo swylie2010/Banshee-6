@@ -7,7 +7,7 @@ function Tag({ children, color = "var(--ink-3)", bg = "transparent", border, sty
   return (
     <span className="mono" style={{
       display: "inline-flex", alignItems: "center", gap: 4,
-      fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase",
+      fontSize: 13, letterSpacing: "0.14em", textTransform: "uppercase",
       color, padding: "2px 6px", background: bg,
       border: `1px solid ${border || "transparent"}`,
       lineHeight: 1.1, ...style,
@@ -28,7 +28,7 @@ function Dot({ color = "var(--ink-3)", size = 6, blink = false }) {
 function Label({ children, color = "var(--ink-3)" }) {
   return (
     <div className="mono" style={{
-      fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+      fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase",
       color, lineHeight: 1,
     }}>{children}</div>
   );
@@ -83,7 +83,7 @@ function EdgeRing({ value = 0, size = 56, color = "var(--cyan)", label = "EDGE" 
         alignItems: "center", justifyContent: "center", gap: 1,
       }}>
         <div className="num" style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", lineHeight: 1 }}>{value}</div>
-        <div className="mono" style={{ fontSize: 7, letterSpacing: "0.18em", color: "var(--ink-3)" }}>{label}</div>
+        <div className="mono" style={{ fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-3)" }}>{label}</div>
       </div>
     </div>
   );
@@ -130,8 +130,8 @@ function PowerBar({ value = 0, segments = 30, height = 24, label = "MACRO WARN" 
         <Label>{label}</Label>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
           <span className="num" style={{ fontSize: 20, color: status.c, fontWeight: 600, lineHeight: 1 }}>{value}</span>
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.16em" }}>/100</span>
-          <span className="mono" style={{ fontSize: 10, color: status.c, letterSpacing: "0.18em", marginLeft: 6 }}>{status.tx}</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.16em" }}>/100</span>
+          <span className="mono" style={{ fontSize: 13, color: status.c, letterSpacing: "0.18em", marginLeft: 6 }}>{status.tx}</span>
         </div>
       </div>
       <div style={{ flex: 1, display: "flex", gap: 2, height, alignItems: "stretch" }}>
@@ -153,7 +153,7 @@ function PowerBar({ value = 0, segments = 30, height = 24, label = "MACRO WARN" 
         <Label>SIGNAL</Label>
         <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
           <Dot color={status.c} blink={value >= 75} />
-          <span className="mono" style={{ fontSize: 11, color: status.c, letterSpacing: "0.14em" }}>
+          <span className="mono" style={{ fontSize: 13, color: status.c, letterSpacing: "0.14em" }}>
             {value >= 75 ? "ALERT" : value >= 55 ? "CAUTION" : "STABLE"}
           </span>
         </div>
@@ -215,7 +215,7 @@ function AssetCard({ asset, onClick, selected }) {
           padding: "6px 8px",
         }}>
           <span className="mono blink" style={{
-            fontSize: 8, letterSpacing: "0.18em", color: "var(--ink-3)",
+            fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-3)",
           }}>◇ LOADING…</span>
         </div>
       )}
@@ -228,9 +228,9 @@ function AssetCard({ asset, onClick, selected }) {
               <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", letterSpacing: "0.04em" }}>
                 {asset.sym}
               </div>
-              <Tag border="var(--line)" style={{ fontSize: 8 }}>{asset.cls}</Tag>
+              <Tag border="var(--line)" style={{ fontSize: 11 }}>{asset.cls}</Tag>
             </div>
-            <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {asset.name} · {asset.pair}
             </div>
           </div>
@@ -242,7 +242,7 @@ function AssetCard({ asset, onClick, selected }) {
                asset.price < 100 ? asset.price.toFixed(2) :
                asset.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </div>
-            <div className="num" style={{ fontSize: 11, color: up ? "var(--buy)" : "var(--sell)", lineHeight: 1 }}>
+            <div className="num" style={{ fontSize: 13, color: up ? "var(--buy)" : "var(--sell)", lineHeight: 1 }}>
               {up ? "+" : ""}{asset.chg.toFixed(2)}%
             </div>
           </div>
@@ -264,7 +264,7 @@ function AssetCard({ asset, onClick, selected }) {
           }}>
             <Dot color={c.fg} blink={asset.verdict !== "WAIT"} size={5} />
             <span className="mono" style={{
-              fontSize: 11, color: c.fg, fontWeight: 600,
+              fontSize: 13, color: c.fg, fontWeight: 600,
               letterSpacing: "0.16em",
             }}>{asset.verdict}</span>
           </div>
@@ -279,7 +279,7 @@ function AssetCard({ asset, onClick, selected }) {
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <Label>BIAS</Label>
-            <div className="mono" style={{ fontSize: 10, color: "var(--ink-2)", letterSpacing: "0.08em" }}>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", letterSpacing: "0.08em" }}>
               {asset.bias}
             </div>
           </div>
@@ -287,7 +287,7 @@ function AssetCard({ asset, onClick, selected }) {
             <Label>RSI</Label>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <MiniBar value={asset.rsi} color={asset.rsi > 70 ? "var(--sell)" : asset.rsi < 30 ? "var(--buy)" : "var(--cyan)"} w={42} />
-              <span className="num" style={{ fontSize: 10, color: "var(--ink-2)" }}>{asset.rsi}</span>
+              <span className="num" style={{ fontSize: 13, color: "var(--ink-2)" }}>{asset.rsi}</span>
             </div>
           </div>
         </div>
@@ -295,7 +295,7 @@ function AssetCard({ asset, onClick, selected }) {
 
       {/* HUD ID + data source badge */}
       <div className="mono" style={{
-        position: "absolute", top: 8, right: 8, fontSize: 8,
+        position: "absolute", top: 8, right: 8, fontSize: 11,
         letterSpacing: "0.18em", color: asset._live ? "var(--buy)" : "var(--ink-4)",
       }}>
         {asset._live ? "◆ LIVE" : `◢ ${String(Math.abs(asset.sym.charCodeAt(0) * 7 % 999)).padStart(3,"0")}`}
@@ -446,21 +446,28 @@ function smcToZones(smcData) {
       dashed:                 !ob.gate_passed,
       opacity:                ob.gate_passed ? 1.0 : 0.45,
       isFVG:                  false,
+      session_weight:         ob.session_weight         || 1.0,
+      htf_confluence:         ob.htf_confluence         || [],
+      touch_count:            ob.touch_count            || 0,
+      timestamp:              ob.timestamp              || null,
     });
   }
 
   for (const fvg of (ltf.fvgs || [])) {
     if (fvg.status === "filled") continue;
     zones.push({
-      type:      "fvg",
-      kind:      fvg.kind,
-      top:       fvg.top,
-      bottom:    fvg.bottom,
-      status:    fvg.status,
-      timestamp: fvg.timestamp || null,
-      dashed:    false,
-      opacity:   fvg.status === "partial" ? 0.55 : 1.0,
-      isFVG:     true,
+      type:           "fvg",
+      kind:           fvg.kind,
+      top:            fvg.top,
+      bottom:         fvg.bottom,
+      status:         fvg.status,
+      timestamp:      fvg.timestamp     || null,
+      dashed:         false,
+      opacity:        fvg.status === "partial" ? 0.55 : 1.0,
+      isFVG:          true,
+      htf_confluence: fvg.htf_confluence || [],
+      fill_pct:       typeof fvg.fill_pct === "number" ? fvg.fill_pct
+                      : (fvg.status === "partial" ? 40 : 0),
     });
   }
 
@@ -936,7 +943,7 @@ function SMCLegend() {
   return (
     <div style={{ padding: "18px 14px 6px 14px" }}>
       <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: "18px 20px" }}>
-        <div className="mono" style={{ fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-4)", marginBottom: 16 }}>
+        <div className="mono" style={{ fontSize: 13, letterSpacing: "0.18em", color: "var(--ink-4)", marginBottom: 16 }}>
           SMC CHART KEY
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 28px" }}>
@@ -1382,7 +1389,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       {/* candle data badge */}
       <div className="mono" style={{
         position: "absolute", top: 6, left: 8,
-        fontSize: 9, letterSpacing: "0.16em", pointerEvents: "none",
+        fontSize: 12, letterSpacing: "0.16em", pointerEvents: "none",
         background: "rgba(6,8,12,0.7)", padding: "2px 6px",
         color: dataSource === "live" ? "#5eead4" : dataSource === "mock" ? "#f59e0b" : "#4a5364",
       }}>
@@ -1399,7 +1406,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
           className="mono"
           style={{
             position: "absolute", top: 24, left: 8, zIndex: 10,
-            fontSize: 9, letterSpacing: "0.14em",
+            fontSize: 12, letterSpacing: "0.14em",
             background: showSMC && smcData && !smcData.error ? "rgba(56,189,248,0.15)" : "rgba(6,8,12,0.7)",
             border: `1px solid ${showSMC && smcData && !smcData.error ? "#38bdf8" : "#2a3346"}`,
             color: smcLoading ? "#f59e0b"
@@ -1418,7 +1425,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
           className="mono"
           style={{
             position: "absolute", top: 42, left: 8, zIndex: 10,
-            fontSize: 9, letterSpacing: "0.14em",
+            fontSize: 12, letterSpacing: "0.14em",
             background: showGH && ghData && !ghData.error ? "rgba(192,132,252,0.15)" : "rgba(6,8,12,0.7)",
             border: `1px solid ${showGH && ghData && !ghData.error ? "#c084fc" : "#2a3346"}`,
             color: ghLoading ? "#f59e0b"
@@ -1437,7 +1444,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
           className="mono"
           style={{
             position: "absolute", top: 60, left: 8, zIndex: 10,
-            fontSize: 9, letterSpacing: "0.14em",
+            fontSize: 12, letterSpacing: "0.14em",
             background: showXABCD && xabcdData && !xabcdData.error ? "rgba(245,158,11,0.15)" : "rgba(6,8,12,0.7)",
             border: `1px solid ${showXABCD && xabcdData && !xabcdData.error ? "#f59e0b" : "#2a3346"}`,
             color: xabcdLoading ? "#f59e0b"
@@ -1456,7 +1463,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
           className="mono"
           style={{
             position: "absolute", top: 78, left: 8, zIndex: 10,
-            fontSize: 9, letterSpacing: "0.14em",
+            fontSize: 12, letterSpacing: "0.14em",
             background: "rgba(6,8,12,0.7)",
             border: "1px solid #2a3346",
             color: opacityMult >= 1.0 ? "#38bdf8" : opacityMult >= 0.65 ? "#6c7889" : "#4a5364",
@@ -1491,15 +1498,15 @@ function AlertCard({ level, section, text }) {
         borderRight: `1px solid ${c.border}22`,
         display: "flex", flexDirection: "column", gap: 3, justifyContent: "center",
       }}>
-        <span className="mono" style={{ fontSize: 8, color: c.border, letterSpacing: "0.18em", opacity: 0.75 }}>
+        <span className="mono" style={{ fontSize: 11, color: c.border, letterSpacing: "0.18em", opacity: 0.75 }}>
           {section}
         </span>
-        <span className="mono" style={{ fontSize: 11, color: c.border, fontWeight: 700, letterSpacing: "0.08em" }}>
+        <span className="mono" style={{ fontSize: 13, color: c.border, fontWeight: 700, letterSpacing: "0.08em" }}>
           {c.icon} {c.label}
         </span>
       </div>
       <div style={{ padding: "11px 16px", display: "flex", alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: "#c8d4e0", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em" }}>
+        <span style={{ fontSize: 13, color: "#c8d4e0", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em" }}>
           {text}
         </span>
       </div>
@@ -1560,15 +1567,15 @@ function MacroSensorCard({ sensorKey, sensor, label, unit = "", explain }) {
         <div>
           <Label style={{ marginBottom: 5 }}>{label}</Label>
           <div className="num" style={{ fontSize: 26, fontWeight: 700, color: accentColor, lineHeight: 1.1 }}>{disp}</div>
-          <div className="mono" style={{ fontSize: 9, color: accentColor, letterSpacing: "0.14em", marginTop: 5, opacity: 0.85 }}>{status}</div>
+          <div className="mono" style={{ fontSize: 12, color: accentColor, letterSpacing: "0.14em", marginTop: 5, opacity: 0.85 }}>{status}</div>
         </div>
-        <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: "0.1em", paddingTop: 2 }}>
+        <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em", paddingTop: 2 }}>
           {expanded ? "▲" : "▼"}
         </span>
       </div>
       {expanded && explain && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
-          <div style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.65, letterSpacing: "0.02em", fontFamily: "'JetBrains Mono', monospace" }}>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.65, letterSpacing: "0.02em", fontFamily: "'JetBrains Mono', monospace" }}>
             {explain}
           </div>
         </div>
