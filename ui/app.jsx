@@ -918,9 +918,14 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
       setSimError(result.error);
     } else {
       setSimStatus("success");
-      setTimeout(() => { setSimPanel(false); setSimStatus("idle"); }, 2000);
     }
   }
+
+  useEffect(() => {
+    if (simStatus !== "success") return;
+    const id = setTimeout(() => { setSimPanel(false); setSimStatus("idle"); }, 2000);
+    return () => clearTimeout(id);
+  }, [simStatus]);
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(6,8,12,0.97)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", zIndex: 30, animation: "fadeIn 200ms ease" }}>
