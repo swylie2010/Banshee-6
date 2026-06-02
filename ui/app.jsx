@@ -2344,27 +2344,36 @@ function NumInput({ label, value, onChange, step = 1 }) {
 }
 
 /* ── RiskDeskPage — reactive position sizing calculator (Page 6) */
-function RiskDeskPage({ openSym, radarData, onBack }) {
-  const [account,    setAccount]    = useState(10000);
-  const [riskPct,    setRiskPct]    = useState(1.0);
-  const [entry,      setEntry]      = useState(0);
-  const [stop,       setStop]       = useState(0);
-  const [conflicted, setConflicted] = useState(false);
-  const [plan,       setPlan]       = useState(null);
-  const [calculating, setCalculating] = useState(false);
-  const [calcError,  setCalcError]  = useState(null);
+function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
+  const [account,      setAccount]      = useState(10000);
+  const [riskPct,      setRiskPct]      = useState(1.0);
+  const [entry,        setEntry]        = useState(0);
+  const [stop,         setStop]         = useState(0);
+  const [conflicted,   setConflicted]   = useState(false);
+  const [plan,         setPlan]         = useState(null);
+  const [calculating,  setCalculating]  = useState(false);
+  const [calcError,    setCalcError]    = useState(null);
+  const [searchSym,    setSearchSym]    = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError,  setSearchError]  = useState(null);
+  const [activeSeed,   setActiveSeed]   = useState(null); // { sym, verdict, edge } for paper trade
+  const [paperStatus,  setPaperStatus]  = useState("idle"); // "idle"|"loading"|"success"|"error"
+  const [paperError,   setPaperError]   = useState(null);
 
-  /* auto-populate from focused symbol on mount */
+  /* auto-populate from seedAsset on mount */
   useEffect(() => {
-    if (!openSym || !radarData[openSym]) return;
-    const r   = radarData[openSym];
-    const atr = r.atr_plan;
-    const v   = r.verdict || "";
-    setEntry(r.price || 0);
+    if (!seedAsset) return;
+    const v   = seedAsset.verdict || "";
+    const atr = seedAsset.atr_plan;
+    setEntry(seedAsset.price || 0);
     if (atr && v.includes("BUY")  && atr.stop_long)  setStop(parseFloat(Number(atr.stop_long).toFixed(4)));
     else if (atr && v.includes("SELL") && atr.stop_short) setStop(parseFloat(Number(atr.stop_short).toFixed(4)));
-    else if (r.price) setStop(parseFloat((r.price * 0.95).toFixed(4)));
-  }, []); // mount only
+    else {
+      const dir = v.includes("SELL") ? -1 : 1;
+      setStop(parseFloat((seedAsset.price - dir * (seedAsset.atr || 0) * 1.2).toFixed(4)));
+    }
+    setActiveSeed({ sym: seedAsset.sym, verdict: v, edge: String(seedAsset.edge ?? "") });
+  }, []); // mount only — seedAsset is a snapshot, not live
 
   /* debounced recalculation */
   useEffect(() => {
@@ -2382,6 +2391,30 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
     return () => clearTimeout(id);
   }, [account, riskPct, entry, stop, conflicted]);
 
+  async function handleSearch() {
+    const sym = searchSym.trim().toUpperCase();
+    if (!sym) return;
+    setSearchLoading(true);
+    setSearchError(null);
+    const res = await window.API.fetchRadar(sym, "swing");
+    setSearchLoading(false);
+    if (!res || res.error || typeof res.price !== "number") {
+      setSearchError(`Symbol "${sym}" not found`);
+      return;
+    }
+    const v   = res.verdict || "";
+    const atr = res.atr_plan;
+    setEntry(res.price || 0);
+    if (atr && v.includes("BUY")  && atr.stop_long)  setStop(parseFloat(Number(atr.stop_long).toFixed(4)));
+    else if (atr && v.includes("SELL") && atr.stop_short) setStop(parseFloat(Number(atr.stop_short).toFixed(4)));
+    else {
+      const dir = v.includes("SELL") ? -1 : 1;
+      setStop(parseFloat((res.price - dir * (res.atr_plan?.atr || 0) * 1.2).toFixed(4)));
+    }
+    setPlan(null); // force recalculate
+    setActiveSeed({ sym, verdict: v, edge: String(res.edge ?? "") });
+  }
+
   const isLong      = plan?.is_long ?? (entry > stop);
   const dirColor    = isLong ? "var(--buy)" : "var(--sell)";
   const conflictClr = "var(--sell)";
@@ -2394,12 +2427,40 @@ function RiskDeskPage({ openSym, radarData, onBack }) {
         <div>
           <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>⚖ RISK DESK</div>
           <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>
-            Position size · Margin · R-multiples{openSym ? ` · Auto-filled from ${openSym}` : ""}
+            Position size · Margin · R-multiples{activeSeed ? ` · ${activeSeed.sym}` : ""}
           </div>
         </div>
       </div>
 
       <div style={{ padding: "20px 24px", flex: 1 }}>
+        {/* search box */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+          <input
+            type="text"
+            value={searchSym}
+            onChange={e => setSearchSym(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            placeholder="Type symbol (e.g. NVDA, BTC) and press Enter"
+            className="mono"
+            style={{ flex: 1, background: "var(--bg-1)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "8px 12px", fontSize: 13, letterSpacing: "0.08em", outline: "none" }}
+          />
+          <button
+            onClick={handleSearch}
+            disabled={searchLoading}
+            className="mono"
+            style={{ padding: "8px 16px", background: "var(--cyan)", color: "var(--bg-0)", border: "none", cursor: searchLoading ? "wait" : "pointer", fontWeight: 700, letterSpacing: "0.14em", opacity: searchLoading ? 0.6 : 1 }}
+          >
+            {searchLoading ? "…" : "LOAD"}
+          </button>
+        </div>
+        {searchError && (
+          <div className="mono" style={{ fontSize: 13, color: "var(--sell)", marginBottom: 12 }}>{searchError}</div>
+        )}
+        {activeSeed && (
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em", marginBottom: 12 }}>
+            ◆ {activeSeed.sym} · {activeSeed.verdict || "–"} · Edge {activeSeed.edge}
+          </div>
+        )}
         {/* inputs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
           <NumInput label="ACCOUNT SIZE ($)" value={account} onChange={setAccount} step={100} />
