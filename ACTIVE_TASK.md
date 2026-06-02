@@ -53,7 +53,7 @@
 
 # Active Task: Banshee 5 — Phase 7 (React UI — Missing Features)
 
-**Next up: #12b Hover composite (Lens 4 SNIPER)**
+**Next up: SMC Visual Redesign (Phase 8) — spec written, implementation plan needed**
 
 ---
 
@@ -73,11 +73,85 @@
 9. ✅ **Macro Deep-Dive sidebar panel — DONE (2026-05-28).** MacroPage was already the deep-dive page. Completed it: added 3 missing sensors (gold=GLD 5D, liquidity=Fed balance 60D, rotation=XLU/XLF/XLK/XLE vs SPY) with full SENSOR_EXPLAIN entries. MACRO_SENSOR_ROWS restructured: row 3=xle/copper/gold, row 4=liquidity/rotation. Macro AI briefing fixed (was broken — `fetchAIBriefing("MACRO")` hit OHLCV fetch → error every time) and given a dedicated `tab="macro"` pathway. New `build_macro_prompt()` in `banshee_ai.py`: macro-only briefing (no per-asset data), format: Regime Read → Sensors in Focus → What to Watch → Positioning Implications. Genuinely different from Nexus: macro briefing is environment-wide, Nexus is per-asset.
 10. ✅ **News / Predator sidebar panel — DONE (2026-05-28).** Full-page NewsPage component: masthead (macro_tone badge + risk dots), top story block, collapsible ai_narrative, Run Daily Predator button with pipeline progress, Watchlist Events / Discovered Signals / Yesterday Followups card sections. PredatorCard (clickable source link when URL present, impact badge) + FollowupCard (status pill). Backend: `_attach_urls()` in `predator_engine.py` threads source-matched URLs from raw intake events into briefing JSON. CSS var naming fixed sitewide (all components now use established --bg-1, --bg-2, --bg-3, --ink, --buy, --sell). 9 commits on main.
 11. ✅ **Pine Script generator for GH — DONE (2026-05-29).** `generate_pine_script()` in `geometric_harmonic.py` — 8 circles × 6 Fib levels as 60-pt polylines in normalized log space, teal=floor/red=ceiling, macro 20% transp/local 60% transp. `GET /geo-harmonic/pine` endpoint + `generate_gh_pine` MCP tool + PINE SCRIPT GENERATOR amber panel on GH tab (scrollable code block + COPY button). Spec + plan at docs/superpowers/. 64/64 tests green.
-11b. **GH coordinate output + Pine Script UI polish** — (1) Restore V4 coordinate table to GH tab: per-circle anchor date+price + radius endpoint, so user can manually place TV Fib Circles drawing tool (proven workflow). (2) Make Pine Script panel collapsible. (3) Move Pine Script panel below AI analysis section.
-12b. **Hover composite (Lens 4 SNIPER)** — hovering an OB in SNIPER lens briefly reveals nearest FVG or OTE line. Deferred from Optometry UI build. Requires mouse-position tracking against chart canvas + temporary primitive state.
-12. **Banshee Manual sidebar panel** — ◌ MANUAL nav link + stub page added (2026-05-28). Navigable, shows placeholder content. Actual content (SMC lenses, GH arcs, XABCD, Optometry guide, glossary) is future work. Sidebar nav also reordered this session: MACRO WEATHER → PREDATOR NEWS → RISK DESK → TRADE JOURNAL → SIGNAL LAB → SETTINGS → MANUAL.
+11b. ✅ **GH coordinate output + Pine Script UI polish** — DONE (2026-05-30). `cx_ts` added to `gh_circles` in engine. Table on GH tab: per-circle anchor date+price + shared radius endpoint date+price (6 columns, magenta border). Pine Script panel collapsible (▼/▲ toggle, starts collapsed) and moved below AI analysis.
+12b. ✅ **Hover composite (Lens 4 SNIPER)** — superseded by full SMC Visual Redesign below (hover context card is included in that spec).
+12. ✅ **Banshee Manual sidebar panel** — DONE (2026-06-01). Full content: 4-lens optometry guide, 8-step setup workflow, SMC concepts glossary (10 entries), GH arcs section, XABCD patterns reference (8 patterns with ratios). Hybrid format: walkthrough for lenses/workflow, reference cards for concepts.
 
-**Trigger phrase:** "Banshee React UI wiring session"
+---
+
+# ✅ Phase 8 Complete (2026-05-31): SMC Visual Redesign
+
+**Spec:** `docs/superpowers/specs/2026-05-30-smc-visual-redesign.md`
+**Plan:** `docs/superpowers/plans/2026-05-31-smc-visual-redesign.md`
+**Commits:** `244c01b` → `dee87fb` (13 commits) — all on `main`
+
+- ✅ Color system: OBs deep blue/crimson, FVGs vivid teal/red, all direct hex
+- ✅ Session weight badges: ⚡◈★ drawn on OB canvas rectangles
+- ✅ HTF 4-color lines: gold (yearly/monthly), purple (MM), teal (VWAP), steel (Elliott)
+- ✅ Swing markers: 16px orange/blue triangles
+- ✅ BATTLEFIELD: BOS/CHoCH colored label boxes
+- ✅ Dynamic visual weight: 3% proximity threshold, cold=35%; SNIPER filter-based
+- ✅ Hover hit-testing: all 7 element types (OB, FVG, HTF, EQH, EQL, swing, BOS/CHoCH)
+- ✅ HoverContextCard: lens-aware right panel, empty state shows lens description
+
+---
+
+# Next Task: Phase 9 — Polish & UX Fixes
+
+Identified 2026-06-01. Mix of quick fixes and medium-effort items. Do quick batch first, then medium.
+
+## Quick Fixes (batch together, few lines each)
+
+- [x] **Sidebar toggle button** — changed to orange `#FF6D00` (2026-06-01)
+- [x] **Back arrows** — all 6 `onBack` buttons changed to orange `#FF6D00` (2026-06-01)
+- [x] **Tab labels (SMC/GH/Nexus)** — inactive tabs changed from `var(--ink-4)` to `var(--ink)` (2026-06-01)
+- [x] **Macro flag name turns red when stressed** — `var(--sell)` color applied when f.st is stressed (2026-06-01)
+- [x] **Alert section label font** — bumped 11→12 in parts.jsx (2026-06-01)
+- [x] **GH coordinate table font** — bumped 11→12 in app.jsx (2026-06-01)
+
+## Medium Effort
+
+- [x] **SMC legend collapsible** — `legendOpen` state + toggle bar with ▼/▲; starts collapsed (2026-06-01)
+- [x] **Nexus timeframe selector** — `nexusTf` state + TF bar row added above Nexus chart (2026-06-01)
+
+## Also Fixed This Session (user review findings)
+
+- [x] **AssetHub "GRID" back button** — was `var(--ink-2)`, now `#FF6D00` (2026-06-01)
+- [x] **AssetCard live badge overlap** — removed absolute positioning, moved inline below price/chg in header column (2026-06-01)
+- [x] **Sidebar accessibility** — zIndex raised 4→35; sidebar now slides in on top of any full-page overlay (2026-06-01)
+- [x] **SMC legend button visibility** — toggle bar text brightened to `var(--ink)` (2026-06-01)
+- [x] **SMC legend completeness** — added FVG bull/bear split, swing markers (HH/LH orange ▼, HL/LL blue ▲), BOS ▲/▼, CHoCH ▲/▼, EQH/EQL dotted lines, HTF level types (gold/purple/teal/steel) with section dividers (2026-06-01)
+
+## Phase 9 Additions (2026-06-01 review findings)
+
+### Quick Fixes
+- [x] **Settings back button** — DONE (2026-06-02). Was still `var(--ink-2)`; now `#FF6D00`. MacroPage back button also caught and fixed.
+- [x] **Nexus TF → trade recommendation** — DONE (2026-06-02). `nexusMode` derived from `nexusTf` (1H=sniper/4H=swing/1D=long); stop/tp multiplier (0.4/1.2/3.0) updates on TF change; MODE label + HOLD time shown in trade panel.
+- [x] **Nexus bottom bar (Edge Score/RSI/ATR/Vol/Bias)** — DONE (2026-06-02). MetricTile grid (5 cols) added below chart+aside block on Nexus tab; read-only, same layout as AssetHub.
+- [x] **Macro flag popup on asset pages** — DONE (2026-06-02). TopBar `zIndex` raised 5→40 so its stacking context clears the page overlay z-index of 30; flag panels now appear on all pages.
+
+### Medium Effort
+- [x] **Macro 3-tier color system** — DONE (2026-06-02). `critical` bool added to all sensors in `macro_engine.py` with sharper thresholds (e.g. VIX>35, curve<-0.5, DXY>4%). `sensorsToTopBar` now emits "stressed"/"elevated"/"calm". TopBar: bullet + label both show green/yellow/red per tier. MacroSensorCard: teal=OK, amber=warning, red=critical with matching bg/border tints.
+- [x] **Predator news: clickable article titles** — DONE (2026-06-02). Headline is now the `<a>` link with cyan hover; source chip demoted to plain label. `_attach_urls()` confirmed correct (source-name match). Non-functional links are AI paraphrase mismatches — acceptable.
+
+### Needs Spec / Reference V4
+- [x] **Risk Desk restore + Simulate** — DONE (2026-06-02). 9 commits (`1ea6b8d`→`2af53d0`). `journalOpen` API helper; seedAsset snapshot prop; search box in Risk Desk; simulate mode banner + PAPER TRADE button (useEffect cleanup); AssetHub SIMULATE confirmation panel (SIMULATE NOW / OPEN RISK DESK); EXECUTE "not enabled" inline message; Escape key simulate-mode routing fixed; mode state forwarded to journal POST. Manual section added.
+- [ ] **Watchlist custom groups** — spec not yet written. V4 let users create named groups of assets and reorder them in the sidebar. Current watchlist is hardcoded in `data.js`. Bring back: add group, add ticker to group, drag/reorder groups. Defaults remain; user additions stack on top. Needs a brainstorming/spec session.
+
+## Phase 9 Additions — Round 2 (captured 2026-06-02)
+
+- [ ] **Technical indicators on Nexus/AssetHub chart** — V4 showed EMA 50 (blue), EMA 200 (red), VWAP (purple dotted) overlaid on the price pane, and Stochastic %K/%D in a sub-pane below. V5 chart currently shows raw candles only. Bring these back with per-indicator toggle buttons (same pattern as SMC/GH/XABCD toggles). Indicators already partially computed in `micro_engine.py` (EMA, ATR). VWAP and Stochastic need computing from OHLCV. Lightweight Charts supports line series overlays + separate panes for oscillators. Add toggles across the top of the chart area. Applies to Nexus tab and/or AssetHub main chart — TBD in spec.
+- [ ] **Signal checklist + edge check** — The signal checklist (RSI in band, trend with macro, etc.) exists in AssetHub trade rec panel but user reports it feels absent/broken. The "edge case check" button may not be functioning. Investigate: (1) is the checklist rendering correctly on all assets, (2) what is the "edge check" button and why isn't it firing, (3) consider surfacing checklist more prominently. Needs investigation before spec.
+
+## Longer-Term (needs spec/design before touching code)
+
+- [ ] **Dynamic zone boundaries ("blast radius")** — Zones should be bounded on *both* sides by their own history, not the viewport. Left edge: always the formation candle (`start_time`) — never bleeds left into the viewport on scroll. Right edge: active zones extend to current candle; mitigated zones cap at the mitigation candle and render as a ghost (10% opacity, no solid border). Together these give the trader a free temporal read: zone width = age at a glance, no label needed. A month-old unmitigated OB reads differently than a day-old one just from geometry. The ghost box approach (from Blast Radius.md) is the right model for the right edge — not hiding mitigated zones entirely, but anchoring them in time. Key data needed: `end_time` (mitigation candle timestamp) from SMC engine — check whether `smc_engine.py` already stores this or only tracks status. Affects ALL lens and FOOTPRINTS most. Needs a spec session before touching canvas code.
+- [ ] **Timeframe filtering by data availability** — `TF_LIST = ["1H", "4H", "1D"]` is hardcoded. Timeframes that the data source can't serve should not appear. Requires: Core API to report available TFs per symbol/source, UI to filter TF_LIST accordingly. Blocked on data source architecture.
+- [ ] **Custom data source / API management** — allow users to plug in their own API keys (CoinGecko paid, Binance, etc.) and have the timeframe list reflect what that source supports. Would live in Settings page as a "Data Sources" section. Core needs a pluggable fetcher layer. Needs a proper spec session.
+
+## Cosmetic (known, low priority)
+
+- [ ] BOS/CHoCH box edge clamping — canvas overflow on top/right edges, cosmetic only
 
 **Context (carry forward):**
 - Banshee 5 = asset-centric visual platform. Click asset → unified chart with toggleable overlays.

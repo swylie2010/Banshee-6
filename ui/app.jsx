@@ -3675,7 +3675,7 @@ function ManualPage({ onBack }) {
         <button onClick={onBack} style={{ background: "none", border: "none", color: "#FF6D00", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
         <div>
           <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>◌ MANUAL</div>
-          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Lenses · Setup workflow · SMC concepts · GH arcs · XABCD</div>
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Lenses · Setup workflow · Risk Desk · SMC concepts · GH arcs · XABCD</div>
         </div>
       </div>
 
@@ -3733,6 +3733,40 @@ function ManualPage({ onBack }) {
             <ManStep n={8} title="AI BRIEFING — CROSS-CHECK YOUR READ">
               Read the SMC Analysis brief to catch what you missed. If the AI read contradicts your interpretation, investigate — the engine may be seeing structure you skipped, or it may be wrong. Either way, the discrepancy is worth understanding before you commit size.
             </ManStep>
+          </div>
+        </div>
+
+        {/* RISK DESK + SIMULATE */}
+        <div style={CARD}>
+          <ManSectionHdr title="RISK DESK + SIMULATE" accent="var(--amber)" sub="SIDEBAR · ⚖ RISK DESK  ·  ASSET HUB · SIMULATE / EXECUTE" />
+          <div style={{ padding: "14px 16px" }}>
+            <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.7, marginBottom: 14 }}>
+              Risk Desk is a pure position-sizing calculator — it never places real orders. Enter your account size, risk %, entry price, and stop price to get position size, leverage table, and R-multiple exit targets. Simulate logs a paper trade to the journal without touching a broker.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+              <div style={{ borderLeft: "3px solid var(--amber)", paddingLeft: 12 }}>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--amber)", letterSpacing: "0.08em", marginBottom: 4 }}>FROM AN ASSET — TWO PATHS</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.65 }}>
+                  <strong style={{ color: "var(--ink)" }}>SIMULATE NOW</strong> — logs a $1,000 paper trade directly from AssetHub values (entry, ATR stop, 1.5R target). Fastest path. Use it when you've already validated the setup and just want a journal entry.<br/><br/>
+                  <strong style={{ color: "var(--ink)" }}>OPEN RISK DESK</strong> — navigates to Risk Desk pre-filled with the current asset's price and ATR-derived stop. Adjust account size or risk % before confirming. Use it when you want to size carefully.
+                </div>
+              </div>
+              <div style={{ borderLeft: "3px solid var(--cyan)", paddingLeft: 12 }}>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--cyan)", letterSpacing: "0.08em", marginBottom: 4 }}>STANDALONE — SEARCH BOX</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.65 }}>
+                  Open Risk Desk from the sidebar without an asset selected. Type any ticker (e.g. NVDA, BTC) and hit Enter — it fetches live price and stop from Core and auto-fills the calculator. Account size and risk % are preserved across searches, so you can compare position sizes across assets without re-entering your portfolio settings.
+                </div>
+              </div>
+            </div>
+            <div style={{ background: "var(--bg-3)", border: "1px solid var(--line)", padding: "10px 14px", marginBottom: 12 }}>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.1em", marginBottom: 8 }}>SIMULATE MODE (from OPEN RISK DESK)</div>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.75 }}>
+                A cyan <strong style={{ color: "var(--cyan)" }}>◇ SIMULATION MODE · {"{SYM}"}</strong> banner appears at the top. At the bottom, a full-width <strong style={{ color: "var(--ink)" }}>◆ PAPER TRADE</strong> button (buy/sell color) posts to the Trade Journal using Risk Desk's current position size, entry, stop, and a computed 1.5R target. On success: "◆ PAPER TRADE LOGGED" → auto-navigates back to the asset view after 1.5s.
+              </div>
+            </div>
+            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.06em", lineHeight: 1.7 }}>
+              EXECUTE button — visible but intentionally not wired to a broker. Clicking it shows a message: "Direct broker execution is not enabled. Use Simulate to log paper trades in the journal." This is a deliberate architectural decision — no live order execution in Banshee.  ·  SMC CONFLICTED checkbox halves position size when HTF and LTF structure disagree.
+            </div>
           </div>
         </div>
 
