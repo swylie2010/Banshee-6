@@ -2438,9 +2438,14 @@ function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
       setPaperError(result.error);
     } else {
       setPaperStatus("success");
-      setTimeout(() => onBack(), 1500);
     }
   }
+
+  useEffect(() => {
+    if (paperStatus !== "success") return;
+    const id = setTimeout(() => onBack(), 1500);
+    return () => clearTimeout(id);
+  }, [paperStatus]);
 
   const isLong      = plan?.is_long ?? (entry > stop);
   const dirColor    = isLong ? "var(--buy)" : "var(--sell)";
