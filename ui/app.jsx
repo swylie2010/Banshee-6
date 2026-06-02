@@ -910,7 +910,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
       position_usd: 1000,
       verdict:      asset.verdict,
       edge:         String(asset.edge ?? ""),
-      mode:         "swing",
+      mode:         mode,
       notes:        "Quick simulate from AssetHub",
     });
     if (result?.error) {
@@ -3874,7 +3874,8 @@ function App() {
       if (e.key === "Escape") {
         if (page === "analysis") { setPage("hub"); return; }
         if (page === "hub")      { setOpenSym(null); setCustomAsset(null); setPage("grid"); return; }
-        if (["macro", "settings", "lab", "risk", "journal", "manual", "news"].includes(page)) { setPage("grid"); return; }
+        if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); return; }
+        if (["macro", "settings", "lab", "journal", "manual", "news"].includes(page)) { setPage("grid"); return; }
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
