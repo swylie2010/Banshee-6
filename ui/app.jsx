@@ -2415,6 +2415,33 @@ function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
     setActiveSeed({ sym, verdict: v, edge: String(res.edge ?? "") });
   }
 
+  async function handlePaperTrade() {
+    if (!activeSeed?.sym || !entry || !stop) return;
+    const isL = entry > stop;
+    const targetPrice = entry + (isL ? 1 : -1) * Math.abs(entry - stop) * 1.5;
+    setPaperStatus("loading");
+    setPaperError(null);
+    const result = await window.API.journalOpen({
+      symbol:       activeSeed.sym,
+      direction:    isL ? "long" : "short",
+      entry_price:  entry,
+      stop_price:   stop,
+      target_price: targetPrice,
+      position_usd: plan?.position_value ?? 1000,
+      verdict:      activeSeed.verdict,
+      edge:         activeSeed.edge,
+      mode:         "swing",
+      notes:        "Simulated from Risk Desk",
+    });
+    if (result?.error) {
+      setPaperStatus("error");
+      setPaperError(result.error);
+    } else {
+      setPaperStatus("success");
+      setTimeout(() => onBack(), 1500);
+    }
+  }
+
   const isLong      = plan?.is_long ?? (entry > stop);
   const dirColor    = isLong ? "var(--buy)" : "var(--sell)";
   const conflictClr = "var(--sell)";
@@ -2431,6 +2458,12 @@ function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
           </div>
         </div>
       </div>
+
+      {simulateMode && activeSeed && (
+        <div className="mono" style={{ padding: "8px 24px", background: "rgba(0,229,255,0.06)", borderBottom: "1px solid var(--cyan)", fontSize: 13, color: "var(--cyan)", letterSpacing: "0.14em" }}>
+          ◇ SIMULATION MODE · {activeSeed.sym}
+        </div>
+      )}
 
       <div style={{ padding: "20px 24px", flex: 1 }}>
         {/* search box */}
@@ -2559,6 +2592,28 @@ function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
           </div>
         ) : null}
       </div>
+
+      {simulateMode && (
+        <div style={{ padding: "16px 24px", borderTop: "1px solid var(--line)", flex: "0 0 auto", background: "var(--bg-1)" }}>
+          {paperStatus === "success" ? (
+            <div className="mono" style={{ textAlign: "center", fontSize: 14, color: "var(--buy)", letterSpacing: "0.14em" }}>◆ PAPER TRADE LOGGED</div>
+          ) : (
+            <>
+              <button
+                onClick={handlePaperTrade}
+                disabled={paperStatus === "loading" || !activeSeed?.sym || !entry || !stop}
+                className="mono"
+                style={{ width: "100%", padding: "14px", background: isLong ? "var(--buy)" : "var(--sell)", color: "var(--bg-0)", border: "none", cursor: (paperStatus === "loading" || !activeSeed?.sym) ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, letterSpacing: "0.2em", opacity: (paperStatus === "loading" || !activeSeed?.sym) ? 0.5 : 1 }}
+              >
+                {paperStatus === "loading" ? "◇ LOGGING…" : "◆ PAPER TRADE"}
+              </button>
+              {paperStatus === "error" && (
+                <div className="mono" style={{ fontSize: 12, color: "var(--sell)", marginTop: 8, textAlign: "center" }}>{paperError}</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
