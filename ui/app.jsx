@@ -858,10 +858,26 @@ function DeepDiveCard({ icon, title, sub, accent, onDeepDive }) {
 }
 
 /* ── AssetHub — standard overview (Page 2) ─────────────────── */
-function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
+function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate }) {
   const [mode, setMode] = useState("swing");
   const [tf, setTf] = useState("1H");
+  const [simPanel, setSimPanel]   = useState(false);
+  const [simStatus, setSimStatus] = useState("idle"); // "idle"|"loading"|"success"|"error"
+  const [simError,  setSimError]  = useState(null);
+  const [execPanel, setExecPanel] = useState(false);
+  const panelRef = useRef(null);
   useEffect(() => { setTf(MODE_TF[mode][1] || MODE_TF[mode][0]); }, [mode]);
+  useEffect(() => {
+    if (!simPanel && !execPanel) return;
+    function handler(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        setSimPanel(false);
+        setExecPanel(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [simPanel, execPanel]);
 
   const c = window.verdictColors(asset.verdict);
   const macroVal = macroWarning ?? window.MACRO.warning;
@@ -880,6 +896,31 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
   const conf = Math.round(asset.edge * (1 - Math.abs(50 - asset.rsi) / 100));
   const horizon = { sniper: "minutes — hours", swing: "days — weeks", long: "weeks — months" }[mode];
   const sizeR = { sniper: "0.5R", swing: "1.0R", long: "1.5R" }[mode];
+
+  async function handleSimulateNow() {
+    setSimStatus("loading");
+    setSimError(null);
+    const isL = dir > 0;
+    const result = await window.API.journalOpen({
+      symbol:       asset.sym,
+      direction:    isL ? "long" : "short",
+      entry_price:  entry,
+      stop_price:   stop,
+      target_price: tp1,
+      position_usd: 1000,
+      verdict:      asset.verdict,
+      edge:         String(asset.edge ?? ""),
+      mode:         "swing",
+      notes:        "Quick simulate from AssetHub",
+    });
+    if (result?.error) {
+      setSimStatus("error");
+      setSimError(result.error);
+    } else {
+      setSimStatus("success");
+      setTimeout(() => { setSimPanel(false); setSimStatus("idle"); }, 2000);
+    }
+  }
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(6,8,12,0.97)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", zIndex: 30, animation: "fadeIn 200ms ease" }}>
@@ -1008,9 +1049,55 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive }) {
             ))}
           </div>
           <div style={{ padding: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, borderTop: "1px solid var(--line)", background: "var(--bg-1)", flex: "0 0 auto" }}>
-            <button style={{ padding: "10px 12px", background: c.fg, color: "var(--bg-0)", border: "none", cursor: "pointer", fontWeight: 700, letterSpacing: "0.16em", clipPath: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" }} className="mono">EXECUTE</button>
-            <button style={{ padding: "10px 12px", background: "transparent", color: "var(--ink-2)", border: "1px solid var(--line-2)", cursor: "pointer", fontWeight: 600, letterSpacing: "0.16em", clipPath: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" }} className="mono">SIMULATE</button>
+            <button
+              onClick={() => { setExecPanel(true); setSimPanel(false); }}
+              style={{ padding: "10px 12px", background: c.fg, color: "var(--bg-0)", border: "none", cursor: "pointer", fontWeight: 700, letterSpacing: "0.16em", clipPath: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" }}
+              className="mono"
+            >EXECUTE</button>
+            <button
+              onClick={() => { setSimPanel(true); setExecPanel(false); setSimStatus("idle"); setSimError(null); }}
+              style={{ padding: "10px 12px", background: "transparent", color: "var(--ink-2)", border: "1px solid var(--line-2)", cursor: "pointer", fontWeight: 600, letterSpacing: "0.16em", clipPath: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" }}
+              className="mono"
+            >SIMULATE</button>
           </div>
+
+          {/* Simulate confirmation panel */}
+          {simPanel && (
+            <div ref={panelRef} style={{ padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--bg-1)", flex: "0 0 auto" }}>
+              {simStatus === "success" ? (
+                <div className="mono" style={{ textAlign: "center", fontSize: 13, color: "var(--buy)", letterSpacing: "0.12em", padding: "8px 0" }}>◆ Paper trade logged</div>
+              ) : (
+                <>
+                  <div className="mono" style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600, letterSpacing: "0.12em", marginBottom: 6 }}>
+                    SIMULATE TRADE FOR {asset.sym}?
+                  </div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.08em", marginBottom: 10 }}>
+                    Entry {fmt(entry)} · Stop {fmt(stop)} · $1,000
+                  </div>
+                  {simStatus === "error" && (
+                    <div className="mono" style={{ fontSize: 12, color: "var(--sell)", marginBottom: 8 }}>{simError}</div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <button
+                      onClick={handleSimulateNow}
+                      disabled={simStatus === "loading"}
+                      className="mono"
+                      style={{ padding: "9px 10px", background: "var(--cyan)", color: "var(--bg-0)", border: "none", cursor: simStatus === "loading" ? "wait" : "pointer", fontWeight: 700, fontSize: 12, letterSpacing: "0.14em", opacity: simStatus === "loading" ? 0.6 : 1 }}
+                    >
+                      {simStatus === "loading" ? "◇ LOGGING…" : "SIMULATE NOW"}
+                    </button>
+                    <button
+                      onClick={() => { setSimPanel(false); if (onGoRiskSimulate) onGoRiskSimulate(); }}
+                      className="mono"
+                      style={{ padding: "9px 10px", background: "transparent", color: "var(--ink-2)", border: "1px solid var(--line-2)", cursor: "pointer", fontWeight: 600, fontSize: 12, letterSpacing: "0.12em" }}
+                    >
+                      OPEN RISK DESK
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </aside>
       </div>
 
