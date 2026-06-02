@@ -1103,6 +1103,26 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
               )}
             </div>
           )}
+
+          {/* Execute not-enabled message */}
+          {execPanel && !simPanel && (
+            <div ref={panelRef} style={{ padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--bg-1)", flex: "0 0 auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div className="mono" style={{ fontSize: 13, color: "var(--ink)", marginBottom: 6, letterSpacing: "0.08em" }}>
+                    Direct broker execution is not enabled.
+                  </div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.06em" }}>
+                    Use Simulate to log paper trades in the journal.
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExecPanel(false)}
+                  style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 16, padding: "0 0 0 12px", lineHeight: 1 }}
+                >✕</button>
+              </div>
+            </div>
+          )}
         </aside>
       </div>
 
