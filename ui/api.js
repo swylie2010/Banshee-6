@@ -365,4 +365,23 @@ async function runPredator(force = true) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, coreSymbol };
+/* open a paper trade in the journal — wraps POST /journal/open */
+async function journalOpen({ symbol, direction, entry_price, stop_price,
+  target_price, position_usd = 1000, verdict = "", edge = "", mode = "swing", notes = "" }) {
+  const pair = coreSymbol(symbol);
+  try {
+    const res = await fetch(`${API_BASE}/journal/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: pair, direction, entry_price, stop_price,
+        target_price, position_usd, verdict, edge, mode, notes }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] journalOpen:", err.message);
+    return { error: err.message };
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol };
