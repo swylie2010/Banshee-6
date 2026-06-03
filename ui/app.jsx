@@ -2788,8 +2788,8 @@ function JournalPage({ radarData, onBack }) {
   useEffect(() => { loadTrades(); }, []);
 
   /* split trades */
-  const openTrades   = trades.filter(t => !t.closed_at);
-  const closedTrades = trades.filter(t =>  t.closed_at);
+  const openTrades   = trades.filter(t => !t.closed_at).reverse();
+  const closedTrades = trades.filter(t =>  t.closed_at).reverse();
 
   /* toggle helpers */
   function toggleOpen(id) {
