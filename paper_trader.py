@@ -174,11 +174,11 @@ def place_paper_trade(
         _save_journal(trades)
 
     return {
-        "status":     "placed" if order_id else "logged_only",
-        "order_id":   order_id,
-        "order_type": trade["order_type"],
-        "error":      order_error,
-        "trade_id":   trade["id"],
+        "status":      "placed" if order_id else "logged_only",
+        "order_id":    order_id,
+        "order_type":  trade["order_type"],
+        "alpaca_error": order_error,   # informational only — trade is logged regardless
+        "trade_id":    trade["id"],
     }
 
 
