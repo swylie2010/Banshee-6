@@ -1068,7 +1068,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
 
           {/* Simulate confirmation panel */}
           {simPanel && (
-            <div ref={panelRef} style={{ padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--bg-1)", flex: "0 0 auto" }}>
+            <div ref={panelRef} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--bg-1)", zIndex: 5 }}>
               {simStatus === "success" ? (
                 <div className="mono" style={{ textAlign: "center", fontSize: 13, color: "var(--buy)", letterSpacing: "0.12em", padding: "8px 0" }}>◆ Paper trade logged</div>
               ) : (
@@ -1106,7 +1106,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
 
           {/* Execute not-enabled message */}
           {execPanel && !simPanel && (
-            <div ref={panelRef} style={{ padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--bg-1)", flex: "0 0 auto" }}>
+            <div ref={panelRef} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 16px", borderTop: "1px solid var(--line)", background: "var(--bg-1)", zIndex: 5 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div className="mono" style={{ fontSize: 13, color: "var(--ink)", marginBottom: 6, letterSpacing: "0.08em" }}>
