@@ -1398,6 +1398,9 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   const [pineOpen, setPineOpen]       = useState(false);
   const [xabcdData, setXabcdData]   = useState(null);
   const [xabcdLoading, setXabcdLoading] = useState(false);
+  const [showEMA,   setShowEMA]   = useState(true);
+  const [showVWAP,  setShowVWAP]  = useState(true);
+  const [showStoch, setShowStoch] = useState(false);
   const [aiText, setAiText]   = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]   = useState(null);
@@ -1621,6 +1624,9 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                   showSMC={showSMC} setShowSMC={() => {}}
                   showGH={showGH} setShowGH={() => {}}
                   showXABCD={showXABCD} setShowXABCD={() => {}}
+                  showEMA={showEMA} setShowEMA={setShowEMA}
+                  showVWAP={showVWAP} setShowVWAP={setShowVWAP}
+                  showStoch={showStoch} setShowStoch={setShowStoch}
                   lensMode={lensMode}
                   currentPrice={asset.price}
                   onHover={setHoveredElement} />
@@ -1713,7 +1719,10 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
                 xabcdData={null} xabcdLoading={false}
                 showSMC={false} setShowSMC={() => {}}
                 showGH={false} setShowGH={() => {}}
-                showXABCD={false} setShowXABCD={() => {}} />
+                showXABCD={false} setShowXABCD={() => {}}
+                showEMA={showEMA} setShowEMA={setShowEMA}
+                showVWAP={showVWAP} setShowVWAP={setShowVWAP}
+                showStoch={showStoch} setShowStoch={setShowStoch} />
             </div>
             <aside style={{ background: "var(--bg-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
               <window.CornerTicks color={c.fg} />
