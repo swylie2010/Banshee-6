@@ -454,14 +454,16 @@ function mergeRadar(base, live) {
   if (!live) return base;
   return {
     ...base,
-    _live:   true,
-    price:   typeof live.price   === "number" ? live.price   : base.price,
-    chg:     typeof live.chg_pct === "number" ? live.chg_pct : base.chg,
-    verdict: live.verdict ?? base.verdict,
-    edge:    typeof live.edge    === "number" ? normaliseEdge(live.edge) : base.edge,
-    bias:    live.bias    ?? base.bias,
-    rsi:     typeof live.rsi     === "number" ? Math.round(live.rsi) : base.rsi,
-    atr:     live.atr_plan?.atr  ?? base.atr,
+    _live:          true,
+    price:          typeof live.price   === "number" ? live.price   : base.price,
+    chg:            typeof live.chg_pct === "number" ? live.chg_pct : base.chg,
+    verdict:        live.verdict ?? base.verdict,
+    edge:           typeof live.edge    === "number" ? normaliseEdge(live.edge) : base.edge,
+    bias:           live.bias    ?? base.bias,
+    rsi:            typeof live.rsi     === "number" ? Math.round(live.rsi) : base.rsi,
+    atr:            live.atr_plan?.atr  ?? base.atr,
+    volume:         live.volume         ?? base.volume,
+    session_weight: typeof live.session_weight === "number" ? live.session_weight : base.session_weight,
   };
 }
 
@@ -865,6 +867,9 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
   const [simStatus, setSimStatus] = useState("idle"); // "idle"|"loading"|"success"|"error"
   const [simError,  setSimError]  = useState(null);
   const [execPanel, setExecPanel] = useState(false);
+  const [showEMA,   setShowEMA]   = useState(true);
+  const [showVWAP,  setShowVWAP]  = useState(true);
+  const [showStoch, setShowStoch] = useState(false);
   const panelRef = useRef(null);
   useEffect(() => { setTf(MODE_TF[mode][1] || MODE_TF[mode][0]); }, [mode]);
   useEffect(() => {
@@ -998,7 +1003,10 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
               xabcdData={null} xabcdLoading={false}
               showSMC={false} setShowSMC={() => {}}
               showGH={false} setShowGH={() => {}}
-              showXABCD={false} setShowXABCD={() => {}} />
+              showXABCD={false} setShowXABCD={() => {}}
+              showEMA={showEMA} setShowEMA={setShowEMA}
+              showVWAP={showVWAP} setShowVWAP={setShowVWAP}
+              showStoch={showStoch} setShowStoch={setShowStoch} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, flex: "0 0 auto" }}>
@@ -1040,10 +1048,10 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
             {[
               { ok: asset.edge > 60,                   t: `Edge ≥ 60 (cur ${asset.edge})` },
               { ok: asset.rsi > 30 && asset.rsi < 70,  t: `RSI in band (cur ${asset.rsi})` },
-              { ok: dir > 0,                            t: "Trend with macro regime" },
-              { ok: macroVal < 70,                      t: `Macro warn safe (${macroVal})` },
-              { ok: asset.vol < 1.5,                    t: `Volatility manageable (${asset.vol}x)` },
-              { ok: true,                               t: "Liquidity sufficient · L1 spread tight" },
+              { ok: (asset.bias?.includes("↑") && dir > 0) || (asset.bias?.includes("↓") && dir < 0) || asset.bias?.includes("→"), t: `Bias aligns verdict (${asset.bias ?? "—"})` },
+              { ok: macroVal < 70,                      t: `Macro risk safe (${macroVal})` },
+              { ok: !asset.volume?.includes("SELLING"), t: `Volume: ${asset.volume ?? "—"}` },
+              { ok: (asset.session_weight ?? 1) >= 0.7, t: `Session weight (${(asset.session_weight ?? 1).toFixed(2)}x)` },
             ].map((row, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 14, height: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${row.ok ? "var(--buy)" : "var(--ink-4)"}`, color: row.ok ? "var(--buy)" : "var(--ink-4)", fontSize: 12 }}>
