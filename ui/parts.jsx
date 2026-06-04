@@ -1085,7 +1085,7 @@ function filterZonesForLens(zones, lensMode, currentPrice) {
   return zones;
 }
 
-function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = null, smcLoading = false, ghData = null, ghLoading = false, xabcdData = null, xabcdLoading = false, showSMC = true, setShowSMC = () => {}, showGH = true, setShowGH = () => {}, showXABCD = true, setShowXABCD = () => {}, lensMode = 1, currentPrice = null, onHover = null }) {
+function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = null, smcLoading = false, ghData = null, ghLoading = false, xabcdData = null, xabcdLoading = false, showSMC = true, setShowSMC = () => {}, showGH = true, setShowGH = () => {}, showXABCD = true, setShowXABCD = () => {}, showEMA = true, setShowEMA = () => {}, showVWAP = true, setShowVWAP = () => {}, showStoch = false, setShowStoch = () => {}, lensMode = 1, currentPrice = null, onHover = null }) {
   const containerRef  = useRef(null);
   const chartRef      = useRef(null);
   const seriesRef     = useRef(null);
@@ -1681,6 +1681,54 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
             cursor: "pointer",
           }}>
           {opacityMult >= 1.0 ? "◉ FULL" : opacityMult >= 0.65 ? "◎ SOFT" : "◌ FAINT"}
+        </button>
+      )}
+      {/* EMA toggle — right side */}
+      {indicatorData && (
+        <button
+          onClick={() => setShowEMA(v => !v)}
+          className="mono"
+          style={{
+            position: "absolute", top: 24, right: 8, zIndex: 10,
+            fontSize: 12, letterSpacing: "0.14em",
+            background: showEMA ? "rgba(66,165,245,0.15)" : "rgba(6,8,12,0.7)",
+            border: `1px solid ${showEMA ? "#42A5F5" : "#2a3346"}`,
+            color: showEMA ? "#42A5F5" : "#4a5364",
+            padding: "2px 7px", cursor: "pointer",
+          }}>
+          {showEMA ? "EMA ◆" : "EMA ○"}
+        </button>
+      )}
+      {/* VWAP toggle — right side */}
+      {indicatorData && (
+        <button
+          onClick={() => setShowVWAP(v => !v)}
+          className="mono"
+          style={{
+            position: "absolute", top: 42, right: 8, zIndex: 10,
+            fontSize: 12, letterSpacing: "0.14em",
+            background: showVWAP ? "rgba(171,71,188,0.15)" : "rgba(6,8,12,0.7)",
+            border: `1px solid ${showVWAP ? "#AB47BC" : "#2a3346"}`,
+            color: showVWAP ? "#AB47BC" : "#4a5364",
+            padding: "2px 7px", cursor: "pointer",
+          }}>
+          {showVWAP ? "VWAP ◆" : "VWAP ○"}
+        </button>
+      )}
+      {/* STOCH toggle — right side */}
+      {indicatorData && (
+        <button
+          onClick={() => setShowStoch(v => !v)}
+          className="mono"
+          style={{
+            position: "absolute", top: 60, right: 8, zIndex: 10,
+            fontSize: 12, letterSpacing: "0.14em",
+            background: showStoch ? "rgba(239,83,80,0.15)" : "rgba(6,8,12,0.7)",
+            border: `1px solid ${showStoch ? "#EF5350" : "#2a3346"}`,
+            color: showStoch ? "#EF5350" : "#4a5364",
+            padding: "2px 7px", cursor: "pointer",
+          }}>
+          {showStoch ? "STOCH ◆" : "STOCH ○"}
         </button>
       )}
     </div>
