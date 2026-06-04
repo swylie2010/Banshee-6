@@ -235,7 +235,7 @@ function AssetCard({ asset, onClick, selected }) {
             </div>
           </div>
           <div style={{
-            display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1,
+            display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
           }}>
             <div className="num" style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", lineHeight: 1 }}>
               {asset.price < 10 ? asset.price.toFixed(3) :
@@ -244,6 +244,9 @@ function AssetCard({ asset, onClick, selected }) {
             </div>
             <div className="num" style={{ fontSize: 13, color: up ? "var(--buy)" : "var(--sell)", lineHeight: 1 }}>
               {up ? "+" : ""}{asset.chg.toFixed(2)}%
+            </div>
+            <div className="mono" style={{ fontSize: 11, letterSpacing: "0.14em", color: asset._live ? "var(--buy)" : "var(--ink-4)", lineHeight: 1 }}>
+              {asset._live ? "◆ LIVE" : `◢ ${String(Math.abs(asset.sym.charCodeAt(0) * 7 % 999)).padStart(3,"0")}`}
             </div>
           </div>
         </div>
@@ -293,13 +296,6 @@ function AssetCard({ asset, onClick, selected }) {
         </div>
       </div>
 
-      {/* HUD ID + data source badge */}
-      <div className="mono" style={{
-        position: "absolute", top: 8, right: 8, fontSize: 11,
-        letterSpacing: "0.18em", color: asset._live ? "var(--buy)" : "var(--ink-4)",
-      }}>
-        {asset._live ? "◆ LIVE" : `◢ ${String(Math.abs(asset.sym.charCodeAt(0) * 7 % 999)).padStart(3,"0")}`}
-      </div>
     </button>
   );
 }
@@ -391,7 +387,7 @@ class SMCZoneRenderer {
             ctx.lineTo(xPx, botPx);
             ctx.stroke();
             /* small label "FVG" above/below the tick */
-            ctx.font      = `bold ${Math.round(8 * Math.min(vr, hr))}px 'JetBrains Mono', monospace`;
+            ctx.font      = `bold ${Math.max(11, Math.round(8 * Math.min(vr, hr)))}px 'JetBrains Mono', monospace`;
             ctx.fillStyle = fillBase + "cc";
             ctx.textAlign = "center";
             if (z.kind === "bullish") {
@@ -412,7 +408,7 @@ class SMCZoneRenderer {
           else if (sw >= 1.5) { badge = "◈"; badgeColor = "#FF8F00"; }
           else if (sw < 1.0)  { badge = "·"; badgeColor = "#607D8B"; }
 
-          const fSize = Math.round(10 * Math.min(vr, hr));
+          const fSize = Math.max(11, Math.round(10 * Math.min(vr, hr)));
           const baseX = bw - 5 * hr;
           const baseY = topPx + 12 * vr;
           let curX = baseX;
@@ -536,7 +532,7 @@ class SMCMarkersRenderer {
       /* Swing labels — 16px triangles, spec colors */
       const lensMode     = this._source._lensMode;
       const currentPrice = this._source._currentPrice;
-      ctx.font = `${Math.round(9 * hr)}px 'JetBrains Mono', monospace`;
+      ctx.font = `${Math.max(11, Math.round(9 * hr))}px 'JetBrains Mono', monospace`;
       ctx.textAlign = "center";
       for (const sw of swings) {
         const x = txToX(sw.timestamp);
@@ -565,7 +561,7 @@ class SMCMarkersRenderer {
           ctx.lineTo(x + triSize, y);
         }
         ctx.fill();
-        ctx.font = `${Math.round(9 * hr)}px 'JetBrains Mono', monospace`;
+        ctx.font = `${Math.max(11, Math.round(9 * hr))}px 'JetBrains Mono', monospace`;
         ctx.fillStyle = base + markerAlpha;
         if (isHigh) ctx.fillText(label, x, y - triSize - 4 * vr);
         else        ctx.fillText(label, x, y + triSize + 10 * vr);
@@ -919,7 +915,7 @@ class SMCPDZoneRenderer {
           ctx.fillStyle = premGrad;
           ctx.fillRect(0, topClip, bw, midClip - topClip);
           /* PREMIUM label — just inside the ceiling */
-          ctx.font      = `bold ${Math.round(10 * Math.min(vr, hr))}px 'JetBrains Mono', monospace`;
+          ctx.font      = `bold ${Math.max(11, Math.round(10 * Math.min(vr, hr)))}px 'JetBrains Mono', monospace`;
           ctx.fillStyle = "rgba(255,80,80,0.9)";
           ctx.textAlign = "right";
           ctx.fillText("▲ PREMIUM  SELL ZONE", bw - 8 * hr, topClip + 14 * vr);
@@ -934,7 +930,7 @@ class SMCPDZoneRenderer {
           ctx.fillStyle = discGrad;
           ctx.fillRect(0, midClip, bw, botClip - midClip);
           /* DISCOUNT label — just above range_low */
-          ctx.font      = `bold ${Math.round(10 * Math.min(vr, hr))}px 'JetBrains Mono', monospace`;
+          ctx.font      = `bold ${Math.max(11, Math.round(10 * Math.min(vr, hr)))}px 'JetBrains Mono', monospace`;
           ctx.fillStyle = "rgba(60,220,120,0.85)";
           ctx.textAlign = "right";
           ctx.fillText("▼ DISCOUNT  BUY ZONE", bw - 8 * hr, botClip - 6 * vr);
@@ -950,7 +946,7 @@ class SMCPDZoneRenderer {
           ctx.lineTo(bw, midClip);
           ctx.stroke();
           ctx.setLineDash([]);
-          ctx.font      = `${Math.round(8 * Math.min(vr, hr))}px 'JetBrains Mono', monospace`;
+          ctx.font      = `${Math.max(11, Math.round(8 * Math.min(vr, hr)))}px 'JetBrains Mono', monospace`;
           ctx.fillStyle = "#9ca3af70";
           ctx.textAlign = "right";
           ctx.fillText("EQ", bw - 8 * hr, midClip - 3 * vr);
@@ -986,28 +982,46 @@ function SMCLegend() {
   const rows = [
     { swatch: "#3b82f6", swatchStyle: {}, label: "Bullish Order Block (OB ▲)", desc: "Last bearish candle before an upward institutional displacement. Blue box. Price returning here = institutional buy zone." },
     { swatch: "#ef4444", swatchStyle: {}, label: "Bearish Order Block (OB ▼)", desc: "Last bullish candle before a downward institutional displacement. Red box. Price returning here = institutional sell zone." },
-    { swatch: "#5eead4", swatchStyle: { opacity: 0.7 }, label: "Fair Value Gap (FVG)", desc: "Three-candle imbalance where price moved too fast for fair two-sided trading. Teal = bullish gap (support). Red = bearish gap (resistance)." },
+    { swatch: "#5eead4", swatchStyle: { opacity: 0.7 }, label: "Bullish FVG (teal)", desc: "Three-candle upward imbalance — price moved too fast to fill both sides. Acts as support on retrace." },
+    { swatch: "#ef4444", swatchStyle: { opacity: 0.5 }, label: "Bearish FVG (red)", desc: "Three-candle downward imbalance. Acts as resistance on retrace." },
     { icon: "⚡", iconColor: "#22c55e", bordColor: "#22c55e", label: "Green border — Inducement Swept", desc: "The liquidity trap in front of this OB has fired. Smart money collected stops. This OB is now actionable — highest conviction entry." },
     { icon: "⌛", iconColor: "#f59e0b", bordColor: "#f59e0b", label: "Amber border — Inducement Pending", desc: "An unswept EQH or EQL sits between price and this OB. The trap is set but hasn't fired yet. Watch this level — don't enter early." },
     { icon: "◑", iconColor: "#9ca3af", label: "Touched", desc: "A wick entered the OB zone on a first touch. The zone is still valid but has been tested once. Slightly reduced conviction." },
     { icon: "⚠", iconColor: "#f59e0b", label: "Degraded", desc: "A candle body closed past the 50% midpoint of the OB. Institutions partially failed to defend. Lower confidence — treat as support only." },
     { icon: "╌╌", iconColor: "#6c7889", label: "Dashed border — Candidate OB", desc: "Order block with no inducement detected in front of it. It may itself be the trap that smart money uses to collect retail orders. Exercise caution." },
-    { bandColor: "#ef4444", bandOpacity: 0.5, label: "Premium Zone — SELL ZONE (red gradient)", desc: "Price is in the top half of the current dealing range. Brightest red = nearest the ceiling (range high). Smart money is positioned to sell here. Do NOT chase longs in premium — if you're already long, this is your target area." },
-    { bandColor: "#22c55e", bandOpacity: 0.4, label: "Discount Zone — BUY ZONE (green gradient)", desc: "Price is in the bottom half of the dealing range. Deepest green = nearest the floor (range low). Smart money prefers to buy here. Long setups in discount have the highest probability. Shorts here are counter-trend." },
-    { icon: "╌╌", iconColor: "#f59e0b", label: "OTE 62% / OTE 79% (amber dashed lines)", desc: "Optimal Trade Entry — the golden pocket. 61.8% to 79% Fibonacci retracement into the dealing range. Best entries cluster between these two lines. Look for OBs inside this band." },
-    { icon: "─ ─", iconColor: "#9ca3af", label: "Equilibrium Line (dotted grey)", desc: "The 50% midpoint of the current dealing range between the last swing high and swing low. Neither premium nor discount — price can go either way here." },
+    { bandColor: "#ef4444", bandOpacity: 0.5, label: "Premium Zone (red gradient)", desc: "Price is in the top half of the current dealing range. Smart money is positioned to sell here. Do NOT chase longs in premium." },
+    { bandColor: "#22c55e", bandOpacity: 0.4, label: "Discount Zone (green gradient)", desc: "Price is in the bottom half of the dealing range. Smart money prefers to buy here. Long setups in discount have the highest probability." },
+    { icon: "╌╌", iconColor: "#f59e0b", label: "OTE 62% / OTE 79% (amber dashed)", desc: "Optimal Trade Entry — the golden pocket. 61.8%–79% Fibonacci retracement into the dealing range. Look for OBs inside this band." },
+    { icon: "─ ─", iconColor: "#9ca3af", label: "Equilibrium (dotted grey)", desc: "The 50% midpoint of the current dealing range. Neither premium nor discount — price can go either way here." },
+    { heading: "STRUCTURE & LIQUIDITY" },
+    { icon: "▼", iconColor: "#FF6D00", label: "Swing High — HH / LH (orange ▼)", desc: "Higher High or Lower High swing label. Orange triangles mark structural highs. HH = bullish structure continuation. LH = weakening structure." },
+    { icon: "▲", iconColor: "#2979FF", label: "Swing Low — HL / LL (blue ▲)", desc: "Higher Low or Lower Low swing label. Blue triangles mark structural lows. HL = bullish structure continuation. LL = bearish structure." },
+    { icon: "BOS", iconColor: "#00E676", label: "BOS ▲ — Break of Structure (bullish)", desc: "Price broke above the previous swing high, confirming a bullish trend continuation. Solid green tick mark." },
+    { icon: "BOS", iconColor: "#FF1744", label: "BOS ▼ — Break of Structure (bearish)", desc: "Price broke below the previous swing low, confirming a bearish trend continuation. Solid red tick mark." },
+    { icon: "CHoCH", iconColor: "#69F0AE", label: "CHoCH ▲ — Change of Character (bull)", desc: "First break of structure against the prevailing trend to the upside. Possible trend reversal — not confirmed until a second BOS." },
+    { icon: "CHoCH", iconColor: "#FF5252", label: "CHoCH ▼ — Change of Character (bear)", desc: "First break of structure against the prevailing trend to the downside. Possible trend reversal — not confirmed until a second BOS." },
+    { icon: "─ ─", iconColor: "#ef4444", label: "EQH — Equal Highs (red dotted)", desc: "Two or more equal swing highs create a pool of resting sell-stop orders above. Smart money may target this liquidity before reversing." },
+    { icon: "─ ─", iconColor: "#5eead4", label: "EQL — Equal Lows (teal dotted)", desc: "Two or more equal swing lows create a pool of resting buy-stop orders below. Smart money may sweep this liquidity before reversing." },
+    { heading: "HTF KEY LEVELS" },
+    { icon: "───", iconColor: "#FFD600", label: "Yearly / Monthly (gold solid)", desc: "Annual or monthly open/close level from htf_levels.json. Highest timeframe confluence — treat as major support/resistance." },
+    { icon: "───", iconColor: "#CE93D8", label: "Market Maker (purple solid)", desc: "Weekly or market-maker-derived level. Mid-tier HTF confluence. Often the location of large institutional order flow." },
+    { icon: "╌╌╌", iconColor: "#26C6DA", label: "VWAP (teal dashed)", desc: "Volume Weighted Average Price level. Acts as a fair value magnet. Price above VWAP = bullish; below = bearish." },
+    { icon: "╌╌╌", iconColor: "#90A4AE", label: "Elliott Wave (steel dashed)", desc: "Elliott Wave derived level from htf_levels.json. Lower confidence but useful for wave count confluence." },
   ];
 
   return (
-    <div style={{ padding: "18px 14px 6px 14px" }}>
-      <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: "18px 20px" }}>
-        <div className="mono" style={{ fontSize: 13, letterSpacing: "0.18em", color: "var(--ink-4)", marginBottom: 16 }}>
+    <div style={{ padding: "10px 14px 6px 14px" }}>
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: "14px 20px" }}>
+        <div className="mono" style={{ fontSize: 12, letterSpacing: "0.18em", color: "var(--ink)", marginBottom: 14 }}>
           SMC CHART KEY
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 28px" }}>
-          {rows.map((r, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              {/* swatch / icon */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 28px" }}>
+          {rows.map((r, i) => r.heading ? (
+            <div key={i} style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--line)", paddingTop: 10, marginTop: 2 }}>
+              <span className="mono" style={{ fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-3)" }}>{r.heading}</span>
+            </div>
+          ) : (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
               <div style={{ flexShrink: 0, width: 28, paddingTop: 2, textAlign: "center" }}>
                 {r.swatch ? (
                   <div style={{
@@ -1023,15 +1037,14 @@ function SMCLegend() {
                     margin: "3px auto 0",
                   }} />
                 ) : (
-                  <span style={{ fontSize: 18, color: r.iconColor, lineHeight: 1 }}>{r.icon}</span>
+                  <span style={{ fontSize: r.icon.length > 2 ? 11 : 16, color: r.iconColor, lineHeight: 1, fontFamily: "'JetBrains Mono', monospace" }}>{r.icon}</span>
                 )}
               </div>
-              {/* text */}
               <div>
-                <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: r.iconColor || r.bordColor || "#c8d4e0", letterSpacing: "0.04em", marginBottom: 3 }}>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: r.iconColor || r.bordColor || "#c8d4e0", letterSpacing: "0.04em", marginBottom: 2 }}>
                   {r.label}
                 </div>
-                <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ fontSize: 11, color: "var(--ink-2)", lineHeight: 1.5, fontFamily: "'JetBrains Mono', monospace" }}>
                   {r.desc}
                 </div>
               </div>
@@ -1084,6 +1097,11 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const htfLinesRef       = useRef([]);
   const ghLinesRef        = useRef([]);
   const eqlLinesRef       = useRef([]);
+  const ema50SeriesRef  = useRef(null);
+  const ema200SeriesRef = useRef(null);
+  const vwapSeriesRef   = useRef(null);
+  const stochKSeriesRef = useRef(null);
+  const stochDSeriesRef = useRef(null);
   const oteLinesRef       = useRef([]);
   const smcDataRef        = useRef(null);
   const htfLevelDataRef   = useRef([]);
@@ -1096,6 +1114,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const [dataSource,  setDataSource]  = useState("…");
   const [diagMsg,     setDiagMsg]     = useState("");
   const [opacityMult, setOpacityMult] = useState(1.0);
+  const [indicatorData, setIndicatorData] = useState(null);
 
   const ACCENT_MAP = {
     "--buy":     "#5eead4",
@@ -1294,6 +1313,11 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       ghLinesRef.current  = [];
       eqlLinesRef.current = [];
       oteLinesRef.current = [];
+      ema50SeriesRef.current  = null;
+      ema200SeriesRef.current = null;
+      vwapSeriesRef.current   = null;
+      stochKSeriesRef.current = null;
+      stochDSeriesRef.current = null;
       chart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
@@ -1306,11 +1330,13 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     let cancelled = false;
     setDataSource("…");
 
-    window.API.fetchOHLCV(symbol, tf).then(({ candles, source }) => {
+    setIndicatorData(null);
+    window.API.fetchOHLCV(symbol, tf).then(({ candles, indicators, source }) => {
       if (cancelled || !seriesRef.current || !candles.length) return;
       seriesRef.current.setData(candles);
       chartRef.current.timeScale().fitContent();
       setDataSource(source);
+      setIndicatorData(indicators || null);
     });
 
     return () => { cancelled = true; };
@@ -1682,7 +1708,7 @@ function AlertCard({ level, section, text }) {
         borderRight: `1px solid ${c.border}22`,
         display: "flex", flexDirection: "column", gap: 3, justifyContent: "center",
       }}>
-        <span className="mono" style={{ fontSize: 11, color: c.border, letterSpacing: "0.18em", opacity: 0.75 }}>
+        <span className="mono" style={{ fontSize: 12, color: c.border, letterSpacing: "0.18em", opacity: 0.75 }}>
           {section}
         </span>
         <span className="mono" style={{ fontSize: 13, color: c.border, fontWeight: 700, letterSpacing: "0.08em" }}>
@@ -1730,16 +1756,19 @@ function MacroSensorCard({ sensorKey, sensor, label, unit = "", explain }) {
     disp = val ? String(val) : "N/A";
   }
 
+  const critical = sensor.critical;
   const warn = sensor.warning;
-  const accentColor = warn ? "#ef4444" : "#5eead4";
-  const status = sensor.status || (warn ? "WARNING" : "OK");
+  const accentColor = critical ? "#ef4444" : warn ? "#f59e0b" : "#5eead4";
+  const bgColor     = critical ? "rgba(239,68,68,0.07)" : warn ? "rgba(245,158,11,0.06)" : "rgba(94,234,212,0.04)";
+  const borderColor = critical ? "#ef444440" : warn ? "#f59e0b40" : "var(--line)";
+  const status = sensor.status || (critical ? "CRITICAL" : warn ? "WARNING" : "OK");
 
   return (
     <div
       onClick={() => setExpanded(e => !e)}
       style={{
-        background: warn ? "rgba(239,68,68,0.07)" : "rgba(94,234,212,0.04)",
-        border: `1px solid ${warn ? "#ef444440" : "var(--line)"}`,
+        background: bgColor,
+        border: `1px solid ${borderColor}`,
         borderLeft: `3px solid ${accentColor}`,
         padding: "14px 16px",
         cursor: "pointer",
