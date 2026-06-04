@@ -44,6 +44,14 @@ function toLWCandles(records) {
     .sort((a, b) => a.time - b.time);
 }
 
+/* extract a named indicator column from Core OHLCV records → LW Charts {time,value} format */
+function toIndicatorSeries(records, field) {
+  return records
+    .filter(r => r.timestamp && r[field] != null && !isNaN(r[field]))
+    .map(r => ({ time: Math.floor(new Date(r.timestamp).getTime() / 1000), value: r[field] }))
+    .sort((a, b) => a.time - b.time);
+}
+
 /* fetch OHLCV for a symbol+tf from Core; returns LW-formatted candles */
 async function fetchOHLCV(sym, tf) {
   const mode    = TF_TO_MODE[tf] || "swing";
@@ -56,7 +64,17 @@ async function fetchOHLCV(sym, tf) {
     if (data.error) throw new Error(data.error);
     const records = data.tfs?.[coreKey];
     if (!records || !records.length) throw new Error(`no data for tf=${coreKey}`);
-    return { candles: toLWCandles(records), source: "live" };
+    return {
+      candles: toLWCandles(records),
+      indicators: {
+        ema50:  toIndicatorSeries(records, 'ema_50'),
+        ema200: toIndicatorSeries(records, 'ema_200'),
+        vwap:   toIndicatorSeries(records, 'vwap'),
+        stochK: toIndicatorSeries(records, 'stoch_k'),
+        stochD: toIndicatorSeries(records, 'stoch_d'),
+      },
+      source: "live",
+    };
   } catch (err) {
     console.warn(`[api] OHLCV fallback for ${sym}/${tf}:`, err.message);
     /* fall back to mock candles so the chart still renders */
@@ -68,7 +86,7 @@ async function fetchOHLCV(sym, tf) {
       time:  now - (mockRaw.length - 1 - i) * step,
       open:  c.o, high: c.h, low: c.l, close: c.c,
     }));
-    return { candles, source: "mock" };
+    return { candles, indicators: null, source: "mock" };
   }
 }
 
