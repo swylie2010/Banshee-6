@@ -1577,6 +1577,47 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     };
   }, [xabcdData, showXABCD]);
 
+  /* EMA 50/200 overlays — create/destroy on data or toggle change */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (ema50SeriesRef.current)  { try { chart.removeSeries(ema50SeriesRef.current);  } catch(e){} ema50SeriesRef.current  = null; }
+    if (ema200SeriesRef.current) { try { chart.removeSeries(ema200SeriesRef.current); } catch(e){} ema200SeriesRef.current = null; }
+    if (!showEMA || !indicatorData?.ema50?.length) return;
+    const s50 = chart.addLineSeries({ color: '#42A5F5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+    s50.setData(indicatorData.ema50);
+    ema50SeriesRef.current = s50;
+    const s200 = chart.addLineSeries({ color: '#EF5350', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+    s200.setData(indicatorData.ema200);
+    ema200SeriesRef.current = s200;
+  }, [indicatorData, showEMA]);
+
+  /* VWAP overlay — create/destroy on data or toggle change */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (vwapSeriesRef.current) { try { chart.removeSeries(vwapSeriesRef.current); } catch(e){} vwapSeriesRef.current = null; }
+    if (!showVWAP || !indicatorData?.vwap?.length) return;
+    const s = chart.addLineSeries({ color: '#AB47BC', lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    s.setData(indicatorData.vwap);
+    vwapSeriesRef.current = s;
+  }, [indicatorData, showVWAP]);
+
+  /* Stoch RSI sub-pane — create/destroy on data or toggle change */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (stochKSeriesRef.current) { try { chart.removeSeries(stochKSeriesRef.current); } catch(e){} stochKSeriesRef.current = null; }
+    if (stochDSeriesRef.current) { try { chart.removeSeries(stochDSeriesRef.current); } catch(e){} stochDSeriesRef.current = null; }
+    if (!showStoch || !indicatorData?.stochK?.length) return;
+    const sK = chart.addLineSeries({ pane: 1, color: '#42A5F5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+    sK.setData(indicatorData.stochK);
+    stochKSeriesRef.current = sK;
+    const sD = chart.addLineSeries({ pane: 1, color: '#EF5350', lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    sD.setData(indicatorData.stochD);
+    stochDSeriesRef.current = sD;
+  }, [indicatorData, showStoch]);
+
   /* derive badge text */
   const smcBadge = smcLoading ? "SMC ◇"
     : smcData?.error            ? "SMC ⚠"
