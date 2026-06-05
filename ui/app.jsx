@@ -1521,7 +1521,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
   const TF_LIST = ["1H", "4H", "1D"];
 
   return (
-    <div style={{ position: "absolute", inset: 0, background: "rgba(6,8,12,0.97)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", zIndex: 30, animation: "fadeIn 200ms ease" }}>
+    <div style={{ position: "absolute", inset: 0, background: "rgba(6,8,12,0.97)", backdropFilter: "blur(6px)", display: "flex", flexDirection: "column", zIndex: 30, animation: "fadeIn 200ms ease", overflowY: "auto" }}>
 
       {/* header with tabs */}
       <div style={{ height: 52, flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "stretch", background: "var(--bg-2)" }}>
