@@ -140,14 +140,53 @@ Identified 2026-06-01. Mix of quick fixes and medium-effort items. Do quick batc
 
 ## Phase 9 Additions — Round 2 (captured 2026-06-02)
 
-- [ ] **Technical indicators on Nexus/AssetHub chart** — V4 showed EMA 50 (blue), EMA 200 (red), VWAP (purple dotted) overlaid on the price pane, and Stochastic %K/%D in a sub-pane below. V5 chart currently shows raw candles only. Bring these back with per-indicator toggle buttons (same pattern as SMC/GH/XABCD toggles). Indicators already partially computed in `micro_engine.py` (EMA, ATR). VWAP and Stochastic need computing from OHLCV. Lightweight Charts supports line series overlays + separate panes for oscillators. Add toggles across the top of the chart area. Applies to Nexus tab and/or AssetHub main chart — TBD in spec.
-- [ ] **Signal checklist + edge check** — The signal checklist (RSI in band, trend with macro, etc.) exists in AssetHub trade rec panel but user reports it feels absent/broken. The "edge case check" button may not be functioning. Investigate: (1) is the checklist rendering correctly on all assets, (2) what is the "edge check" button and why isn't it firing, (3) consider surfacing checklist more prominently. Needs investigation before spec.
+- [x] **Technical indicators on chart** — DONE (2026-06-04). EMA 50 (blue), EMA 200 (red), VWAP (purple dashed) on main pane + Stoch RSI %K/%D toggleable. EMA/VWAP on by default, Stoch off. Toggle buttons on RIGHT side of chart (EMA ◆, VWAP ◆, STOCH ◆). Spec + plan at docs/superpowers/. 6 commits. **Stoch sub-pane display issue remains** — see next item below.
+- [x] **Stoch sub-pane fix** — DONE (2026-06-05). Separate 100px LW Charts instance below main chart. Bidirectional time-scale sync + crosshair sync (main→Stoch). 20/80 reference lines. autoscaleInfoProvider pins Y axis to 0-100. Works on AnalysisPage (420px) and Nexus (260px). Spec + plan at docs/superpowers/. 5 commits.
+- [x] **Signal checklist + edge check** — DONE (2026-06-03).
+
+## Sovereign AI Architecture (very long-term, foundational — captured 2026-06-03)
+
+These three items are core to Banshee's identity: local-first, cheap, hot-swappable AI brains. No urgency — build them when the time is right, but the design should inform Settings page evolution now.
+
+- [ ] **Standardize Ollama path on OpenAI API schema** — `call_ai()` currently hits Ollama's legacy `/api/generate` with a flat `prompt:` string. Ollama also serves `/v1/chat/completions` (OpenAI compat). Migrate the `ollama` branch to use `openai.OpenAI(base_url=..., api_key="ollama")`. This collapses the Ollama + Custom branches into one and makes any OpenAI-compat provider (LM Studio, Jan, LocalAI, Groq, Together, Fireworks, OpenRouter, Vertex, Mistral AI) configurable with just a base_url + model name. Gemini and Anthropic retain their own SDK branches — their native SDKs expose features (thinking tokens, caching, 1M context) the compat layer doesn't.
+- [ ] **Context-aware routing** — No token counting exists today. `num_ctx: 8192` is hardcoded for Ollama. Build a `route_by_capacity()` wrapper: measure assembled prompt size (tiktoken or `len//4` approximation), compare to configured model context limit, either truncate secondary sections (news, distant FVGs, older structure events) or fall back to the cloud brain. This is the key piece that makes Banshee *aware* of its own cognitive capacity and able to route around limits without human intervention. When Gemma 5 ships with 1M context, this logic becomes a config value change, not a code change.
+- [ ] **Externalize system prompts** — `_SMC_SYSTEM_PROMPT` and the default system prompt in `call_ai()` are hardcoded Python strings. Move to external YAML files with named variants per model family (e.g. `prompts/smc_gemma.yaml`, `prompts/smc_gemini.yaml`). Different model families respond differently to formatting — Gemma prefers direct instructions, Gemini handles detailed constraints well. This lets prompt tuning happen without code deploys and lets Banshee carry model-specific personalities.
+- [ ] **AI Brain roster + Settings expansion** — The current Settings page has one active brain (provider + model + key + URL). Long-term this becomes a named roster: multiple configured brains, each with type/base_url/model/context_limit/cost_tier. Routing policy selector: "prefer local, fall back to cloud if context > X". Candidate providers to eventually support beyond Ollama: LM Studio (localhost:1234, OpenAI compat), Jan.ai, LocalAI, Groq (cloud, ultra-fast LPU), Together AI, Fireworks AI, OpenRouter (meta-API: one key, 100+ models), Google Vertex AI (enterprise Gemini + open models via Model Garden), Mistral AI, Cerebras. Most already speak OpenAI compat — once item 1 above is done, adding them is a URL.
 
 ## Longer-Term (needs spec/design before touching code)
 
 - [ ] **Dynamic zone boundaries ("blast radius")** — Zones should be bounded on *both* sides by their own history, not the viewport. Left edge: always the formation candle (`start_time`) — never bleeds left into the viewport on scroll. Right edge: active zones extend to current candle; mitigated zones cap at the mitigation candle and render as a ghost (10% opacity, no solid border). Together these give the trader a free temporal read: zone width = age at a glance, no label needed. A month-old unmitigated OB reads differently than a day-old one just from geometry. The ghost box approach (from Blast Radius.md) is the right model for the right edge — not hiding mitigated zones entirely, but anchoring them in time. Key data needed: `end_time` (mitigation candle timestamp) from SMC engine — check whether `smc_engine.py` already stores this or only tracks status. Affects ALL lens and FOOTPRINTS most. Needs a spec session before touching canvas code.
 - [ ] **Timeframe filtering by data availability** — `TF_LIST = ["1H", "4H", "1D"]` is hardcoded. Timeframes that the data source can't serve should not appear. Requires: Core API to report available TFs per symbol/source, UI to filter TF_LIST accordingly. Blocked on data source architecture.
 - [ ] **Custom data source / API management** — allow users to plug in their own API keys (CoinGecko paid, Binance, etc.) and have the timeframe list reflect what that source supports. Would live in Settings page as a "Data Sources" section. Core needs a pluggable fetcher layer. Needs a proper spec session.
+
+## Security Hardening (pre-open-source, needs dedicated session)
+
+Research doc: `Research and Resources/BLACK HAT.md` — Gemini black-hat analysis, 4-phase roadmap.
+
+Key issues identified (grouped by phase):
+- **Phase 1 (Secrets):** `os.chmod(KEYS_FILE, 0o600)` missing in `shared_data.py`; `/settings` endpoint may leak masked keys to browser Network tab; sanitize stack traces in error responses
+- **Phase 2 (Auth/SSRF):** No local bearer token — any process on machine can hit `:8765`; `/settings/test` passes user-supplied URL directly to `requests.post()` — block internal IP ranges (127.x, 192.168.x, 169.254.x)
+- **Phase 3 (Concurrency/Input):** No file lock on `paper_trades.json` — background scheduler + UI writes can collide and corrupt; no symbol input validation (length/charset checks on `/radar`, `/smc`, etc.); RSS feed content injected raw into LLM prompt — wrap in `<user_content>` tags + system prompt guard
+- **Phase 4 (Legal/UX):** Risk acknowledgment modal on first launch (store `accepted_disclaimer: true` in settings); hardcode Alpaca connection to paper endpoint for V1; HITL for any live trade action; CORS must be surgical (`localhost:3000` only, never `*`)
+- **Other:** Pin versions in `requirements.txt`; `.gitignore` must cover `.banshee_keys.json`, `.banshee_kill_switch.json`, `paper_trades.json`; audit for accidental key logging in exception handlers
+
+When to tackle: before any public/open-source release. No urgency now.
+
+## Sector Rotation / Growth Detection (macro engine expansion)
+
+Research doc: `Research and Resources/Sector Rotation and Macro Signal System For Growth indicator.md`
+
+Current state: `macro_engine.py` has a stub `rotation` sensor tracking 4 sectors (XLU/XLF/XLK/XLE vs SPY, 5-day) but its **weight is 0** — not affecting risk score.
+
+What the research paper describes (full MacroRotationEngine):
+- All 10 sector SPDRs (XLK/XLY/XLI/XLB/XLE/XLF/XLV/XLP/XLU/XLRE) vs SPY benchmark
+- Comparative Relative Strength (CRS) = sector/SPY ratio per day
+- Rate of Change (ROC) on CRS over 5-day (velocity) and 21-day (structure) windows
+- FRED macro overlay: copper-to-gold ratio (PCOPPUSDM / GOLDAMGBD228NLBM), M2 (WM2NS), 10Y yield (DGS10) — requires FRED API key (already in settings)
+- Cross-Asset Momentum Divergence (CAMD) detection: sector outperforming when SPY is weak = stealth accumulation signal
+- JSON payload → LLM synthesis → "Rotation Alert"
+
+Integration: new `sector_rotation_engine.py` → results surfaced on MacroPage as a new sensor row + rotation alert card. Existing FRED key in settings is the only new credential needed. Needs spec session before build.
 
 ## Cosmetic (known, low priority)
 
