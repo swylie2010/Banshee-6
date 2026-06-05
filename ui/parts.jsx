@@ -1100,8 +1100,11 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const ema50SeriesRef  = useRef(null);
   const ema200SeriesRef = useRef(null);
   const vwapSeriesRef   = useRef(null);
-  const stochKSeriesRef = useRef(null);
-  const stochDSeriesRef = useRef(null);
+  const stochKSeriesRef     = useRef(null);
+  const stochDSeriesRef     = useRef(null);
+  const stochContainerRef   = useRef(null);
+  const stochChartRef       = useRef(null);
+  const syncingRef          = useRef(false);
   const oteLinesRef       = useRef([]);
   const smcDataRef        = useRef(null);
   const htfLevelDataRef   = useRef([]);
@@ -1635,6 +1638,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     : null;
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
     <div style={{ position: "relative", width: "100%", height }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       {/* candle data badge */}
@@ -1772,6 +1776,16 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
           {showStoch ? "STOCH ◆" : "STOCH ○"}
         </button>
       )}
+    </div>
+    <div
+      ref={stochContainerRef}
+      style={{
+        width: "100%",
+        height: 100,
+        display: showStoch && indicatorData?.stochK?.length ? "block" : "none",
+        background: "#06080c",
+      }}
+    />
     </div>
   );
 }
