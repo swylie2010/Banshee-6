@@ -1321,6 +1321,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       vwapSeriesRef.current   = null;
       stochKSeriesRef.current = null;
       stochDSeriesRef.current = null;
+      if (stochChartRef.current) { stochChartRef.current.remove(); stochChartRef.current = null; }
       chart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
