@@ -1670,11 +1670,10 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
 
     // --- crosshair sync (main → Stoch, vertical line only) ---
     const handleCrosshair = param => {
-      if (!stochChartRef.current || !stochKSeriesRef.current) return;
       if (param.time) {
-        stochChartRef.current.setCrosshairPosition(50, param.time, stochKSeriesRef.current);
+        sc.setCrosshairPosition(50, param.time, sK);
       } else {
-        stochChartRef.current.clearCrosshairPosition();
+        sc.clearCrosshairPosition();
       }
     };
     chartRef.current.subscribeCrosshairMove(handleCrosshair);
