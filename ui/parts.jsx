@@ -1606,19 +1606,91 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     vwapSeriesRef.current = s;
   }, [indicatorData, showVWAP]);
 
-  /* Stoch RSI sub-pane — create/destroy on data or toggle change */
+  /* Stoch RSI sub-pane — separate LW Charts instance, synced to main chart */
   useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    if (stochKSeriesRef.current) { try { chart.removeSeries(stochKSeriesRef.current); } catch(e){} stochKSeriesRef.current = null; }
-    if (stochDSeriesRef.current) { try { chart.removeSeries(stochDSeriesRef.current); } catch(e){} stochDSeriesRef.current = null; }
-    if (!showStoch || !indicatorData?.stochK?.length) return;
-    const sK = chart.addLineSeries({ pane: 1, color: '#42A5F5', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+    const container = stochContainerRef.current;
+    if (!container) return;
+
+    // --- teardown any existing stoch chart ---
+    stochKSeriesRef.current = null;
+    stochDSeriesRef.current = null;
+    if (stochChartRef.current) { stochChartRef.current.remove(); stochChartRef.current = null; }
+
+    if (!showStoch || !indicatorData?.stochK?.length || !chartRef.current) return;
+
+    // --- create chart ---
+    const sc = window.LightweightCharts.createChart(container, {
+      autoSize: true,
+      layout: { background: { color: '#06080c' }, textColor: '#4a5364' },
+      grid: { vertLines: { color: '#0e1420' }, horzLines: { color: '#0e1420' } },
+      rightPriceScale: { visible: true, borderVisible: false, scaleMargins: { top: 0.05, bottom: 0.05 } },
+      timeScale: { visible: false },
+      crosshair: { mode: window.LightweightCharts.CrosshairMode.Normal },
+      handleScale: { mouseWheel: false, pinch: false, axisPressedMouseMove: false },
+    });
+    stochChartRef.current = sc;
+
+    // --- %K line (pinned 0-100 via autoscaleInfoProvider) ---
+    const sK = sc.addLineSeries({
+      color: '#42A5F5', lineWidth: 1.5,
+      priceLineVisible: false, lastValueVisible: false,
+      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+    });
     sK.setData(indicatorData.stochK);
     stochKSeriesRef.current = sK;
-    const sD = chart.addLineSeries({ pane: 1, color: '#EF5350', lineWidth: 1.5, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+
+    // --- %D line (dashed) ---
+    const sD = sc.addLineSeries({
+      color: '#EF5350', lineWidth: 1.5, lineStyle: 2,
+      priceLineVisible: false, lastValueVisible: false,
+    });
     sD.setData(indicatorData.stochD);
     stochDSeriesRef.current = sD;
+
+    // --- 20 / 80 reference lines ---
+    sK.createPriceLine({ price: 80, color: '#3a4560', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' });
+    sK.createPriceLine({ price: 20, color: '#3a4560', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '' });
+
+    // --- time-scale sync (bidirectional) ---
+    const handleMainRange = range => {
+      if (syncingRef.current || !range) return;
+      syncingRef.current = true;
+      sc.timeScale().setVisibleLogicalRange(range);
+      syncingRef.current = false;
+    };
+    chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(handleMainRange);
+
+    const handleStochRange = range => {
+      if (syncingRef.current || !range) return;
+      syncingRef.current = true;
+      chartRef.current?.timeScale().setVisibleLogicalRange(range);
+      syncingRef.current = false;
+    };
+    sc.timeScale().subscribeVisibleLogicalRangeChange(handleStochRange);
+
+    // --- crosshair sync (main → Stoch, vertical line only) ---
+    const handleCrosshair = param => {
+      if (!stochChartRef.current || !stochKSeriesRef.current) return;
+      if (param.time) {
+        stochChartRef.current.setCrosshairPosition(50, param.time, stochKSeriesRef.current);
+      } else {
+        stochChartRef.current.clearCrosshairPosition();
+      }
+    };
+    chartRef.current.subscribeCrosshairMove(handleCrosshair);
+
+    // --- initial range sync so Stoch starts aligned ---
+    const currentRange = chartRef.current.timeScale().getVisibleLogicalRange();
+    if (currentRange) sc.timeScale().setVisibleLogicalRange(currentRange);
+
+    return () => {
+      chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(handleMainRange);
+      sc.timeScale().unsubscribeVisibleLogicalRangeChange(handleStochRange);
+      chartRef.current?.unsubscribeCrosshairMove(handleCrosshair);
+      stochKSeriesRef.current = null;
+      stochDSeriesRef.current = null;
+      if (stochChartRef.current) { stochChartRef.current.remove(); stochChartRef.current = null; }
+    };
   }, [indicatorData, showStoch]);
 
   /* derive badge text */
