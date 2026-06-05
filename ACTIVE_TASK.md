@@ -141,7 +141,7 @@ Identified 2026-06-01. Mix of quick fixes and medium-effort items. Do quick batc
 ## Phase 9 Additions — Round 2 (captured 2026-06-02)
 
 - [x] **Technical indicators on chart** — DONE (2026-06-04). EMA 50 (blue), EMA 200 (red), VWAP (purple dashed) on main pane + Stoch RSI %K/%D toggleable. EMA/VWAP on by default, Stoch off. Toggle buttons on RIGHT side of chart (EMA ◆, VWAP ◆, STOCH ◆). Spec + plan at docs/superpowers/. 6 commits. **Stoch sub-pane display issue remains** — see next item below.
-- [x] **Stoch sub-pane fix** — DONE (2026-06-05). Separate 100px LW Charts instance below main chart. Bidirectional time-scale sync + crosshair sync (main→Stoch). 20/80 reference lines. autoscaleInfoProvider pins Y axis to 0-100. Works on AnalysisPage (420px) and Nexus (260px). Spec + plan at docs/superpowers/. 5 commits.
+- [x] **Stoch sub-pane fix** — BUILT (2026-06-05), layout follow-up needed. Separate 100px LW Charts instance below main chart. Bidirectional time-scale sync + crosshair sync (main→Stoch). 20/80 reference lines. autoscaleInfoProvider pins Y axis to 0-100. Spec + plan at docs/superpowers/. 5 commits. **Known issue: when Stoch is on, the AnalysisPage overflows — bottom content (tab bar, metrics) gets bunched. `overflowY: auto` added but scroll doesn't fully solve it. Next session: combine scroll fix + drag-to-resize divider (user adjusts Stoch pane height by dragging its top edge, like TradingView). For now, keep Stoch off to preserve normal layout.**
 - [x] **Signal checklist + edge check** — DONE (2026-06-03).
 
 ## Sovereign AI Architecture (very long-term, foundational — captured 2026-06-03)
