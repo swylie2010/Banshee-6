@@ -10,7 +10,6 @@ calls yfinance directly. The caller provides the closes.
 
 import sys
 import pandas as pd
-import numpy as np
 from datetime import datetime, timezone
 from cache_utils import ttl_cache
 
@@ -33,6 +32,7 @@ _ERROR_SHAPE = {
     "camd_alerts": [],
     "spy_roc_21": None,
     "macro_env": None,
+    "timestamp": None,
 }
 
 
@@ -57,7 +57,10 @@ def run(closes_df: pd.DataFrame, fred_key=None) -> dict:
     spy = closes["SPY"]
 
     # SPY 21-day absolute momentum — gate for CAMD detection
-    spy_roc_21 = float((spy.iloc[-1] - spy.iloc[-22]) / spy.iloc[-22] * 100)
+    spy_base = float(spy.iloc[-22])
+    if spy_base == 0 or pd.isna(spy_base):
+        return dict(_ERROR_SHAPE)
+    spy_roc_21 = float((spy.iloc[-1] - spy_base) / spy_base * 100)
 
     sectors_out = []
     for ticker, name in SECTORS.items():
@@ -67,9 +70,13 @@ def run(closes_df: pd.DataFrame, fred_key=None) -> dict:
         sector_prices = closes[ticker]
         crs = sector_prices / spy  # Comparative Relative Strength
 
-        # Rate of Change on the CRS ratio
-        roc_21 = float((crs.iloc[-1] - crs.iloc[-22]) / crs.iloc[-22] * 100)
-        roc_5  = float((crs.iloc[-1] - crs.iloc[-6])  / crs.iloc[-6]  * 100)
+        crs_base_21 = float(crs.iloc[-22])
+        crs_base_5  = float(crs.iloc[-6])
+        if crs_base_21 == 0 or pd.isna(crs_base_21) or crs_base_5 == 0 or pd.isna(crs_base_5):
+            continue  # skip this sector if data is unusable
+
+        roc_21 = round(float((crs.iloc[-1] - crs_base_21) / crs_base_21 * 100), 2)
+        roc_5  = round(float((crs.iloc[-1] - crs_base_5)  / crs_base_5  * 100), 2)
 
         # CAMD: sector outperforming AND SPY flat-or-falling
         camd = bool(roc_21 > 0 and roc_5 > 0 and spy_roc_21 <= 0)
@@ -77,8 +84,8 @@ def run(closes_df: pd.DataFrame, fred_key=None) -> dict:
         sectors_out.append({
             "ticker": ticker,
             "name":   name,
-            "roc_5":  round(roc_5,  2),
-            "roc_21": round(roc_21, 2),
+            "roc_5":  roc_5,
+            "roc_21": roc_21,
             "camd":   camd,
         })
 
