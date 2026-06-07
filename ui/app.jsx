@@ -3925,22 +3925,19 @@ function ManualPage({ onBack }) {
 }
 
 /* ── Watchlist custom presets helpers ─────────────────────── */
-function loadCustomPresets() {
+/* read-once migration source — never written back to localStorage */
+function _migratePresetsFromLocalStorage() {
   try {
     const raw = localStorage.getItem('banshee_custom_presets');
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
-}
-function persistCustomPresets(presets) {
-  try { localStorage.setItem('banshee_custom_presets', JSON.stringify(presets)); }
-  catch {}
 }
 
 /* ── App ───────────────────────────────────────────────────── */
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [watchlist, setWatchlist]     = useState("all");
-  const [customPresets, setCustomPresets] = React.useState(() => loadCustomPresets());
+  const [customPresets, setCustomPresets] = React.useState([]);
   const [presetsOpen, setPresetsOpen]     = React.useState(false);
   const [focusedSym, setFocusedSym]   = useState(null);
   const [openSym, setOpenSym]         = useState(null);
@@ -3958,9 +3955,26 @@ function App() {
     [customPresets]
   );
 
+  /* load presets from Core on mount; migrate from localStorage if Core returns empty */
+  React.useEffect(() => {
+    window.API.fetchPresets().then(serverPresets => {
+      if (serverPresets === null) return; // Core unavailable — keep state as-is
+      if (serverPresets.length > 0) {
+        setCustomPresets(serverPresets);
+      } else {
+        const migrated = _migratePresetsFromLocalStorage();
+        if (migrated.length > 0) {
+          setCustomPresets(migrated);
+          window.API.savePresets(migrated); // persist to disk
+          localStorage.removeItem('banshee_custom_presets');
+        }
+      }
+    });
+  }, []);
+
   function saveCustomPresets(presets) {
     setCustomPresets(presets);
-    persistCustomPresets(presets);
+    window.API.savePresets(presets);
   }
 
   React.useEffect(() => {

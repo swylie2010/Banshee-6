@@ -2123,37 +2123,30 @@ except ImportError:
 # ROUTE 13 — Watchlist Presets
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PRESETS_PATH = Path(__file__).parent / "watchlist_presets.json"
+_PRESETS_PATH = Path(__file__).parent / "banshee_presets.json"
 
-def _load_presets() -> dict:
+def _load_presets() -> list:
     try:
-        return json.loads(_PRESETS_PATH.read_text(encoding="utf-8"))
+        data = json.loads(_PRESETS_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            return data
+        # migrate old dict format {name: [syms]} → new array format
+        return [{"id": k, "name": k, "syms": v} for k, v in data.items()]
     except Exception:
-        return {}
+        return []
 
-def _save_presets(data: dict):
-    _PRESETS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+def _save_presets(presets: list):
+    _PRESETS_PATH.write_text(json.dumps(presets, indent=2), encoding="utf-8")
 
 @app.get("/presets")
-def route_presets_list():
-    return _load_presets()
+def route_presets_get():
+    return {"presets": _load_presets()}
 
-@app.post("/presets/{name}")
-def route_presets_save(name: str, body: dict = Body(...)):
-    symbols = body.get("symbols", [])
-    data = _load_presets()
-    data[name] = [s.strip().upper() for s in symbols if s.strip()]
-    _save_presets(data)
-    return {"saved": name, "symbols": data[name]}
-
-@app.delete("/presets/{name}")
-def route_presets_delete(name: str):
-    data = _load_presets()
-    if name not in data:
-        raise HTTPException(status_code=404, detail="Preset not found")
-    del data[name]
-    _save_presets(data)
-    return {"deleted": name}
+@app.post("/presets")
+def route_presets_save(body: dict = Body(...)):
+    presets = body.get("presets", [])
+    _save_presets(presets)
+    return {"saved": len(presets)}
 
 
 @app.post("/shutdown")

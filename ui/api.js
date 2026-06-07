@@ -129,15 +129,28 @@ async function fetchSMC(sym, tf = "4H") {
   }
 }
 
-/* fetch presets list from Core */
+/* fetch presets array from Core */
 async function fetchPresets() {
   try {
     const res = await fetch(`${API_BASE}/presets`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    const data = await res.json();
+    return data.presets ?? [];
   } catch (err) {
-    console.warn("[api] presets fallback:", err.message);
-    return { presets: [] };
+    console.warn("[api] fetchPresets:", err.message);
+    return null; // null = Core unavailable (use localStorage migration)
+  }
+}
+
+async function savePresets(presets) {
+  try {
+    await fetch(`${API_BASE}/presets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ presets }),
+    });
+  } catch (err) {
+    console.warn("[api] savePresets:", err.message);
   }
 }
 
@@ -402,4 +415,4 @@ async function journalOpen({ symbol, direction, entry_price, stop_price,
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol };
