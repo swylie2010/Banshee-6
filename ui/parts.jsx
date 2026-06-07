@@ -2130,7 +2130,7 @@ function RotationSection({ data, loading }) {
           <div style={sty.alertHd}>⚡ ROTATION ALERT</div>
           {camd_alerts.map(a => (
             <div key={a.ticker} style={sty.alertRow}>
-              {a.ticker} · {a.name} — 21D: +{a.roc_21.toFixed(2)}% · 5D: +{a.roc_5.toFixed(2)}% · Divergence: +{a.divergence_strength.toFixed(2)}
+              {a.ticker} · {a.name} — 21D: {a.roc_21 >= 0 ? "+" : ""}{a.roc_21.toFixed(2)}% · 5D: {a.roc_5 >= 0 ? "+" : ""}{a.roc_5.toFixed(2)}% · Divergence: {a.divergence_strength >= 0 ? "+" : ""}{a.divergence_strength.toFixed(2)}
             </div>
           ))}
           {macro_env?.interpretation && (
