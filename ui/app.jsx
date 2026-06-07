@@ -1968,6 +1968,100 @@ function SaveRow({ onSave, status }) {
   );
 }
 
+const MCP_CONFIG_SNIPPET = `{
+  "mcpServers": {
+    "banshee-pro": {
+      "command": "python",
+      "args": ["C:/Users/swyli/AntiEverything/Banshee_5/mcp_server.py"]
+    }
+  }
+}`;
+
+const MCP_TOOLS = [
+  ["get_regime",            "lightweight regime bucket + go/no-go (fast, cached)"],
+  ["get_macro_weather",     "global macro environment — VIX, yield curve, liquidity"],
+  ["get_watchlist",         "user's saved symbol list — call before scan_assets"],
+  ["get_asset_radar",       "full multi-timeframe technical analysis for one asset"],
+  ["get_smc_structure",     "SMC structure map — swings, BOS/CHoCH, FVGs, order blocks"],
+  ["scan_assets",           "ranked scan across a list of symbols"],
+  ["synthesize_nexus",      "top-down macro + micro + news AI briefing"],
+  ["build_execution_plan",  "position sizing and R-target execution plan"],
+  ["read_market_intel",     "daily Predator briefing or RSS fallback"],
+  ["get_strategy_results",  "retrieve saved Strategy Lab backtests"],
+  ["open_paper_trade",      "open a new paper trade"],
+  ["check_kill_switch",     "close all positions if CRACK DETECTED (domino ≥ 2)"],
+  ["log_signal_outcome",    "record exit reason or note on any trade"],
+  ["get_signal_log",        "retrieve judged trades + regime/exit-reason stats"],
+];
+
+function MCPConnectionBlock() {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(MCP_CONFIG_SNIPPET).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+      {/* left — config snippet */}
+      <div>
+        <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+          <window.Label>CLAUDE CONFIG SNIPPET</window.Label>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.12em" }}>
+            paste into ~/.claude/.mcp.json → mcpServers
+          </span>
+        </div>
+        <pre style={{
+          background: "var(--bg-3)", border: "1px solid var(--line-2)",
+          padding: "12px 14px", margin: 0,
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+          color: "var(--cyan)", letterSpacing: "0.05em", lineHeight: 1.7,
+          overflowX: "auto", whiteSpace: "pre",
+        }}>
+          {MCP_CONFIG_SNIPPET}
+        </pre>
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14 }}>
+          <button onClick={handleCopy} style={{
+            padding: "7px 18px",
+            background: copied ? "rgba(52,211,153,0.12)" : "rgba(56,189,248,0.1)",
+            color: copied ? "var(--buy)" : "var(--cyan)",
+            border: `1px solid ${copied ? "var(--buy)" : "var(--cyan)"}`,
+            cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.18em",
+          }}>
+            {copied ? "✓ COPIED" : "COPY"}
+          </button>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>
+            Core must be running on :8765 before MCP tools respond
+          </span>
+        </div>
+      </div>
+
+      {/* right — tools list */}
+      <div>
+        <div style={{ marginBottom: 8 }}><window.Label>AVAILABLE TOOLS</window.Label></div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {MCP_TOOLS.map(([name, desc]) => (
+            <div key={name} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+              <span className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.06em", flexShrink: 0, minWidth: 190 }}>
+                {name}
+              </span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.08em", lineHeight: 1.5 }}>
+                {desc}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 function SettingsPage({ onBack }) {
   const [loaded, setLoaded]         = useState(false);
   const [fredKey, setFredKey]       = useState("");
@@ -2143,6 +2237,13 @@ function SettingsPage({ onBack }) {
             <SaveRow onSave={saveAIBrain} status={aiSaveStatus} />
           </>)}
         </SettingsSection>
+
+        {/* MCP CONNECTION */}
+        <div style={{ gridColumn: "1 / -1" }}>
+          <SettingsSection title="▸ MCP CONNECTION">
+            <MCPConnectionBlock />
+          </SettingsSection>
+        </div>
 
       </div>
     </div>
@@ -3904,10 +4005,24 @@ function ManualPage({ onBack }) {
   );
 }
 
+/* ── Watchlist custom presets helpers ─────────────────────── */
+function loadCustomPresets() {
+  try {
+    const raw = localStorage.getItem('banshee_custom_presets');
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function persistCustomPresets(presets) {
+  try { localStorage.setItem('banshee_custom_presets', JSON.stringify(presets)); }
+  catch {}
+}
+
 /* ── App ───────────────────────────────────────────────────── */
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [watchlist, setWatchlist]     = useState("all");
+  const [customPresets, setCustomPresets] = React.useState(() => loadCustomPresets());
+  const [presetsOpen, setPresetsOpen]     = React.useState(false);
   const [focusedSym, setFocusedSym]   = useState(null);
   const [openSym, setOpenSym]         = useState(null);
   const [page, setPage]               = useState("grid");   // "grid" | "hub" | "analysis" | "macro" | "settings" | "lab" | "risk" | "journal" | "manual"
@@ -3918,6 +4033,24 @@ function App() {
   const [customAsset, setCustomAsset] = useState(null);
   const [riskSeedAsset, setRiskSeedAsset] = useState(null);
   const [simulateMode,  setSimulateMode]  = useState(false);
+
+  const watchlists = React.useMemo(
+    () => [...customPresets, ...window.WATCHLISTS],
+    [customPresets]
+  );
+
+  function saveCustomPresets(presets) {
+    setCustomPresets(presets);
+    persistCustomPresets(presets);
+  }
+
+  React.useEffect(() => {
+    const allIds = new Set([
+      ...customPresets.map(p => p.id),
+      ...window.WATCHLISTS.map(w => w.id),
+    ]);
+    if (!allIds.has(watchlist)) setWatchlist('all');
+  }, [customPresets]);
 
   /* keyboard nav */
   useEffect(() => {
@@ -3930,7 +4063,7 @@ function App() {
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
-        const wl = window.WATCHLISTS.find(w => w.id === watchlist);
+        const wl = watchlists.find(w => w.id === watchlist);
         const syms = wl.syms;
         const idx = syms.indexOf(openSym);
         if (idx === -1) return;
@@ -3942,7 +4075,7 @@ function App() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [page, openSym, watchlist]);
+  }, [page, openSym, watchlist, watchlists]);
 
   /* symbol search via sidebar */
   async function handleSymbolSearch(sym) {
@@ -4031,6 +4164,7 @@ function App() {
       <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
         <Sidebar
           open={sidebarOpen}
+          watchlists={watchlists}
           watchlist={watchlist} setWatchlist={setWatchlist}
           focusedSym={focusedSym}
           radarData={radarData}
@@ -4044,8 +4178,10 @@ function App() {
           onJournal={() => setPage("journal")}
           onManual={() => setPage("manual")}
           currentPage={page}
+          onPresetsOpen={() => setPresetsOpen(true)}
         />
         <AssetGrid
+          watchlists={watchlists}
           watchlist={watchlist}
           focusedSym={focusedSym}
           onOpen={openAsset}
@@ -4089,6 +4225,15 @@ function App() {
         )}
         {page === "news" && (
           <NewsPage onBack={goBack} />
+        )}
+        {presetsOpen && (
+          <window.PresetsModal
+            customPresets={customPresets}
+            saveCustomPresets={saveCustomPresets}
+            watchlist={watchlist}
+            setWatchlist={setWatchlist}
+            onClose={() => setPresetsOpen(false)}
+          />
         )}
       </div>
     </div>
