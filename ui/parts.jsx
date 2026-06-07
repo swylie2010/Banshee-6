@@ -1118,6 +1118,8 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const [diagMsg,     setDiagMsg]     = useState("");
   const [opacityMult, setOpacityMult] = useState(1.0);
   const [indicatorData, setIndicatorData] = useState(null);
+  const [stochHeight, setStochHeight] = useState(100);
+  const stochDragRef = useRef({ dragging: false, startY: 0, startH: 0 });
 
   const ACCENT_MAP = {
     "--buy":     "#5eead4",
@@ -1607,6 +1609,33 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     vwapSeriesRef.current = s;
   }, [indicatorData, showVWAP]);
 
+  /* drag-to-resize Stoch pane */
+  useEffect(() => {
+    function onMouseMove(e) {
+      if (!stochDragRef.current.dragging) return;
+      const dy = stochDragRef.current.startY - e.clientY;
+      const newH = Math.max(60, Math.min(300, stochDragRef.current.startH + dy));
+      setStochHeight(newH);
+    }
+    function onMouseUp() { stochDragRef.current.dragging = false; }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  /* sync main chart height when stoch pane appears/resizes */
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const HANDLE = 6;
+    const mainH = (showStoch && indicatorData?.stochK?.length)
+      ? Math.max(80, height - stochHeight - HANDLE)
+      : height;
+    chartRef.current.applyOptions({ height: mainH });
+  }, [showStoch, stochHeight, indicatorData, height]);
+
   /* Stoch RSI sub-pane — separate LW Charts instance, synced to main chart */
   useEffect(() => {
     const container = stochContainerRef.current;
@@ -1709,9 +1738,13 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     : xabcdData        ? (showXABCD ? "XABCD ◆" : "XABCD ○")
     : null;
 
+  const stochVisible = showStoch && !!(indicatorData?.stochK?.length);
+  const HANDLE_H = 6;
+  const mainChartH = stochVisible ? Math.max(80, height - stochHeight - HANDLE_H) : height;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
-    <div style={{ position: "relative", width: "100%", height }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height }}>
+    <div style={{ position: "relative", width: "100%", height: mainChartH }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       {/* candle data badge */}
       <div className="mono" style={{
@@ -1849,15 +1882,28 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
         </button>
       )}
     </div>
-    <div
-      ref={stochContainerRef}
-      style={{
-        width: "100%",
-        height: 100,
-        display: showStoch && indicatorData?.stochK?.length ? "block" : "none",
-        background: "#06080c",
-      }}
-    />
+    {stochVisible && (
+      <>
+        <div
+          onMouseDown={e => {
+            stochDragRef.current = { dragging: true, startY: e.clientY, startH: stochHeight };
+            e.preventDefault();
+          }}
+          style={{
+            height: HANDLE_H, cursor: "row-resize", flexShrink: 0,
+            background: "var(--bg-2)", borderTop: "1px solid var(--line)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div style={{ width: 28, height: 2, background: "#2a3346", borderRadius: 1 }} />
+        </div>
+        <div
+          ref={stochContainerRef}
+          style={{ width: "100%", height: stochHeight, flexShrink: 0, background: "#06080c" }}
+        />
+      </>
+    )}
+    {!stochVisible && <div ref={stochContainerRef} style={{ display: "none" }} />}
     </div>
   );
 }
@@ -1992,3 +2038,272 @@ window.smcToMarkers = smcToMarkers;
 window.AlertCard    = AlertCard;
 window.AlertStrip   = AlertStrip;
 window.MacroSensorCard = MacroSensorCard;
+
+/* ── PresetsModal — manage custom watchlist presets ──────── */
+window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, watchlist, setWatchlist, onClose }) {
+  const [selectedId, setSelectedId] = React.useState(customPresets[0]?.id ?? null);
+  const [nameVal,    setNameVal]    = React.useState(customPresets[0]?.name ?? '');
+  const [addVal,     setAddVal]     = React.useState('');
+  const nameTimer = React.useRef(null);
+
+  const selected = customPresets.find(p => p.id === selectedId) ?? null;
+
+  /* sync name input when selection changes */
+  React.useEffect(() => {
+    setNameVal(selected?.name ?? '');
+    setAddVal('');
+  }, [selectedId]);
+
+  /* close on Escape */
+  React.useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, []);
+
+  function selectPreset(id) {
+    setSelectedId(id);
+    setWatchlist(id);
+  }
+
+  function handleNewPreset() {
+    const p = { id: 'custom_' + Date.now(), name: '', syms: [] };
+    saveCustomPresets([p, ...customPresets]);
+    setSelectedId(p.id);
+  }
+
+  function handleNameChange(val) {
+    setNameVal(val);
+    clearTimeout(nameTimer.current);
+    nameTimer.current = setTimeout(() => {
+      saveCustomPresets(customPresets.map(p => p.id === selectedId ? { ...p, name: val } : p));
+    }, 400);
+  }
+
+  function handleAddTicker() {
+    const sym = addVal.trim().toUpperCase();
+    if (!sym || !selected || selected.syms.includes(sym)) { setAddVal(''); return; }
+    saveCustomPresets(customPresets.map(p =>
+      p.id === selectedId ? { ...p, syms: [...p.syms, sym] } : p
+    ));
+    setAddVal('');
+  }
+
+  function handleRemoveTicker(sym) {
+    saveCustomPresets(customPresets.map(p =>
+      p.id === selectedId ? { ...p, syms: p.syms.filter(s => s !== sym) } : p
+    ));
+  }
+
+  function handleMoveUp(id) {
+    const i = customPresets.findIndex(p => p.id === id);
+    if (i <= 0) return;
+    const next = [...customPresets];
+    [next[i - 1], next[i]] = [next[i], next[i - 1]];
+    saveCustomPresets(next);
+  }
+
+  function handleMoveDown(id) {
+    const i = customPresets.findIndex(p => p.id === id);
+    if (i < 0 || i >= customPresets.length - 1) return;
+    const next = [...customPresets];
+    [next[i], next[i + 1]] = [next[i + 1], next[i]];
+    saveCustomPresets(next);
+  }
+
+  function handleDelete(id) {
+    const remaining = customPresets.filter(p => p.id !== id);
+    saveCustomPresets(remaining);
+    if (selectedId === id) setSelectedId(remaining[0]?.id ?? null);
+  }
+
+  const S = {
+    backdrop: {
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)',
+      zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    },
+    panel: {
+      background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 6,
+      width: 620, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
+    },
+    header: {
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '12px 16px', borderBottom: '1px solid var(--line)',
+    },
+    headerLabel: {
+      fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.18em',
+      color: 'var(--amber)', fontWeight: 600,
+    },
+    closeBtn: {
+      background: 'none', border: 'none', color: 'var(--ink-3)', fontSize: 18,
+      cursor: 'pointer', padding: '2px 6px', lineHeight: 1,
+    },
+    body: { display: 'flex', flex: 1, minHeight: 0 },
+    leftCol: {
+      width: 220, borderRight: '1px solid var(--line)', display: 'flex',
+      flexDirection: 'column', padding: '10px 0',
+    },
+    newBtn: {
+      margin: '0 10px 8px 10px', padding: '5px 0', background: 'transparent',
+      border: '1px solid var(--amber)', borderRadius: 3, color: 'var(--amber)',
+      fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.14em', cursor: 'pointer',
+    },
+    presetList: { flex: 1, overflowY: 'auto' },
+    presetRow: (isActive) => ({
+      display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', cursor: 'pointer',
+      borderLeft: isActive ? '2px solid var(--amber)' : '2px solid transparent',
+      background: isActive ? 'rgba(255,160,0,0.07)' : 'transparent',
+    }),
+    presetName: (isActive) => ({
+      flex: 1, fontFamily: 'var(--mono)', fontSize: 11,
+      color: isActive ? 'var(--amber)' : 'var(--ink)', letterSpacing: '0.1em',
+      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+    }),
+    iconBtn: {
+      background: 'none', border: 'none', color: 'var(--ink-3)', fontSize: 11,
+      cursor: 'pointer', padding: '1px 3px', lineHeight: 1,
+    },
+    dividerRow: {
+      display: 'flex', alignItems: 'center', gap: 6, margin: '8px 10px 4px 10px',
+    },
+    dividerLine: { flex: 1, borderTop: '1px solid var(--line)' },
+    dividerLabel: {
+      fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.16em',
+    },
+    builtinRow: {
+      padding: '4px 12px', fontFamily: 'var(--mono)', fontSize: 11,
+      color: 'var(--ink-3)', letterSpacing: '0.1em',
+    },
+    rightCol: { flex: 1, display: 'flex', flexDirection: 'column', padding: 16, gap: 12 },
+    placeholder: {
+      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.12em',
+      textAlign: 'center',
+    },
+    nameInput: {
+      background: 'var(--bg-3)', border: '1px solid var(--line)', borderRadius: 3,
+      color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: 12, padding: '6px 10px',
+      letterSpacing: '0.12em', outline: 'none', width: '100%', boxSizing: 'border-box',
+    },
+    chipsWrap: { display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 34 },
+    chip: {
+      display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
+      background: 'var(--bg-3)', border: '1px solid var(--line)', borderRadius: 12,
+      fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink)', letterSpacing: '0.1em',
+    },
+    chipX: {
+      background: 'none', border: 'none', color: 'var(--ink-3)', fontSize: 13,
+      cursor: 'pointer', padding: 0, lineHeight: 1,
+    },
+    emptyChips: {
+      fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.1em',
+      alignSelf: 'center',
+    },
+    addRow: { display: 'flex', gap: 8 },
+    addInput: {
+      flex: 1, background: 'var(--bg-3)', border: '1px solid var(--line)', borderRadius: 3,
+      color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: 11, padding: '5px 10px',
+      letterSpacing: '0.12em', outline: 'none',
+    },
+    addBtn: {
+      padding: '5px 12px', background: 'transparent', border: '1px solid var(--ink-3)',
+      borderRadius: 3, color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: 10,
+      letterSpacing: '0.14em', cursor: 'pointer',
+    },
+  };
+
+  return (
+    <div style={S.backdrop} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={S.panel}>
+
+        {/* Header */}
+        <div style={S.header}>
+          <span style={S.headerLabel}>MANAGE PRESETS</span>
+          <button style={S.closeBtn} onClick={onClose}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={S.body}>
+
+          {/* Left column — preset list */}
+          <div style={S.leftCol}>
+            <button style={S.newBtn} onClick={handleNewPreset}>+ NEW PRESET</button>
+            <div style={S.presetList}>
+              {customPresets.map((p, i) => (
+                <div key={p.id} style={S.presetRow(selectedId === p.id)}
+                  onClick={() => selectPreset(p.id)}>
+                  <span style={S.presetName(selectedId === p.id)}>
+                    {p.name || 'Untitled Preset'}
+                  </span>
+                  <button style={S.iconBtn} title="Move up"
+                    onClick={e => { e.stopPropagation(); handleMoveUp(p.id); }}
+                    disabled={i === 0}>&#9650;</button>
+                  <button style={S.iconBtn} title="Move down"
+                    onClick={e => { e.stopPropagation(); handleMoveDown(p.id); }}
+                    disabled={i === customPresets.length - 1}>&#9660;</button>
+                  <button style={S.iconBtn} title="Delete preset"
+                    onClick={e => { e.stopPropagation(); handleDelete(p.id); }}>&#128465;</button>
+                </div>
+              ))}
+
+              {/* Defaults divider */}
+              <div style={S.dividerRow}>
+                <div style={S.dividerLine} />
+                <span style={S.dividerLabel}>DEFAULTS</span>
+                <div style={S.dividerLine} />
+              </div>
+
+              {/* Built-ins — read only */}
+              {window.WATCHLISTS.map(w => (
+                <div key={w.id} style={S.builtinRow}>{w.name}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right column — editor */}
+          <div style={S.rightCol}>
+            {!selected ? (
+              <div style={S.placeholder}>
+                {customPresets.length === 0
+                  ? 'Click + NEW PRESET to get started'
+                  : 'Select a preset to edit'}
+              </div>
+            ) : (
+              <>
+                <input
+                  style={S.nameInput}
+                  placeholder="Preset name…"
+                  value={nameVal}
+                  onChange={e => handleNameChange(e.target.value)}
+                />
+                <div style={S.chipsWrap}>
+                  {selected.syms.length === 0
+                    ? <span style={S.emptyChips}>No assets yet — add a ticker below</span>
+                    : selected.syms.map(sym => (
+                        <div key={sym} style={S.chip}>
+                          <span>{sym}</span>
+                          <button style={S.chipX} onClick={() => handleRemoveTicker(sym)}>&times;</button>
+                        </div>
+                      ))
+                  }
+                </div>
+                <div style={S.addRow}>
+                  <input
+                    style={S.addInput}
+                    placeholder="Add ticker (e.g. AAPL, BTC)…"
+                    value={addVal}
+                    onChange={e => setAddVal(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddTicker(); }}
+                  />
+                  <button style={S.addBtn} onClick={handleAddTicker}>ADD</button>
+                </div>
+              </>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
