@@ -2030,6 +2030,118 @@ function AlertStrip({ warnings }) {
   );
 }
 
+/* ── RotationSection — sector rotation engine panel ─────────── */
+function RotationSection({ data, loading }) {
+  const sty = {
+    wrap:    { marginBottom: 16 },
+    header:  { fontSize: 10, color: "var(--ink-4)", letterSpacing: 1, marginBottom: 8, textTransform: "uppercase" },
+    summary: { fontSize: 12, color: "var(--ink)", marginBottom: 12, lineHeight: 1.6 },
+    muted:   { fontSize: 12, color: "var(--ink-4)", padding: "12px 0" },
+    table:   { width: "100%", borderCollapse: "collapse", fontSize: 11 },
+    th:      { textAlign: "left",  padding: "4px 6px", fontWeight: 400, color: "var(--ink-4)",
+               borderBottom: "1px solid var(--bg-3)" },
+    thR:     { textAlign: "right", padding: "4px 6px", fontWeight: 400, color: "var(--ink-4)",
+               borderBottom: "1px solid var(--bg-3)" },
+    td:      { padding: "4px 6px" },
+    tdR:     { padding: "4px 6px", textAlign: "right" },
+    alert:   { marginTop: 12, border: "1px solid var(--amber)", borderRadius: 4,
+               padding: "10px 12px", background: "rgba(255,160,0,0.05)" },
+    alertHd: { fontSize: 10, color: "var(--amber)", fontWeight: 700, marginBottom: 6, letterSpacing: 1 },
+    alertRow:{ fontSize: 11, color: "var(--ink)", marginBottom: 3 },
+    alertSub:{ fontSize: 11, color: "var(--ink-4)", marginTop: 8, fontStyle: "italic" },
+  };
+
+  if (loading) return (
+    <div style={sty.wrap}>
+      <div style={sty.header}>SECTOR ROTATION ENGINE</div>
+      <div style={sty.muted}>◇ LOADING ROTATION DATA...</div>
+    </div>
+  );
+
+  if (!data || data.error || !data.sectors?.length) return (
+    <div style={sty.wrap}>
+      <div style={sty.header}>SECTOR ROTATION ENGINE</div>
+      <div style={sty.muted}>Rotation data unavailable.</div>
+    </div>
+  );
+
+  const { sectors, camd_alerts, macro_env } = data;
+
+  const positive  = sectors.filter(s => s.roc_21 > 0);
+  const negative  = sectors.filter(s => s.roc_21 < 0);
+  const intoNames = positive.slice(0, 2).map(s => s.name).join(" and ");
+  const outNames  = negative.slice(-2).map(s => s.name).reverse().join(" and ");
+  let summary;
+  if (intoNames && outNames) {
+    summary = `Money appears to be flowing INTO ${intoNames}, and OUT OF ${outNames} this month.`;
+  } else if (intoNames) {
+    summary = `Money appears to be flowing INTO ${intoNames} this month.`;
+  } else if (outNames) {
+    summary = `Money appears to be flowing OUT OF ${outNames} this month.`;
+  } else {
+    summary = "Sector flows are mixed with no clear directional trend this month.";
+  }
+
+  return (
+    <div style={sty.wrap}>
+      <div style={sty.header}>SECTOR ROTATION ENGINE</div>
+      <div style={sty.summary}>{summary}</div>
+
+      <table style={sty.table}>
+        <thead>
+          <tr>
+            <th style={sty.th}>SECTOR</th>
+            <th style={sty.thR}>5D RS</th>
+            <th style={sty.thR}>21D RS</th>
+            <th style={sty.thR}>FLOW</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sectors.map(s => {
+            const rowBg = s.roc_21 > 0
+              ? "rgba(0,200,100,0.07)"
+              : s.roc_21 < 0
+              ? "rgba(200,50,50,0.07)"
+              : "transparent";
+            const r5Arrow = s.roc_5 >= 0 ? "▲" : "▼";
+            const r5Color = s.roc_5 >= 0 ? "var(--buy)" : "var(--sell)";
+            return (
+              <tr key={s.ticker} style={{ background: rowBg, borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                <td style={{ ...sty.td, color: "var(--ink)" }}>{s.name}</td>
+                <td style={{ ...sty.tdR, color: r5Color }}>
+                  {r5Arrow}{Math.abs(s.roc_5).toFixed(2)}%
+                </td>
+                <td style={{ ...sty.tdR, color: s.roc_21 >= 0 ? "var(--buy)" : "var(--sell)" }}>
+                  {s.roc_21 >= 0 ? "+" : ""}{s.roc_21.toFixed(2)}%
+                </td>
+                <td style={sty.tdR}>
+                  {s.camd && (
+                    <span style={{ color: "var(--buy)", fontSize: 10, fontWeight: 600 }}>◆ CAMD</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {camd_alerts?.length > 0 && (
+        <div style={sty.alert}>
+          <div style={sty.alertHd}>⚡ ROTATION ALERT</div>
+          {camd_alerts.map(a => (
+            <div key={a.ticker} style={sty.alertRow}>
+              {a.ticker} · {a.name} — 21D: +{a.roc_21.toFixed(2)}% · 5D: +{a.roc_5.toFixed(2)}% · Divergence: +{a.divergence_strength.toFixed(2)}
+            </div>
+          ))}
+          {macro_env?.interpretation && (
+            <div style={sty.alertSub}>{macro_env.interpretation}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── MacroSensorCard — expandable macro sensor display ───────── */
 function MacroSensorCard({ sensorKey, sensor, label, unit = "", explain }) {
   const [expanded, setExpanded] = useState(false);
@@ -2111,6 +2223,7 @@ window.smcToMarkers = smcToMarkers;
 window.AlertCard    = AlertCard;
 window.AlertStrip   = AlertStrip;
 window.MacroSensorCard = MacroSensorCard;
+window.RotationSection = RotationSection;
 
 /* ── PresetsModal — manage custom watchlist presets ──────── */
 window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, watchlist, setWatchlist, onClose }) {
