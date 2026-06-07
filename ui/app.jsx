@@ -3949,7 +3949,7 @@ function App() {
       ...window.WATCHLISTS.map(w => w.id),
     ]);
     if (!allIds.has(watchlist)) setWatchlist('all');
-  }, [customPresets]);
+  }, [customPresets, watchlist]);
 
   /* keyboard nav */
   useEffect(() => {
@@ -3963,6 +3963,7 @@ function App() {
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
         const wl = watchlists.find(w => w.id === watchlist);
+        if (!wl) return;
         const syms = wl.syms;
         const idx = syms.indexOf(openSym);
         if (idx === -1) return;
