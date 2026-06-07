@@ -422,7 +422,7 @@ async function fetchRotation() {
     return await res.json();
   } catch (err) {
     console.warn("[api] fetchRotation:", err.message);
-    return { error: err.message, sectors: [], camd_alerts: [], spy_roc_21: null, macro_env: null };
+    return { error: err.message, sectors: [], camd_alerts: [], spy_roc_21: null, macro_env: null, timestamp: null };
   }
 }
 
