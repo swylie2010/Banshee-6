@@ -3957,7 +3957,8 @@ function App() {
 
   /* load presets from Core on mount; migrate from localStorage if Core returns empty */
   React.useEffect(() => {
-    window.API.fetchPresets().then(serverPresets => {
+    (async () => {
+      const serverPresets = await window.API.fetchPresets();
       if (serverPresets === null) return; // Core unavailable — keep state as-is
       if (serverPresets.length > 0) {
         setCustomPresets(serverPresets);
@@ -3965,11 +3966,11 @@ function App() {
         const migrated = _migratePresetsFromLocalStorage();
         if (migrated.length > 0) {
           setCustomPresets(migrated);
-          window.API.savePresets(migrated); // persist to disk
+          await window.API.savePresets(migrated); // persist to disk
           localStorage.removeItem('banshee_custom_presets');
         }
       }
-    });
+    })();
   }, []);
 
   function saveCustomPresets(presets) {

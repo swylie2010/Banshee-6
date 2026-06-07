@@ -2145,6 +2145,8 @@ def route_presets_get():
 @app.post("/presets")
 def route_presets_save(body: dict = Body(...)):
     presets = body.get("presets", [])
+    if not isinstance(presets, list):
+        raise HTTPException(status_code=422, detail="presets must be a list")
     _save_presets(presets)
     return {"saved": len(presets)}
 
