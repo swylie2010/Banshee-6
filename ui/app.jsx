@@ -1426,6 +1426,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
   const [aiError, setAiError]   = useState(null);
   const aiAbortRef = useRef(null);
   const [lensMode, setLensMode] = useState(1);
+  const [activeOnly, setActiveOnly] = useState(false);
   const [hoveredElement, setHoveredElement] = useState(null);
   const [legendOpen, setLegendOpen] = useState(false);
   const [nexusTf, setNexusTf] = useState("1D");
@@ -1441,6 +1442,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
     setPineScript(null); setPineLoading(false); setPineError(null);
     setAiText(null); setAiLoading(false); setAiError(null);
     setLensMode(1);
+    setActiveOnly(false);
     setHoveredElement(null);
     setPineOpen(false);
   }, [asset.sym]);
@@ -1626,6 +1628,21 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
                         );
                       })}
                     </div>
+                    <button
+                      onClick={() => setActiveOnly(a => !a)}
+                      style={{
+                        padding: "5px 10px",
+                        background: activeOnly ? "#26a69a" : "transparent",
+                        color: activeOnly ? "var(--bg-0)" : "#26a69a",
+                        border: "1px solid #26a69a55",
+                        cursor: "pointer",
+                        marginLeft: 4,
+                      }}
+                    >
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.1em" }}>
+                        ACTIVE {activeOnly ? "◆" : "○"}
+                      </span>
+                    </button>
                   </div>
                 );
               })()}
@@ -1649,6 +1666,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
                   showStoch={showStoch} setShowStoch={setShowStoch}
                   lensMode={lensMode}
                   currentPrice={asset.price}
+                  activeOnly={activeOnly}
                   onHover={setHoveredElement} />
               </div>
               {tab === "smc" && (

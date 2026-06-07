@@ -1142,7 +1142,7 @@ function filterZonesForLens(zones, lensMode, currentPrice) {
   return zones;
 }
 
-function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = null, smcLoading = false, ghData = null, ghLoading = false, xabcdData = null, xabcdLoading = false, showSMC = true, setShowSMC = () => {}, showGH = true, setShowGH = () => {}, showXABCD = true, setShowXABCD = () => {}, showEMA = true, setShowEMA = () => {}, showVWAP = true, setShowVWAP = () => {}, showStoch = false, setShowStoch = () => {}, lensMode = 1, currentPrice = null, onHover = null }) {
+function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = null, smcLoading = false, ghData = null, ghLoading = false, xabcdData = null, xabcdLoading = false, showSMC = true, setShowSMC = () => {}, showGH = true, setShowGH = () => {}, showXABCD = true, setShowXABCD = () => {}, showEMA = true, setShowEMA = () => {}, showVWAP = true, setShowVWAP = () => {}, showStoch = false, setShowStoch = () => {}, lensMode = 1, currentPrice = null, activeOnly = false, onHover = null }) {
   const containerRef  = useRef(null);
   const chartRef      = useRef(null);
   const seriesRef     = useRef(null);
@@ -1168,6 +1168,8 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const eqlDataRef        = useRef([]);
   const lensModeRef       = useRef(lensMode);
   const currentPriceRef   = useRef(currentPrice);
+  const lastCandleTimeRef = useRef(null);
+  const activeOnlyRef     = useRef(activeOnly);
   const zonesForHoverRef  = useRef([]);
   const swingsForHoverRef = useRef([]);
   const eventsForHoverRef = useRef([]);
@@ -1221,7 +1223,8 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
 
     /* Check OBs and FVGs */
     const rawZones = zonesForHoverRef.current;
-    const visZones = filterZonesForLens(rawZones, lensModeRef.current, currentPriceRef.current);
+    let visZones = filterZonesForLens(rawZones, lensModeRef.current, currentPriceRef.current);
+    if (activeOnlyRef.current) visZones = visZones.filter(z => !z.ghost);
     for (const z of visZones) {
       if (price >= z.bottom && price <= z.top) {
         return { elementType: z.type === "fvg" ? "fvg" : "ob", ...z };
@@ -1275,6 +1278,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
 
   lensModeRef.current     = lensMode;
   currentPriceRef.current = currentPrice;
+  activeOnlyRef.current   = activeOnly;
 
   /* create chart once on mount */
   useEffect(() => {
@@ -1397,6 +1401,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     window.API.fetchOHLCV(symbol, tf).then(({ candles, indicators, source }) => {
       if (cancelled || !seriesRef.current || !candles.length) return;
       seriesRef.current.setData(candles);
+      lastCandleTimeRef.current = candles[candles.length - 1].time; // Unix int seconds
       chartRef.current.timeScale().fitContent();
       setDataSource(source);
       setIndicatorData(indicators || null);
@@ -1458,7 +1463,14 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     const rawZones = smcToZones(smcData);
     const zones = filterZonesForLens(rawZones, lensMode, currentPrice).map(z => ({ ...z, opacity: z.opacity * opacityMult }));
     if (zones.length) {
-      const prim = new SMCZonePrimitive(zones, chartRef.current, lensMode, currentPrice);
+      const prim = new SMCZonePrimitive(
+        zones,
+        chartRef.current,
+        lensMode,
+        currentPrice,
+        lastCandleTimeRef.current,  // 5th param: Unix int for active zone right edge
+        activeOnly,                  // 6th param: override to hide ghost zones
+      );
       try {
         series.attachPrimitive(prim);
         primitiveRef.current = prim;
@@ -1568,7 +1580,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       });
       oteLinesRef.current = [];
     };
-  }, [smcData, showSMC, opacityMult, lensMode, currentPrice]);
+  }, [smcData, showSMC, opacityMult, lensMode, currentPrice, activeOnly]);
 
   /* GH overlay — arc primitives drawn on canvas */
   useEffect(() => {
