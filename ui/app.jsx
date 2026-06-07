@@ -245,9 +245,9 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
-function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, currentPage }) {
+function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, currentPage, onPresetsOpen }) {
   const [searchVal, setSearchVal] = useState("");
-  const wl = window.WATCHLISTS.find(w => w.id === watchlist);
+  const wl = watchlists.find(w => w.id === watchlist);
   const symAssets = wl.syms
     .map(s => {
       const base = window.ASSETS.find(a => a.sym === s);
@@ -307,8 +307,27 @@ function Sidebar({ open, watchlist, setWatchlist, focusedSym, setFocusedSym, rad
           borderBottom: "1px solid var(--line)",
         }}>
           <window.Label>WATCHLIST</window.Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
-            {window.WATCHLISTS.map(w => {
+          <button
+            onClick={onPresetsOpen}
+            style={{
+              marginTop: 6,
+              marginBottom: 2,
+              width: "100%",
+              padding: "5px 0",
+              background: "transparent",
+              border: "1px solid var(--amber)",
+              borderRadius: 3,
+              color: "var(--amber)",
+              fontSize: 10,
+              fontFamily: "var(--mono)",
+              letterSpacing: "0.14em",
+              cursor: "pointer",
+            }}
+          >
+            CUSTOM PRESETS
+          </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8, maxHeight: 240, overflowY: "auto" }}>
+            {watchlists.map(w => {
               const active = w.id === watchlist;
               return (
                 <button key={w.id} onClick={() => setWatchlist(w.id)}
@@ -468,8 +487,8 @@ function mergeRadar(base, live) {
 }
 
 /* ── Asset grid ───────────────────────────────────────────── */
-function AssetGrid({ watchlist, focusedSym, onOpen, radarData, radarLoading }) {
-  const wl = window.WATCHLISTS.find(w => w.id === watchlist);
+function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radarLoading }) {
+  const wl = watchlists.find(w => w.id === watchlist);
   const syms = wl.syms;
   const assets = syms
     .map(s => {
