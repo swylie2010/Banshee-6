@@ -1403,7 +1403,7 @@ const ANALYSIS_TABS = [
   { id: "nexus", label: "NEXUS",          accent: "var(--amber)",   hex: "#f59e0b" },
 ];
 
-function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
+function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories = [] }) {
   const [tab, setTab] = useState(initialTab || "smc");
   const [tf, setTf] = useState("1H");
   const activeTabCfg = ANALYSIS_TABS.find(t => t.id === tab);
@@ -1505,7 +1505,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack }) {
     const controller = new AbortController();
     aiAbortRef.current = controller;
     setAiLoading(true); setAiText(null); setAiError(null);
-    window.API.fetchAIBriefing(asset.sym, "swing", tab, controller.signal).then(r => {
+    window.API.fetchAIBriefing(asset.sym, "swing", tab, controller.signal, manualStories).then(r => {
       if (r.aborted) return;
       aiAbortRef.current = null;
       setAiLoading(false);
@@ -2194,7 +2194,7 @@ const MACRO_SENSOR_ROWS = [
   ],
 ];
 
-function MacroPage({ macroData, onBack }) {
+function MacroPage({ macroData, onBack, manualStories = [] }) {
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]     = useState(null);
@@ -2207,7 +2207,7 @@ function MacroPage({ macroData, onBack }) {
 
   function handleMacroAI() {
     setAiLoading(true); setAiText(null); setAiError(null);
-    window.API.fetchAIBriefing("MACRO", "swing", "macro").then(r => {
+    window.API.fetchAIBriefing("MACRO", "swing", "macro", null, manualStories).then(r => {
       setAiLoading(false);
       if (r.error) setAiError(r.error);
       else setAiText(r.text);
@@ -3477,8 +3477,64 @@ function FollowupCard({ original, status, update }) {
   );
 }
 
+/* ── StoryInput / StoryPanel — session-level injected constraint UI ─────── */
+function StoryInput({ onAdd }) {
+  const [val, setVal] = React.useState('');
+  const submit = () => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setVal('');
+  };
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <input
+        type="text"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && submit()}
+        placeholder="e.g. Avoid NVIDIA — earnings risk"
+        style={{ flex: 1, background: "var(--bg-3)", border: "1px solid var(--line)",
+          color: "var(--ink)", fontFamily: "monospace", fontSize: 11,
+          padding: "5px 8px", borderRadius: 3, outline: "none" }}
+      />
+      <button onClick={submit}
+        style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.1em",
+          background: "var(--amber)", color: "#000", border: "none",
+          padding: "5px 12px", borderRadius: 3, cursor: "pointer" }}>
+        + ADD
+      </button>
+    </div>
+  );
+}
+
+function StoryPanel({ manualStories, setManualStories }) {
+  return (
+    <div style={{ marginBottom: 14, background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 4, padding: "12px 14px" }}>
+      <div className="mono" style={{ fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-4)", marginBottom: 8 }}>
+        INJECTED CONSTRAINTS <span style={{ color: "var(--amber)" }}>· Highest priority context for every AI briefing</span>
+      </div>
+      <StoryInput onAdd={story => setManualStories(prev => [...prev, story])} />
+      {manualStories.length > 0 && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+          {manualStories.map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8,
+              background: "var(--bg-3)", padding: "6px 10px", borderRadius: 3,
+              borderLeft: "2px solid var(--amber)" }}>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink)", flex: 1, lineHeight: 1.5 }}>{s}</span>
+              <button onClick={() => setManualStories(prev => prev.filter((_, j) => j !== i))}
+                style={{ background: "none", border: "none", color: "var(--sell)", cursor: "pointer",
+                  fontSize: 14, padding: 0, lineHeight: 1, flexShrink: 0 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── NewsPage — Daily Predator intelligence briefing (Page 9) ───────────── */
-function NewsPage({ onBack }) {
+function NewsPage({ onBack, manualStories = [], setManualStories }) {
   const [briefing, setBriefing]   = useState(null);
   const [loading, setLoading]     = useState(true);
   const [running, setRunning]     = useState(false);
@@ -3545,7 +3601,9 @@ function NewsPage({ onBack }) {
           <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", textAlign: "center", marginTop: 40 }}>◌ LOADING BRIEFING…</div>
         ) : !briefing ? (
           /* Empty state */
-          <div style={{ textAlign: "center", marginTop: 60 }}>
+          <div style={{ marginTop: 40 }}>
+            <StoryPanel manualStories={manualStories} setManualStories={setManualStories} />
+            <div style={{ textAlign: "center" }}>
             <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", marginBottom: 16 }}>No briefing yet for today.</div>
             <button onClick={handleRun} disabled={running}
               style={{ fontFamily: "inherit", fontSize: 12, letterSpacing: "0.12em", background: "var(--amber)",
@@ -3554,6 +3612,7 @@ function NewsPage({ onBack }) {
             </button>
             {running && <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 8 }}>This takes 2–3 minutes</div>}
             {runError && <div className="mono" style={{ fontSize: 11, color: "var(--sell)", marginTop: 8 }}>{runError}</div>}
+            </div>
           </div>
         ) : (
           <>
@@ -3596,6 +3655,9 @@ function NewsPage({ onBack }) {
                 )}
               </div>
             )}
+
+            {/* Injected context panel */}
+            <StoryPanel manualStories={manualStories} setManualStories={setManualStories} />
 
             {/* Action bar */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
@@ -3949,6 +4011,7 @@ function App() {
   const [customAsset, setCustomAsset] = useState(null);
   const [riskSeedAsset, setRiskSeedAsset] = useState(null);
   const [simulateMode,  setSimulateMode]  = useState(false);
+  const [manualStories, setManualStories] = useState([]);
 
   const watchlists = React.useMemo(
     () => [...customPresets, ...window.WATCHLISTS],
@@ -4138,10 +4201,11 @@ function App() {
             macroWarning={topBarMacro.warning}
             initialTab={analysisTab}
             onBack={goBack}
+            manualStories={manualStories}
           />
         )}
         {page === "macro" && (
-          <MacroPage macroData={macroData} onBack={goBack} />
+          <MacroPage macroData={macroData} onBack={goBack} manualStories={manualStories} />
         )}
         {page === "settings" && (
           <SettingsPage onBack={goBack} />
@@ -4159,7 +4223,7 @@ function App() {
           <ManualPage onBack={goBack} />
         )}
         {page === "news" && (
-          <NewsPage onBack={goBack} />
+          <NewsPage onBack={goBack} manualStories={manualStories} setManualStories={setManualStories} />
         )}
         {presetsOpen && (
           <window.PresetsModal

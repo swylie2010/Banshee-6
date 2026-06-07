@@ -197,13 +197,13 @@ async function fetchGHPine(sym) {
  * tab: "nexus" | "smc" | "gh" — controls prompt focus and format
  * signal: optional AbortSignal to cancel a stale in-flight request
  */
-async function fetchAIBriefing(sym, mode = "swing", tab = "nexus", signal = null) {
+async function fetchAIBriefing(sym, mode = "swing", tab = "nexus", signal = null, manualStories = []) {
   const pair = coreSymbol(sym);
   try {
     const res = await fetch(`${API_BASE}/ai/briefing`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: pair, mode, manual_stories: [], tab }),
+      body: JSON.stringify({ symbol: pair, mode, manual_stories: manualStories, tab }),
       signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
