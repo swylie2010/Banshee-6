@@ -2041,10 +2041,12 @@ window.MacroSensorCard = MacroSensorCard;
 
 /* ── PresetsModal — manage custom watchlist presets ──────── */
 window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, watchlist, setWatchlist, onClose }) {
-  const [selectedId, setSelectedId] = React.useState(customPresets[0]?.id ?? null);
-  const [nameVal,    setNameVal]    = React.useState(customPresets[0]?.name ?? '');
-  const [addVal,     setAddVal]     = React.useState('');
+  const [selectedId,  setSelectedId]  = React.useState(customPresets[0]?.id ?? null);
+  const [nameVal,     setNameVal]     = React.useState(customPresets[0]?.name ?? '');
+  const [addVal,      setAddVal]      = React.useState('');
+  const [savedFlash,  setSavedFlash]  = React.useState(false);
   const nameTimer = React.useRef(null);
+  const saveTimer = React.useRef(null);
 
   const selected = customPresets.find(p => p.id === selectedId) ?? null;
 
@@ -2061,9 +2063,9 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
     return () => window.removeEventListener('keydown', fn);
   }, []);
 
-  /* clear pending name debounce on unmount */
+  /* clear pending timers on unmount */
   React.useEffect(() => {
-    return () => clearTimeout(nameTimer.current);
+    return () => { clearTimeout(nameTimer.current); clearTimeout(saveTimer.current); };
   }, []);
 
   function selectPreset(id) {
@@ -2075,6 +2077,14 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
     const p = { id: 'custom_' + Date.now(), name: '', syms: [] };
     saveCustomPresets([p, ...customPresets]);
     setSelectedId(p.id);
+    setWatchlist(p.id);
+  }
+
+  function handleSave() {
+    saveCustomPresets([...customPresets]);
+    setSavedFlash(true);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => setSavedFlash(false), 1500);
   }
 
   function handleNameChange(val) {
@@ -2219,6 +2229,12 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
       borderRadius: 3, color: 'var(--ink)', fontFamily: 'var(--mono)', fontSize: 10,
       letterSpacing: '0.14em', cursor: 'pointer',
     },
+    saveBtn: {
+      marginTop: 10, padding: '7px 0', width: '100%',
+      border: 'none', borderRadius: 3,
+      fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em',
+      cursor: 'pointer', fontWeight: 700, transition: 'background 0.2s',
+    },
   };
 
   return (
@@ -2306,6 +2322,10 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
                   />
                   <button style={S.addBtn} onClick={handleAddTicker}>ADD</button>
                 </div>
+                <button
+                  style={{...S.saveBtn, background: savedFlash ? 'var(--buy)' : 'var(--amber)', color: savedFlash ? '#fff' : '#000'}}
+                  onClick={handleSave}
+                >{savedFlash ? '✓ SAVED' : 'SAVE PRESET'}</button>
               </>
             )}
           </div>

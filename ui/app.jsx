@@ -250,8 +250,9 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
   const wl = watchlists.find(w => w.id === watchlist);
   const symAssets = wl.syms
     .map(s => {
-      const base = window.ASSETS.find(a => a.sym === s);
-      return base ? mergeRadar(base, radarData[s]) : null;
+      const base = window.ASSETS.find(a => a.sym === s)
+        || { sym: s, name: s, cls: 'EQUITY', price: 0, chg: 0, edge: 50, verdict: 'WAIT', bias: '→ FLAT', vol: 1, rsi: 50, atr: 1 };
+      return mergeRadar(base, radarData[s]);
     })
     .filter(Boolean);
 
@@ -492,8 +493,8 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
   const syms = wl.syms;
   const assets = syms
     .map(s => {
-      const base = window.ASSETS.find(a => a.sym === s);
-      if (!base) return null;
+      const base = window.ASSETS.find(a => a.sym === s)
+        || { sym: s, name: s, cls: 'EQUITY', price: 0, chg: 0, edge: 50, verdict: 'WAIT', bias: '→ FLAT', vol: 1, rsi: 50, atr: 1 };
       return { ...mergeRadar(base, radarData[s]), _loading: radarLoading.has(s) };
     })
     .filter(Boolean);
