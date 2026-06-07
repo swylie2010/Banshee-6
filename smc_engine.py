@@ -504,6 +504,10 @@ def detect_fvgs(df: pd.DataFrame, atr: pd.Series) -> list:
                 elif wick_high > bottom:
                     fvg["status"] = "partial"
 
+    # Compute end_timestamp from the bar where the gap was fully filled
+    for fvg in fvgs:
+        fvg["end_timestamp"] = _bar_idx_to_ts(timestamps, fvg["mitigated_at"])
+
     return fvgs
 
 
@@ -572,6 +576,18 @@ def compute_pd_zones(swing_highs: list, swing_lows: list, current_state: str) ->
         "premium_bottom":  equilibrium,    # premium is everything above this
         "state":           current_state,
     }
+
+
+# ─── HELPER: BAR INDEX TO TIMESTAMP ────────────────────────────────────────────
+
+def _bar_idx_to_ts(timestamps, idx):
+    """Return the timestamp at bar index `idx`, or None if invalid/None."""
+    if idx is None:
+        return None
+    try:
+        return timestamps[idx]
+    except (IndexError, TypeError):
+        return None
 
 
 # ─── ORDER BLOCKS ──────────────────────────────────────────────────────────────
@@ -770,6 +786,13 @@ def detect_order_blocks(df: pd.DataFrame, structure_events: list,
                     break
                 if b_high > mt and ob["status"] in ("active", "touched"):
                     ob["status"] = "degraded"
+
+    # Compute end_timestamp: earliest bar where price interacted with the zone
+    for ob in obs:
+        candidates = [i for i in [ob["touched_at"], ob["sapped_at"], ob["invalidated_at"]]
+                      if i is not None]
+        end_idx = min(candidates) if candidates else None
+        ob["end_timestamp"] = _bar_idx_to_ts(timestamps, end_idx)
 
     return obs
 
