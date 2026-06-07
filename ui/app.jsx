@@ -1948,6 +1948,95 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
 /* ── SettingsPage ──────────────────────────────────────────── */
 const AI_PROVIDERS = ["Gemini", "OpenAI", "Anthropic", "Ollama", "Custom"];
 
+const MCP_CONFIG_SNIPPET = `{
+  "mcpServers": {
+    "banshee-pro": {
+      "command": "python",
+      "args": ["C:/Users/swyli/AntiEverything/Banshee_5/mcp_server.py"]
+    }
+  }
+}`;
+
+const MCP_TOOLS = [
+  ["get_regime",            "lightweight regime bucket + go/no-go (fast, cached)"],
+  ["get_macro_weather",     "global macro environment — VIX, yield curve, liquidity"],
+  ["get_watchlist",         "user's saved symbol list — call before scan_assets"],
+  ["get_asset_radar",       "full multi-timeframe technical analysis for one asset"],
+  ["get_smc_structure",     "SMC structure map — swings, BOS/CHoCH, FVGs, order blocks"],
+  ["scan_assets",           "ranked scan across a list of symbols"],
+  ["synthesize_nexus",      "top-down macro + micro + news AI briefing"],
+  ["build_execution_plan",  "position sizing and R-target execution plan"],
+  ["read_market_intel",     "daily Predator briefing or RSS fallback"],
+  ["get_strategy_results",  "retrieve saved Strategy Lab backtests"],
+  ["open_paper_trade",      "open a new paper trade"],
+  ["check_kill_switch",     "close all positions if CRACK DETECTED (domino ≥ 2)"],
+  ["log_signal_outcome",    "record exit reason or note on any trade"],
+  ["get_signal_log",        "retrieve judged trades + regime/exit-reason stats"],
+];
+
+function MCPConnectionBlock() {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(MCP_CONFIG_SNIPPET).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div>
+        <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+          <window.Label>CLAUDE CONFIG SNIPPET</window.Label>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.12em" }}>
+            paste into ~/.claude/.mcp.json → mcpServers
+          </span>
+        </div>
+        <pre style={{
+          background: "var(--bg-3)", border: "1px solid var(--line-2)",
+          padding: "12px 14px", margin: 0,
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+          color: "var(--cyan)", letterSpacing: "0.05em", lineHeight: 1.7,
+          overflowX: "auto", whiteSpace: "pre",
+        }}>
+          {MCP_CONFIG_SNIPPET}
+        </pre>
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 14 }}>
+          <button onClick={handleCopy} style={{
+            padding: "7px 18px",
+            background: copied ? "rgba(52,211,153,0.12)" : "rgba(56,189,248,0.1)",
+            color: copied ? "var(--buy)" : "var(--cyan)",
+            border: `1px solid ${copied ? "var(--buy)" : "var(--cyan)"}`,
+            cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.18em",
+          }}>
+            {copied ? "✓ COPIED" : "COPY"}
+          </button>
+          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>
+            Core must be running on :8765 before MCP tools respond
+          </span>
+        </div>
+      </div>
+      <div>
+        <div style={{ marginBottom: 8 }}><window.Label>AVAILABLE TOOLS</window.Label></div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {MCP_TOOLS.map(([name, desc]) => (
+            <div key={name} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+              <span className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.06em", flexShrink: 0, minWidth: 190 }}>
+                {name}
+              </span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.08em", lineHeight: 1.5 }}>
+                {desc}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const INPUT_STYLE = {
   width: "100%", boxSizing: "border-box",
   background: "var(--bg-3)", border: "1px solid var(--line-2)",
@@ -2081,6 +2170,7 @@ function SettingsPage({ onBack }) {
   const [aiKey, setAiKey]           = useState("");
   const [aiModel, setAiModel]       = useState("");
   const [aiUrl, setAiUrl]           = useState("");
+  const [aiCtxWindow, setAiCtxWindow] = useState(32768);
   const [apiSaveStatus, setApiSaveStatus]   = useState(null);
   const [aiSaveStatus, setAiSaveStatus]     = useState(null);
   const [testStatus, setTestStatus]         = useState(null);
@@ -2097,6 +2187,7 @@ function SettingsPage({ onBack }) {
       setAiKey(ai.key || "");
       setAiModel(ai.model || "");
       setAiUrl(ai.url || "");
+      setAiCtxWindow(ai.context_window || 32768);
       setLoaded(true);
     });
   }, []);
@@ -2115,7 +2206,7 @@ function SettingsPage({ onBack }) {
   async function saveAIBrain() {
     setAiSaveStatus("saving");
     const result = await window.API.saveSettings({
-      AI_API: { type: aiType, key: aiKey, model: aiModel, url: aiUrl },
+      AI_API: { type: aiType, key: aiKey, model: aiModel, url: aiUrl, context_window: aiCtxWindow },
     });
     setAiSaveStatus(result.status === "saved" ? "saved" : "error: " + (result.message || "?"));
     setTimeout(() => setAiSaveStatus(null), 3000);
@@ -2222,6 +2313,15 @@ function SettingsPage({ onBack }) {
                 />
               </SettingsField>
             )}
+            {aiType === "Ollama" && (
+              <SettingsField label="CONTEXT WINDOW" hint="tokens — 32768 for Gemma 4, min supported">
+                <input
+                  type="number" min="32768" step="1024"
+                  value={aiCtxWindow} onChange={e => setAiCtxWindow(parseInt(e.target.value) || 32768)}
+                  style={INPUT_STYLE}
+                />
+              </SettingsField>
+            )}
 
             {/* test connection */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
@@ -2252,6 +2352,13 @@ function SettingsPage({ onBack }) {
         <SettingsSection title="▸ PIN LOCK">
           <PinSettings />
         </SettingsSection>
+
+        {/* MCP CONNECTION — full width */}
+        <div style={{ gridColumn: "1 / -1" }}>
+          <SettingsSection title="▸ MCP CONNECTION">
+            <MCPConnectionBlock />
+          </SettingsSection>
+        </div>
 
       </div>
     </div>
@@ -2287,12 +2394,20 @@ function MacroPage({ macroData, onBack, manualStories = [] }) {
   const [aiText, setAiText]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]     = useState(null);
+  const [rotationData,    setRotationData]    = useState(null);
+  const [rotationLoading, setRotationLoading] = useState(true);
 
   const sensors = macroData?.sensors;
   const macroTop = macroData ? sensorsToTopBar(macroData) : window.MACRO;
   const riskScore = typeof sensors?.risk_score === "number" ? sensors.risk_score : 0;
   const riskColor = riskScore > 70 ? "var(--sell)" : riskScore > 40 ? "var(--wait)" : "var(--buy)";
   const contradictions = sensors?.contradictions || [];
+
+  React.useEffect(() => {
+    window.API.fetchRotation()
+      .then(d  => { setRotationData(d);    setRotationLoading(false); })
+      .catch(() =>                          setRotationLoading(false));
+  }, []);
 
   function handleMacroAI() {
     setAiLoading(true); setAiText(null); setAiError(null);
@@ -2370,6 +2485,8 @@ function MacroPage({ macroData, onBack, manualStories = [] }) {
             ))}
           </div>
         ))}
+
+        <window.RotationSection data={rotationData} loading={rotationLoading} />
 
         {/* AI macro commentary */}
         <div style={{ background: "var(--bg-2)", border: "1px solid rgba(56,189,248,0.2)", borderLeft: "3px solid var(--cyan)" }}>
