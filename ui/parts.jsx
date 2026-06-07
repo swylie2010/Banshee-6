@@ -515,7 +515,9 @@ class SMCMarkersRenderer {
 
     target.useBitmapCoordinateSpace((scope) => {
       const ctx = scope.context;
-      const { verticalPixelRatio: vr, horizontalPixelRatio: hr } = scope;
+      const { verticalPixelRatio: vr, horizontalPixelRatio: hr, bitmapSize } = scope;
+      const bw  = bitmapSize.width;
+      const bh  = bitmapSize.height;
       const ts  = chart.timeScale();
       ctx.save();
 
@@ -598,8 +600,8 @@ class SMCMarkersRenderer {
           const padX = 4 * hr, padY = 3 * vr;
           const bxW = metrics.width + padX * 2;
           const bxH = fSize + padY * 2;
-          const bxX = x + 4 * hr;
-          const bxY = y - bxH - 2 * vr;
+          const bxX = Math.min(x + 4 * hr, bw - bxW - 2 * hr);
+          const bxY = Math.max(y - bxH - 2 * vr, 2 * vr);
           ctx.fillStyle = base + "cc";
           ctx.fillRect(bxX, bxY, bxW, bxH);
           ctx.fillStyle = "#000000ee";
