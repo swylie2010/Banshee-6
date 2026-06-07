@@ -2061,6 +2061,11 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
     return () => window.removeEventListener('keydown', fn);
   }, []);
 
+  /* clear pending name debounce on unmount */
+  React.useEffect(() => {
+    return () => clearTimeout(nameTimer.current);
+  }, []);
+
   function selectPreset(id) {
     setSelectedId(id);
     setWatchlist(id);
@@ -2237,12 +2242,12 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
                 <div key={p.id} style={S.presetRow(selectedId === p.id)}
                   onClick={() => selectPreset(p.id)}>
                   <span style={S.presetName(selectedId === p.id)}>
-                    {p.name || 'Untitled Preset'}
+                    {p.id === watchlist ? '◆ ' : ''}{p.name || 'Untitled Preset'}
                   </span>
-                  <button style={S.iconBtn} title="Move up"
+                  <button style={{...S.iconBtn, opacity: i === 0 ? 0.25 : 1}} title="Move up"
                     onClick={e => { e.stopPropagation(); handleMoveUp(p.id); }}
                     disabled={i === 0}>&#9650;</button>
-                  <button style={S.iconBtn} title="Move down"
+                  <button style={{...S.iconBtn, opacity: i === customPresets.length - 1 ? 0.25 : 1}} title="Move down"
                     onClick={e => { e.stopPropagation(); handleMoveDown(p.id); }}
                     disabled={i === customPresets.length - 1}>&#9660;</button>
                   <button style={S.iconBtn} title="Delete preset"
