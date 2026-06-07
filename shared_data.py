@@ -201,3 +201,33 @@ def fetch_funding_rate(symbol: str) -> float | None:
         return float(rate) * 100
     except Exception:
         return None
+
+
+@ttl_cache(ttl=14400)
+def fetch_sector_closes() -> "pd.DataFrame":
+    """
+    Fetch ~3 months of daily closes for SPY + all 10 sector SPDRs.
+    Returns DataFrame with DatetimeIndex, one column per ticker.
+
+    Data-source adapter for sector_rotation_engine — yfinance today,
+    swappable when the user supplies a different data source. The engine
+    itself never calls yfinance; it receives this DataFrame.
+
+    Cached 4 hours (14400s). First call takes 2-5s; subsequent calls instant.
+    """
+    tickers = ["SPY", "XLK", "XLY", "XLI", "XLB", "XLE", "XLF", "XLV", "XLP", "XLU", "XLRE"]
+    try:
+        raw = yf.download(
+            tickers=tickers,
+            period="3mo",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+        )
+        # yf.download with multiple tickers returns MultiIndex columns: (field, ticker)
+        closes = raw["Close"].dropna(how="all")
+        closes.index = pd.to_datetime(closes.index).tz_localize(None)
+        return closes[tickers]  # consistent column order
+    except Exception as e:
+        print(f"[fetch_sector_closes] yfinance failed: {e}", file=sys.stderr)
+        return pd.DataFrame()
