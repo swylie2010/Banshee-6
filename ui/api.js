@@ -381,12 +381,12 @@ async function fetchPredatorBriefing() {
 }
 
 /* trigger the Daily Predator pipeline; resolves when complete (2-3 min) */
-async function runPredator(force = true) {
+async function runPredator(force = true, manualStories = []) {
   try {
     const res = await fetch(`${API_BASE}/predator/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ watchlist: [], force }),
+      body: JSON.stringify({ watchlist: [], force, manual_stories: manualStories }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();

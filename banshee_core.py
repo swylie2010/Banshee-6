@@ -1401,6 +1401,7 @@ def route_predator_config_save(body: PredatorConfigBody):
 class PredatorRunRequest(BaseModel):
     watchlist: list[str] = []
     force: bool = False
+    manual_stories: list = []
 
 
 @app.post("/predator/run")
@@ -1412,7 +1413,8 @@ def route_predator_run(req: PredatorRunRequest):
         return JSONResponse(content={"error": "No AI key configured"}, status_code=400)
     try:
         briefing = predator_engine.run_daily_cycle(
-            ai_cfg, watchlist_symbols=req.watchlist, force=req.force
+            ai_cfg, watchlist_symbols=req.watchlist, force=req.force,
+            manual_stories=req.manual_stories
         )
         return JSONResponse(content=briefing or {})
     except Exception as e:

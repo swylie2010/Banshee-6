@@ -3518,7 +3518,7 @@ function StoryPanel({ manualStories, setManualStories }) {
       {manualStories.length > 0 && (
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
           {manualStories.map((s, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8,
+            <div key={s} style={{ display: "flex", alignItems: "flex-start", gap: 8,
               background: "var(--bg-3)", padding: "6px 10px", borderRadius: 3,
               borderLeft: "2px solid var(--amber)" }}>
               <span className="mono" style={{ fontSize: 11, color: "var(--ink)", flex: 1, lineHeight: 1.5 }}>{s}</span>
@@ -3550,7 +3550,7 @@ function NewsPage({ onBack, manualStories = [], setManualStories }) {
 
   const handleRun = async () => {
     setRunning(true); setRunError(null);
-    const result = await window.API.runPredator(true);
+    const result = await window.API.runPredator(true, manualStories);
     setRunning(false);
     if (!result) { setRunError("Pipeline failed — check Core logs."); return; }
     setBriefing(result);

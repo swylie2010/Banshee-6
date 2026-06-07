@@ -851,6 +851,7 @@ def run_engine(
     config: dict,
     ai_cfg: dict,
     yesterday_briefing: Optional[dict] = None,
+    manual_stories: list = [],
 ) -> dict:
     """
     Stage 3: Two-pass AI synthesis.
@@ -880,6 +881,11 @@ def run_engine(
                 hl = item.get("headline") or item.get("title", "")
                 yesterday_block += f"- {hl}\n"
 
+    constraints_block = ""
+    if manual_stories:
+        lines = "\n".join(f"- {s}" for s in manual_stories)
+        constraints_block = f"\n--- USER INJECTED CONSTRAINTS (Highest Priority) ---\n{lines}\n\n"
+
     pass1_prompt = f"""THE DAILY PREDATOR — Market Intelligence Brief
 DATE: {date_str}
 
@@ -887,8 +893,7 @@ DATE: {date_str}
 
 {discovered_block}
 
-{yesterday_block}
-TASK: Reason about the above events in three passes:
+{yesterday_block}{constraints_block}TASK: Reason about the above events in three passes:
 1. WATCHLIST: What events directly affect the user's tracked assets? Rate their significance 1-10.
 2. DISCOVERY: What should the user be watching that they aren't? Why is each significant?
 3. FOLLOWUPS: For yesterday's items — developed, resolved, or escalated?
@@ -1023,6 +1028,7 @@ def run_daily_cycle(
     ai_cfg: dict,
     watchlist_symbols: Optional[list[str]] = None,
     force: bool = False,
+    manual_stories: list = [],
 ) -> dict:
     """
     Run the complete 3-stage pipeline.
@@ -1049,7 +1055,7 @@ def run_daily_cycle(
     if yesterday and yesterday.get("date") == datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"):
         yesterday = None  # Today's own briefing is not "yesterday"
 
-    briefing = run_engine(bounced, config, ai_cfg, yesterday_briefing=yesterday)
+    briefing = run_engine(bounced, config, ai_cfg, yesterday_briefing=yesterday, manual_stories=manual_stories)
     save_briefing(briefing)
     return briefing
 
