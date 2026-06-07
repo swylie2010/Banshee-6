@@ -2341,23 +2341,25 @@ window.PinLockScreen = function PinLockScreen({ onUnlock }) {
   const [digits, setDigits] = React.useState('');
   const [error,  setError]  = React.useState(false);
 
-  const stored = localStorage.getItem('banshee_pin') || '';
+  const storedRef = React.useRef(localStorage.getItem('banshee_pin') || '');
+  const errorTimer = React.useRef(null);
 
   const handleDigit = (d) => {
+    clearTimeout(errorTimer.current);
     if (digits.length >= 4) return;
     const next = digits + d;
     setDigits(next);
     setError(false);
     if (next.length === 4) {
-      if (next === stored) {
+      if (next === storedRef.current) {
         onUnlock();
       } else {
-        setTimeout(() => { setDigits(''); setError(true); }, 300);
+        errorTimer.current = setTimeout(() => { setDigits(''); setError(true); }, 300);
       }
     }
   };
 
-  const handleBackspace = () => { setDigits(d => d.slice(0, -1)); setError(false); };
+  const handleBackspace = () => { clearTimeout(errorTimer.current); setDigits(d => d.slice(0, -1)); setError(false); };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "var(--bg-0)",

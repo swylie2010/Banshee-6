@@ -2040,6 +2040,11 @@ function PinSettings() {
           {saved ? "✓ SAVED" : "SET PIN"}
         </button>
       </div>
+      {enabled && !pin && (
+        <div className="mono" style={{ fontSize: 11, color: "var(--amber)" }}>
+          Set a PIN above to activate the lock
+        </div>
+      )}
       {pin && (
         <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
           PIN is set · {enabled ? "Lock active on next launch" : "Lock disabled"}
