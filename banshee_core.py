@@ -38,7 +38,8 @@ import banshee_ai
 import risk_engine
 import smc_engine
 import predator_engine
-from shared_data import load_providers, fetch_crypto_ohlcv
+import sector_rotation_engine
+from shared_data import load_providers, fetch_crypto_ohlcv, fetch_sector_closes
 from knowledge_graph import get_regime_weights
 
 app = FastAPI(title="Banshee Core", version="5.0")
@@ -804,7 +805,7 @@ def route_nexus(
         prompt   = banshee_ai.build_banshee_prompt(
             mac_data, mic_data, news_lines, manual_stories=[], include_macro=True
         )
-        briefing = banshee_ai.call_ai(cfg, prompt)
+        briefing = banshee_ai.call_ai_briefing(cfg, prompt)
         out += f"\n\n{'─' * 60}\nAI BRIEFING ({cfg.get('type', 'AI')} / {cfg.get('model', '')}):\n{'─' * 60}\n{briefing}"
     elif use_ai:
         out += (
@@ -1285,6 +1286,26 @@ def route_macro_intel():
     })
 
 
+@app.get("/rotation")
+def route_rotation():
+    """
+    Sector rotation payload: CRS/ROC metrics for all 10 sector SPDRs vs SPY.
+    Cached via fetch_sector_closes() (4h TTL in shared_data).
+    Returns graceful error shape on data failure — never raises.
+    """
+    providers = load_providers()
+    fred_key  = providers.get("FRED_API", {}).get("key")
+    try:
+        closes = fetch_sector_closes()
+        if closes.empty:
+            return {"error": "Data unavailable", "sectors": [], "camd_alerts": [],
+                    "spy_roc_21": None, "macro_env": None, "timestamp": None}
+        return sector_rotation_engine.run(closes, fred_key)
+    except Exception as e:
+        return {"error": str(e), "sectors": [], "camd_alerts": [],
+                "spy_roc_21": None, "macro_env": None, "timestamp": None}
+
+
 @app.get("/ohlcv")
 def route_ohlcv(
     symbol: str = Query(...),
@@ -1557,7 +1578,7 @@ def route_ai_briefing(req: AIBriefingRequest):
         mac_data, mic_data, news_lines, req.manual_stories, include_macro=True,
         geo_harmonic_context=geo_harmonic_context, tab=req.tab,
     )
-    return banshee_ai.call_ai(cfg, prompt)
+    return banshee_ai.call_ai_briefing(cfg, prompt)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
