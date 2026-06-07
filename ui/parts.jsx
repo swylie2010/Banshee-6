@@ -318,10 +318,25 @@ class SMCZoneRenderer {
       const bw = bitmapSize.width;
       const bh = bitmapSize.height;
       ctx.save();
-      const currentPrice = this._source._currentPrice;
-      const lensMode     = this._source._lensMode;
+
+      const currentPrice     = this._source._currentPrice;
+      const lensMode         = this._source._lensMode;
+      const currentTimestamp = this._source._currentTimestamp; // Unix int (seconds)
+      const activeOnly       = this._source._activeOnly;
+
+      /* ISO-string zone timestamp → bitmap x pixel */
+      const tScale = chart ? chart.timeScale() : null;
+      function txToX(tsStr) {
+        if (!tsStr || !tScale) return null;
+        const unix  = Math.floor(new Date(tsStr).getTime() / 1000);
+        const coord = tScale.timeToCoordinate(unix);
+        return coord === null ? null : Math.round(coord * hr);
+      }
 
       for (const z of zones) {
+        /* skip ghost zones when activeOnly override is on */
+        if (z.ghost && activeOnly) continue;
+
         const rawTop = series.priceToCoordinate(z.top);
         const rawBot = series.priceToCoordinate(z.bottom);
         if (rawTop === null && rawBot === null) continue;
@@ -329,10 +344,30 @@ class SMCZoneRenderer {
         const botPx = Math.min(bh, Math.max(rawTop ?? 0, rawBot ?? bh / vr) * vr);
         const h = Math.max(1, botPx - topPx);
 
-        /* Dynamic visual weight */
+        /* ── Time-bounded x coordinates ──────────────────────────────── */
+        const xLeftRaw = z.timestamp ? txToX(z.timestamp) : null;
+        const xLeft    = xLeftRaw !== null ? Math.max(0, xLeftRaw) : 0;
+
+        let xRight;
+        if (z.end_timestamp) {
+          /* mitigated zone: cap at the mitigation candle */
+          const x = txToX(z.end_timestamp);
+          xRight = x !== null ? Math.min(bw, x) : bw;
+        } else if (currentTimestamp && tScale) {
+          /* active zone: extend to the current (last loaded) candle */
+          const coord = tScale.timeToCoordinate(currentTimestamp);
+          const x     = coord !== null ? Math.round(coord * hr) : null;
+          xRight = x !== null ? Math.min(bw, x) : bw;
+        } else {
+          xRight = bw;
+        }
+
+        if (xLeft >= xRight) continue; /* entirely off screen or zero-width */
+        const w = xRight - xLeft;
+
+        /* Dynamic visual weight (distance-from-price dimming, non-ghost zones only) */
         let dynMult = 1.0;
-        if (lensMode !== 4 && currentPrice && currentPrice > 0) {
-          // SNIPER: filterZonesForLens already handles per-OB opacity; skip dynMult
+        if (!z.ghost && lensMode !== 4 && currentPrice && currentPrice > 0) {
           const mid = (z.top + z.bottom) / 2;
           const pct = Math.abs(mid - currentPrice) / currentPrice;
           if (pct > 0.03) dynMult = 0.35;
@@ -357,50 +392,62 @@ class SMCZoneRenderer {
           : z.status === "touched"  ? 0.75
           : 1.0;
 
-        const fillAlp = z.isFVG
-          ? (z.status === "partial" ? 0.25 : 0.55)
-          : (z.dashed ? 0.06 : 0.22);
-        const bordAlp = z.dashed ? 0.28 : 0.75;
-        const toFill  = (a) => Math.round(a * z.opacity * statusMult * dynMult * 255).toString(16).padStart(2, "0");
-        const toBord  = (a) => Math.round(a * z.opacity * statusMult * dynMult * 255).toString(16).padStart(2, "0");
+        /* Ghost zones: fixed opacity, bypass multipliers for exact values */
+        let fillAlp, bordAlp, useDash;
+        if (z.ghost) {
+          fillAlp = 0.12;
+          bordAlp = 0.30;
+          useDash = true;
+        } else {
+          fillAlp = z.isFVG
+            ? (z.status === "partial" ? 0.25 : 0.55)
+            : (z.dashed ? 0.06 : 0.22);
+          bordAlp = z.dashed ? 0.28 : 0.75;
+          useDash = z.dashed || false;
+        }
+
+        /* Ghost: raw alpha → hex. Active: multiplied alpha → hex. */
+        const toFill = z.ghost
+          ? (a) => Math.round(a * 255).toString(16).padStart(2, "0")
+          : (a) => Math.round(a * z.opacity * statusMult * dynMult * 255).toString(16).padStart(2, "0");
+        const toBord = z.ghost
+          ? (a) => Math.round(a * 255).toString(16).padStart(2, "0")
+          : (a) => Math.round(a * z.opacity * statusMult * dynMult * 255).toString(16).padStart(2, "0");
 
         ctx.fillStyle = fillBase + toFill(fillAlp);
-        ctx.fillRect(0, topPx, bw, h);
+        ctx.fillRect(xLeft, topPx, w, h);
 
         ctx.strokeStyle = bordBase + toBord(bordAlp);
         ctx.lineWidth   = (z.inducement_swept || z.has_pending_inducement ? 2 : 1) * hr;
-        if (z.dashed) ctx.setLineDash([4 * hr, 4 * hr]);
-        ctx.strokeRect(0.5 * hr, topPx + 0.5 * vr, bw - hr, h - vr);
+        if (useDash) ctx.setLineDash([4 * hr, 4 * hr]);
+        ctx.strokeRect(xLeft + 0.5 * hr, topPx + 0.5 * vr, w - hr, h - vr);
         ctx.setLineDash([]);
 
-        /* FVG formation timestamp — vertical anchor line where the gap opened */
-        if (z.isFVG && z.timestamp && chart) {
-          const unix = Math.floor(new Date(z.timestamp).getTime() / 1000);
-          const xCoord = chart.timeScale().timeToCoordinate(unix);
-          if (xCoord !== null) {
-            const xPx = Math.round(xCoord * hr);
+        /* FVG formation tick — vertical anchor line at creation candle (active FVGs only) */
+        if (z.isFVG && !z.ghost && z.timestamp && chart) {
+          const xFvg = txToX(z.timestamp);
+          if (xFvg !== null && xFvg >= xLeft && xFvg <= xRight) {
             ctx.strokeStyle = fillBase + "dd";
             ctx.lineWidth   = 2 * hr;
             ctx.setLineDash([]);
             ctx.beginPath();
-            ctx.moveTo(xPx, topPx);
-            ctx.lineTo(xPx, botPx);
+            ctx.moveTo(xFvg, topPx);
+            ctx.lineTo(xFvg, botPx);
             ctx.stroke();
-            /* small label "FVG" above/below the tick */
             ctx.font      = `bold ${Math.max(11, Math.round(8 * Math.min(vr, hr)))}px 'JetBrains Mono', monospace`;
             ctx.fillStyle = fillBase + "cc";
             ctx.textAlign = "center";
             if (z.kind === "bullish") {
-              ctx.fillText("FVG▲", xPx, topPx - 4 * vr);
+              ctx.fillText("FVG▲", xFvg, topPx - 4 * vr);
             } else {
-              ctx.fillText("FVG▼", xPx, botPx + 10 * vr);
+              ctx.fillText("FVG▼", xFvg, botPx + 10 * vr);
             }
           }
         }
 
-        /* Session weight badges + ★ HTF confluence (OBs only) */
-        if (!z.isFVG && h > 12 * vr) {
-          const sw  = z.session_weight || 1.0;
+        /* Session weight badges + ★ HTF confluence (active OBs only, aligned to zone right edge) */
+        if (!z.isFVG && !z.ghost && h > 12 * vr) {
+          const sw      = z.session_weight || 1.0;
           const hasConf = Array.isArray(z.htf_confluence) && z.htf_confluence.length > 0;
 
           let badge = "", badgeColor = "";
@@ -409,9 +456,9 @@ class SMCZoneRenderer {
           else if (sw < 1.0)  { badge = "·"; badgeColor = "#607D8B"; }
 
           const fSize = Math.max(11, Math.round(10 * Math.min(vr, hr)));
-          const baseX = bw - 5 * hr;
+          const baseX = xRight - 5 * hr; /* follow the zone's right edge, not canvas right */
           const baseY = topPx + 12 * vr;
-          let curX = baseX;
+          let curX    = baseX;
 
           ctx.textAlign = "right";
           if (badge) {
@@ -439,13 +486,15 @@ class SMCZonePaneView {
 }
 
 class SMCZonePrimitive {
-  constructor(zones, chart, lensMode = 1, currentPrice = null) {
-    this._zones        = zones;
-    this._chart        = chart || null;
-    this._lensMode     = lensMode;
-    this._currentPrice = currentPrice;
-    this._series       = null;
-    this._paneViews    = [new SMCZonePaneView(this)];
+  constructor(zones, chart, lensMode = 1, currentPrice = null, currentTimestamp = null, activeOnly = false) {
+    this._zones            = zones;
+    this._chart            = chart || null;
+    this._lensMode         = lensMode;
+    this._currentPrice     = currentPrice;
+    this._currentTimestamp = currentTimestamp;
+    this._activeOnly       = activeOnly;
+    this._series           = null;
+    this._paneViews        = [new SMCZonePaneView(this)];
   }
   attached({ series }) { this._series = series; }
   detached()           { this._series = null; }
