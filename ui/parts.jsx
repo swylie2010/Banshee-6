@@ -2112,9 +2112,12 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
   }
 
   function handleDelete(id) {
+    const i = customPresets.findIndex(p => p.id === id);
     const remaining = customPresets.filter(p => p.id !== id);
     saveCustomPresets(remaining);
-    if (selectedId === id) setSelectedId(remaining[0]?.id ?? null);
+    if (selectedId === id) {
+      setSelectedId(remaining[Math.min(i, remaining.length - 1)]?.id ?? null);
+    }
   }
 
   const S = {
