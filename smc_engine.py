@@ -787,9 +787,11 @@ def detect_order_blocks(df: pd.DataFrame, structure_events: list,
                 if b_high > mt and ob["status"] in ("active", "touched"):
                     ob["status"] = "degraded"
 
-    # Compute end_timestamp: earliest bar where price interacted with the zone
+    # Compute end_timestamp: earliest bar where the zone was truly terminated.
+    # touched_at is NOT a termination — it records first wick entry on degraded/touched OBs.
+    # Only sapped_at (wick through distal) and invalidated_at (body through distal) end a zone.
     for ob in obs:
-        candidates = [i for i in [ob["touched_at"], ob["sapped_at"], ob["invalidated_at"]]
+        candidates = [i for i in [ob["sapped_at"], ob["invalidated_at"]]
                       if i is not None]
         end_idx = min(candidates) if candidates else None
         ob["end_timestamp"] = _bar_idx_to_ts(timestamps, end_idx)

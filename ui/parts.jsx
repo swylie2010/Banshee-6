@@ -418,11 +418,13 @@ class SMCZoneRenderer {
         ctx.fillStyle = fillBase + toFill(fillAlp);
         ctx.fillRect(xLeft, topPx, w, h);
 
-        ctx.strokeStyle = bordBase + toBord(bordAlp);
-        ctx.lineWidth   = (z.inducement_swept || z.has_pending_inducement ? 2 : 1) * hr;
-        if (useDash) ctx.setLineDash([4 * hr, 4 * hr]);
-        ctx.strokeRect(xLeft + 0.5 * hr, topPx + 0.5 * vr, w - hr, h - vr);
-        ctx.setLineDash([]);
+        if (w > hr && h > vr) {
+          ctx.strokeStyle = bordBase + toBord(bordAlp);
+          ctx.lineWidth   = (z.inducement_swept || z.has_pending_inducement ? 2 : 1) * hr;
+          ctx.setLineDash(useDash ? [4 * hr, 4 * hr] : []);
+          ctx.strokeRect(xLeft + 0.5 * hr, topPx + 0.5 * vr, w - hr, h - vr);
+          ctx.setLineDash([]);
+        }
 
         /* FVG formation tick — vertical anchor line at creation candle (active FVGs only) */
         if (z.isFVG && !z.ghost && z.timestamp && chart) {
@@ -576,9 +578,11 @@ class SMCMarkersRenderer {
       ctx.save();
 
       function txToX(tsStr) {
+        if (!tsStr || !ts) return null;
         const unix = Math.floor(new Date(tsStr).getTime() / 1000);
+        if (!Number.isFinite(unix)) return null;
         const coord = ts.timeToCoordinate(unix);
-        return coord === null ? null : Math.round(coord * hr);
+        return coord === null || !Number.isFinite(coord) ? null : Math.round(coord * hr);
       }
       function priceToY(p) {
         const coord = series.priceToCoordinate(p);
