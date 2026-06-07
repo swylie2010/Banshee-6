@@ -1468,7 +1468,30 @@ def route_ai_briefing(req: AIBriefingRequest):
         predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
         if predator_lines:
             news_lines = [predator_lines] + news_lines
-        prompt = banshee_ai.build_macro_prompt(mac_data, news_lines)
+        # Build rotation context (non-blocking — fails silently)
+        rotation_ctx = ""
+        try:
+            closes = fetch_sector_closes()
+            if not closes.empty:
+                rot = sector_rotation_engine.run(closes, providers.get("FRED_API", {}).get("key"))
+                if rot.get("sectors"):
+                    top  = [s for s in rot["sectors"] if s["roc_21"] > 0][:3]
+                    bot  = [s for s in rot["sectors"] if s["roc_21"] < 0][-2:]
+                    top_lines = [
+                        f"{s['name']} ({s['roc_21']:+.1f}% 21D RS{' CAMD' if s['camd'] else ''})"
+                        for s in top
+                    ]
+                    rotation_ctx = "Top flow: " + ", ".join(top_lines)
+                    if bot:
+                        rotation_ctx += "\nWeakest: " + ", ".join(
+                            f"{s['name']} ({s['roc_21']:+.1f}% 21D RS)" for s in bot
+                        )
+                    if rot.get("macro_env") and rot["macro_env"].get("interpretation"):
+                        rotation_ctx += f"\n{rot['macro_env']['interpretation']}"
+        except Exception:
+            pass
+
+        prompt = banshee_ai.build_macro_prompt(mac_data, news_lines, rotation_context=rotation_ctx)
         return banshee_ai.call_ai(cfg, prompt)
 
     # ── SMC tab: dedicated dual-TF pathway (same engine as V4 Streamlit) ──────

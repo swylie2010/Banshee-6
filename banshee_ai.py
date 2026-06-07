@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 
 
-def build_banshee_prompt(macro_data: dict, micro_data: dict, news_lines: list = [], manual_stories: list = [], include_macro: bool = True, geo_harmonic_context: str = "") -> str:
+def build_banshee_prompt(macro_data: dict, micro_data: dict, news_lines: list = [], manual_stories: list = [], include_macro: bool = True, geo_harmonic_context: str = "", tab: str = "nexus") -> str:
     """
     Constructs the prompt for the AI acting as the Banshee Pro quantitative analyst.
     If include_macro is True, it injects the Macro Regime warnings to context-adjust the read.
@@ -117,33 +117,119 @@ def build_banshee_prompt(macro_data: dict, micro_data: dict, news_lines: list = 
         prompt += "\n--- GEO HARMONIC CONTEXT ---\n"
         prompt += geo_harmonic_context + "\n"
 
-    if include_macro and macro_data:
-        prompt += "\nINSTRUCTION: Analyze the asset's technicals within this macro environment. "
-        prompt += "If the micro technicals are bullish (Strong Buy, Buy Setup) but the Macro Regime is CAUTION or CRACK DETECTED, "
-        prompt += "you MUST WARN the user that this breakout is occurring in a hostile macro environment. "
-        prompt += "Conversely, if the macro environment is strong (ALL CLEAR), confirm that the tailwind supports the technicals.\n"
-    else:
-        prompt += "INSTRUCTION: Analyze the asset's technicals purely on its own merits without macro context.\n"
-
-    if geo_harmonic_context:
-        prompt += ("If a Geo Harmonic hot zone sits within 3% of current price, address whether price is approaching "
-                   "from the expected direction: a ▼ ceiling zone is resistance when price approaches from below; "
-                   "a ▲ floor zone is support when price approaches from above.\n")
-        
-    prompt += "\nFormat your briefing as:\n"
-    prompt += "1. THE VERDICT: Direct summary of what to do (1 sentence).\n"
-    prompt += "2. THE 'WHY': 1 paragraph explaining the interplay between the technical setup today and the entry quality.\n"
-    if include_macro:
-        prompt += "3. MACRO OVERLAY: 1 paragraph explicitly addressing how the current Macro regime changes the risk profile of this specific trade.\n"
-    prompt += "4. RISK PARAMETERS: Brief note on squeeze risk or notable obstacles.\n"
+    if tab == "gh":
+        prompt += "\nINSTRUCTION: You are analyzing this asset through a Geo Harmonic lens only. "
+        prompt += "Focus exclusively on the arc zones, Fibonacci harmonic patterns, and PRZ levels provided. "
+        prompt += "Ignore general trend bias — your job is to interpret harmonic geometry.\n"
+        prompt += "\nFormat your briefing as:\n"
+        prompt += "1. ZONE STATUS: Which arc zones are within 5% of current price? Is price approaching from the expected direction (▲ floor from above = support; ▼ ceiling from below = resistance)?\n"
+        prompt += "2. HARMONIC PATTERNS: Any confirmed or forming XABCD patterns and their PRZ levels. If none, state clearly.\n"
+        prompt += "3. KEY LEVELS: Top 3 harmonic price levels to watch and why.\n"
+        prompt += "4. BIAS: Overall directional read based purely on harmonic structure — one sentence.\n"
+    elif tab == "smc":
+        if include_macro and macro_data:
+            prompt += "\nINSTRUCTION: Analyze this asset's Smart Money Concepts structure within the current macro regime. "
+            prompt += "If macro is hostile, flag it — but your primary focus is the SMC technical picture.\n"
+        else:
+            prompt += "\nINSTRUCTION: Analyze this asset's Smart Money Concepts structure on its own merits.\n"
+        prompt += "\nFormat your briefing as:\n"
+        prompt += "1. STRUCTURE BIAS: Current market structure (bullish/bearish HH/HL or LH/LL). Last confirmed BOS or CHoCH and what it means.\n"
+        prompt += "2. ACTIVE ZONES: Most relevant order blocks and FVGs near current price. Which are most likely to hold?\n"
+        prompt += "3. LIQUIDITY TARGETS: EQH/EQL pools price is most likely drawn toward next.\n"
+        prompt += "4. TRADE SETUP: Specific entry trigger, invalidation level, and target based on SMC logic — one paragraph.\n"
+    else:  # nexus — full cross-system synthesis
+        if include_macro and macro_data:
+            prompt += "\nINSTRUCTION: Synthesize all available data — micro technicals, macro regime, and harmonic context — into a single unified trade thesis. "
+            prompt += "If micro technicals are bullish but macro is CAUTION or CRACK DETECTED, you MUST warn the user. "
+            prompt += "Conversely, if macro is ALL CLEAR, confirm the tailwind supports the setup.\n"
+        else:
+            prompt += "\nINSTRUCTION: Synthesize all available data into a unified trade thesis without macro context.\n"
+        if geo_harmonic_context:
+            prompt += ("If a Geo Harmonic hot zone sits within 3% of current price, address whether price is approaching "
+                       "from the expected direction: a ▼ ceiling zone is resistance when approaching from below; "
+                       "a ▲ floor zone is support when approaching from above.\n")
+        prompt += "\nFormat your briefing as:\n"
+        prompt += "1. THE VERDICT: Direct summary of what to do (1 sentence).\n"
+        prompt += "2. THE 'WHY': 1 paragraph — interplay between technical setup, entry quality, and harmonic context.\n"
+        if include_macro:
+            prompt += "3. MACRO OVERLAY: 1 paragraph — how the current macro regime changes the risk profile of this trade.\n"
+        prompt += "4. RISK PARAMETERS: Squeeze risk, key invalidation level, and any notable obstacles.\n"
 
     return prompt
 
-def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
-    """Executes the AI request using either Gemini or Claude.
 
+def build_macro_prompt(macro_data: dict, news_lines: list = [], rotation_context: str = "") -> str:
+    """Macro-environment-only briefing — no per-asset data, pure macro picture."""
+    from datetime import datetime, timezone
+    date_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
+
+    regime        = macro_data.get("regime", "UNKNOWN")
+    cycle         = macro_data.get("domino_phase", 0)
+    risk_score    = macro_data.get("risk_score", 0)
+    warning_count = macro_data.get("warning_count", 0)
+    contradictions = macro_data.get("contradictions", [])
+
+    prompt  = f"DATE: {date_str} UTC\n"
+    prompt += "MACRO ENVIRONMENT ANALYSIS — no per-asset context\n\n"
+    prompt += "--- MACRO REGIME ---\n"
+    prompt += f"REGIME: {regime}\n"
+    prompt += f"DOMINO PHASE: {cycle}\n"
+    prompt += f"SYSTEMIC RISK SCORE: {risk_score}/100\n"
+    prompt += f"ACTIVE SENSOR WARNINGS: {warning_count}\n\n"
+
+    prompt += "--- ALL SENSOR READINGS ---\n"
+    sensor_order = ["vix", "skew", "bonds", "credit", "dxy", "curve", "btc", "eth_btc",
+                    "xle", "copper", "gold", "liquidity", "rotation"]
+    for key in sensor_order:
+        s = macro_data.get(key)
+        if not isinstance(s, dict):
+            continue
+        val     = s.get("value")
+        status  = s.get("status", "?")
+        warning = s.get("warning", False)
+        sub     = s.get("sub", "")
+        flag    = " ⚠" if warning else ""
+        if isinstance(val, (list, tuple)):
+            val_str = " / ".join(
+                (f"{float(v):+.1f}%" if v is not None else "N/A") for v in list(val)[:2]
+            )
+        elif isinstance(val, float):
+            val_str = f"{val:+.1f}%"
+        else:
+            val_str = str(val) if val is not None else "N/A"
+        prompt += f"  {key.upper()}: {val_str} — {status}{flag} ({sub})\n"
+
+    if contradictions:
+        prompt += "\n--- CONTRADICTION PATTERNS ---\n"
+        for c in contradictions:
+            prompt += f"  [{c['severity']}] {c['name']}: {c['description']}\n"
+
+    if news_lines:
+        prompt += "\n--- MARKET INTEL ---\n"
+        for line in news_lines:
+            prompt += f"{line}\n"
+
+    if rotation_context:
+        prompt += "\n--- SECTOR ROTATION ---\n"
+        prompt += rotation_context + "\n"
+
+    prompt += (
+        "\nINSTRUCTION: You are analyzing the macro environment only — not any specific asset. "
+        "Give a complete picture of what the macro is signaling right now and what it means for traders broadly.\n"
+        "\nFormat your briefing as:\n"
+        "1. REGIME READ: What the current macro regime means for risk assets in plain English. Risk-on or risk-off?\n"
+        "2. SENSORS IN FOCUS: The 2-3 active or near-warning sensors most important right now and why they matter together.\n"
+        "3. WHAT TO WATCH: The 1-2 macro developments most likely to shift the regime this week. What would change the picture?\n"
+        "4. POSITIONING IMPLICATIONS: What bias should traders carry in this environment? Any sectors or asset classes to favor or avoid?\n"
+    )
+    return prompt
+
+
+def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
+    """Execute an AI request against whichever provider is configured in Settings.
+
+    Supports: Gemini, Claude/Anthropic, OpenAI, Ollama, Custom (OpenAI-compatible).
     Pass system_prompt_override to replace the default Banshee system prompt.
-    Used by smc_analysis() which needs a different analyst persona.
     """
     system_prompt = system_prompt_override or (
         "You are OpenClaw / Banshee: an autonomous quantitative agent. "
@@ -154,12 +240,13 @@ def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
         "In these asymmetric cases, prioritize the massive reward skew over standard probability warnings. "
         "Format briefings exactly as requested."
     )
+    provider = cfg.get("type", "").lower()
     try:
-        if cfg["type"].lower() == "gemini":
+        if provider == "gemini":
             import google.genai as genai
             client   = genai.Client(api_key=cfg["key"])
             response = client.models.generate_content(
-                model=cfg["model"], 
+                model=cfg["model"],
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     system_instruction=system_prompt
@@ -167,7 +254,7 @@ def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
             )
             return response.text
 
-        elif cfg["type"].lower() == "claude":
+        elif provider in ("claude", "anthropic"):
             import anthropic
             client = anthropic.Anthropic(api_key=cfg["key"])
             msg    = client.messages.create(
@@ -178,10 +265,99 @@ def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
             )
             return msg.content[0].text
 
-    except Exception as e:
-        return f"AI call failed: {e}"
+        elif provider == "openai":
+            import openai
+            client = openai.OpenAI(api_key=cfg["key"])
+            resp   = client.chat.completions.create(
+                model=cfg["model"],
+                max_tokens=1024,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": prompt},
+                ]
+            )
+            return resp.choices[0].message.content
 
-    return "Unknown provider type."
+        elif provider in ("ollama", "custom"):
+            import requests as _req
+            base = (cfg.get("url") or "http://localhost:11434").rstrip("/")
+            ctx = int(cfg.get("context_window") or 32768)
+            body = {
+                "model":  cfg["model"],
+                "prompt": f"{system_prompt}\n\n{prompt}",
+                "stream": False,
+                "options": {"num_ctx": ctx},
+            }
+            r = _req.post(f"{base}/api/generate", json=body, timeout=300)
+            r.raise_for_status()
+            return r.json().get("response", "")
+
+        else:
+            return f"Unknown provider type: '{cfg.get('type')}'. Check Settings → AI Brain."
+
+    except Exception as e:
+        return f"AI call failed ({provider}): {e}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SIP ARCHITECTURE — chunked briefing for context-limited models
+# ─────────────────────────────────────────────────────────────────────────────
+
+CHUNK_BUDGET = 22_400  # 0.7 × 32 768 — fixed sip size, all models
+
+
+def _estimate_tokens(text: str) -> int:
+    return len(text) // 4
+
+
+def _split_prompt(prompt: str) -> list:
+    """Split a built briefing prompt into [data, synthesis] at the INSTRUCTION marker."""
+    idx = prompt.find("\nINSTRUCTION:")
+    if idx == -1:
+        return [("DATA", prompt)]
+    return [
+        ("DATA",      prompt[:idx].strip()),
+        ("SYNTHESIS", prompt[idx:].strip()),
+    ]
+
+
+def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = None) -> str:
+    """Sip mode: deliver sections sequentially with rolling WORKING_NOTES."""
+    accumulated_notes = ""
+    last_response = ""
+
+    for i, (label, text) in enumerate(sections):
+        is_last = (i == len(sections) - 1)
+        preamble = (
+            f"Your working notes from previous analysis:\n{accumulated_notes}\n\n"
+            if accumulated_notes else ""
+        )
+
+        if is_last:
+            chunk_prompt = (
+                f"{preamble}Now write the complete briefing:\n\n{text}"
+            )
+        else:
+            chunk_prompt = (
+                f"{preamble}Analyze the following data:\n\n{text}\n\n"
+                "WORKING_NOTES: Summarize your key findings in under 100 tokens — "
+                "compact but complete enough for your next analysis to build on."
+            )
+
+        last_response = call_ai(cfg, chunk_prompt, system_prompt_override)
+
+        if not is_last and "WORKING_NOTES:" in last_response:
+            notes = last_response.split("WORKING_NOTES:")[-1].strip()
+            accumulated_notes += f"[{label}] {notes}\n"
+
+    return last_response
+
+
+def call_ai_briefing(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
+    """Auto-route: single-shot if payload fits the chunk budget, chunked otherwise."""
+    if _estimate_tokens(prompt) > CHUNK_BUDGET:
+        return call_ai_chunked(cfg, _split_prompt(prompt), system_prompt_override)
+    return call_ai(cfg, prompt, system_prompt_override)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
