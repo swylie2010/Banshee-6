@@ -174,6 +174,16 @@ Key issues identified (grouped by phase):
 
 When to tackle: before any public/open-source release. No urgency now.
 
+### Security Additions (captured 2026-06-07)
+
+- [ ] **UI PIN lock** — simple 4-digit PIN on the Banshee front page to keep idle eyes off open positions and watchlists. Purely cosmetic protection (no server auth), but enough for casual shoulder-surfing. PIN stored in localStorage or settings file. Could be optional (Settings toggle: "Require PIN on launch"). Quick to build, no spec needed.
+- [ ] **Local bearer token (Odysseus-style)** — generate a random token at first launch, store in `.banshee_keys.json`, require it as a header on every API call to `:8765`. React UI picks it up from a `/auth/token` handshake on load. Closes the "any process on the machine can hit the API" gap. Correct solution for shared machines, Tailscale access, or open-source release. Needs a spec session — touches Core + all fetch calls in `api.js`.
+- [ ] **`.gitignore` audit** — before any `git push`, verify `.gitignore` covers: `.banshee_keys.json`, `.banshee_kill_switch.json`, `paper_trades.json`, `banshee_presets.json` (see below), any `*.env` files. Quick check, do it before the next push.
+
+### Preset Storage Migration (captured 2026-06-07)
+
+- [ ] **Move presets from localStorage to backend file** — currently `customPresets` lives in browser localStorage under `banshee_custom_presets`. Problem: wiped when user clears browser cache ("Cookies and other site data" in Chrome/Edge/Firefox). Fix: move to `banshee_presets.json` on disk, managed by Core. Add `GET /presets` (returns array) and `POST /presets` (saves array) to `banshee_core.py`. Update React UI to fetch on load + save via API instead of `localStorage.setItem`. Modal UX unchanged — user sees no difference. This is the correct architecture: presets are trading data, not UI preferences; they belong on disk alongside `paper_trades.json` and `.banshee_keys.json`. Straightforward — no spec needed, just a small backend + api.js change.
+
 ## Sector Rotation / Growth Detection (macro engine expansion)
 
 Research doc: `Research and Resources/Sector Rotation and Macro Signal System For Growth indicator.md`
