@@ -460,7 +460,7 @@ function smcToZones(smcData) {
   const zones = [];
 
   for (const ob of (ltf.order_blocks || [])) {
-    if (["mitigated", "sapped", "invalidated"].includes(ob.status)) continue;
+    const isGhost = ["mitigated", "sapped", "invalidated"].includes(ob.status);
     zones.push({
       type:                   "ob",
       kind:                   ob.kind,
@@ -477,11 +477,13 @@ function smcToZones(smcData) {
       htf_confluence:         ob.htf_confluence         || [],
       touch_count:            ob.touch_count            || 0,
       timestamp:              ob.timestamp              || null,
+      end_timestamp:          ob.end_timestamp          || null,
+      ghost:                  isGhost,
     });
   }
 
   for (const fvg of (ltf.fvgs || [])) {
-    if (fvg.status === "filled") continue;
+    const isGhost = fvg.status === "mitigated";
     zones.push({
       type:           "fvg",
       kind:           fvg.kind,
@@ -489,6 +491,8 @@ function smcToZones(smcData) {
       bottom:         fvg.bottom,
       status:         fvg.status,
       timestamp:      fvg.timestamp     || null,
+      end_timestamp:  fvg.end_timestamp || null,
+      ghost:          isGhost,
       dashed:         false,
       opacity:        1.0,
       isFVG:          true,
@@ -1059,13 +1063,14 @@ function SMCLegend() {
 }
 
 function filterZonesForLens(zones, lensMode, currentPrice) {
-  if (lensMode === 1) return zones; // ALL — no filter
+  if (lensMode === 1) return zones; // ALL — active + ghost visible
 
-  if (lensMode === 2) return []; // BATTLEFIELD — no OBs or FVGs
+  if (lensMode === 2) return []; // BATTLEFIELD — no zone boxes (BOS/CHoCH markers only)
 
   if (lensMode === 3) {
-    // FOOTPRINTS: FVGs + inducement-pending OBs
+    // FOOTPRINTS: active FVGs + inducement-pending OBs; no ghost zones
     return zones.filter(z => {
+      if (z.ghost) return false;
       if (z.type === "fvg") return true;
       if (z.type === "ob") return z.has_pending_inducement || !z.gate_passed;
       return false;
@@ -1073,8 +1078,8 @@ function filterZonesForLens(zones, lensMode, currentPrice) {
   }
 
   if (lensMode === 4) {
-    // SNIPER: gate-passed OBs only, nearest = 100%, others = 40%
-    const obs = zones.filter(z => z.type === "ob" && z.gate_passed);
+    // SNIPER: gate-passed active OBs only; no ghost zones
+    const obs = zones.filter(z => z.type === "ob" && z.gate_passed && !z.ghost);
     if (!currentPrice || !obs.length) return obs;
     let bestIdx = 0, bestDist = Infinity;
     obs.forEach((z, i) => {
