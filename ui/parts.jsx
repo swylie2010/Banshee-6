@@ -328,9 +328,10 @@ class SMCZoneRenderer {
       const tScale = chart ? chart.timeScale() : null;
       function txToX(tsStr) {
         if (!tsStr || !tScale) return null;
-        const unix  = Math.floor(new Date(tsStr).getTime() / 1000);
+        const unix = Math.floor(new Date(tsStr).getTime() / 1000);
+        if (!Number.isFinite(unix)) return null;
         const coord = tScale.timeToCoordinate(unix);
-        return coord === null ? null : Math.round(coord * hr);
+        return coord === null || !Number.isFinite(coord) ? null : Math.round(coord * hr);
       }
 
       for (const z of zones) {
