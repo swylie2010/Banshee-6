@@ -1988,6 +1988,67 @@ function SaveRow({ onSave, status }) {
   );
 }
 
+function PinSettings() {
+  const [enabled, setEnabled] = React.useState(localStorage.getItem('banshee_pin_enabled') === 'true');
+  const [pin,     setPin]     = React.useState(localStorage.getItem('banshee_pin') || '');
+  const [newPin,  setNewPin]  = React.useState('');
+  const [saved,   setSaved]   = React.useState(false);
+
+  const toggleEnable = () => {
+    const next = !enabled;
+    setEnabled(next);
+    localStorage.setItem('banshee_pin_enabled', String(next));
+  };
+
+  const savePin = () => {
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) return;
+    localStorage.setItem('banshee_pin', newPin);
+    setPin(newPin);
+    setNewPin('');
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const inputStyle = {
+    background: "var(--bg-3)", border: "1px solid var(--line)", color: "var(--ink)",
+    fontFamily: "monospace", fontSize: 13, padding: "6px 10px",
+    borderRadius: 3, outline: "none", width: 80, letterSpacing: "0.2em"
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+        <input type="checkbox" checked={enabled} onChange={toggleEnable} />
+        <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.08em" }}>
+          Require PIN on launch
+        </span>
+      </label>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input
+          type="password"
+          maxLength={4}
+          value={newPin}
+          onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          placeholder={pin ? '••••' : '4 digits'}
+          style={inputStyle}
+        />
+        <button onClick={savePin} disabled={newPin.length !== 4}
+          style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.1em",
+            background: saved ? "var(--buy)" : "var(--bg-3)",
+            color: saved ? "#000" : "var(--ink)", border: "1px solid var(--line)",
+            padding: "6px 14px", borderRadius: 3, cursor: "pointer" }}>
+          {saved ? "✓ SAVED" : "SET PIN"}
+        </button>
+      </div>
+      {pin && (
+        <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+          PIN is set · {enabled ? "Lock active on next launch" : "Lock disabled"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsPage({ onBack }) {
   const [loaded, setLoaded]         = useState(false);
   const [fredKey, setFredKey]       = useState("");
@@ -2162,6 +2223,11 @@ function SettingsPage({ onBack }) {
 
             <SaveRow onSave={saveAIBrain} status={aiSaveStatus} />
           </>)}
+        </SettingsSection>
+
+        {/* PIN LOCK */}
+        <SettingsSection title="▸ PIN LOCK">
+          <PinSettings />
         </SettingsSection>
 
       </div>
@@ -4012,6 +4078,10 @@ function App() {
   const [riskSeedAsset, setRiskSeedAsset] = useState(null);
   const [simulateMode,  setSimulateMode]  = useState(false);
   const [manualStories, setManualStories] = useState([]);
+  const [pinLocked, setPinLocked] = React.useState(() =>
+    localStorage.getItem('banshee_pin_enabled') === 'true' &&
+    !!localStorage.getItem('banshee_pin')
+  );
 
   const watchlists = React.useMemo(
     () => [...customPresets, ...window.WATCHLISTS],
@@ -4153,6 +4223,9 @@ function App() {
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {pinLocked && (
+        <window.PinLockScreen onUnlock={() => setPinLocked(false)} />
+      )}
       <TopBar
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         sidebarOpen={sidebarOpen}

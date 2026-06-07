@@ -2335,3 +2335,60 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
     </div>
   );
 };
+
+/* ── PIN Lock Screen ─────────────────────────────────────── */
+window.PinLockScreen = function PinLockScreen({ onUnlock }) {
+  const [digits, setDigits] = React.useState('');
+  const [error,  setError]  = React.useState(false);
+
+  const stored = localStorage.getItem('banshee_pin') || '';
+
+  const handleDigit = (d) => {
+    if (digits.length >= 4) return;
+    const next = digits + d;
+    setDigits(next);
+    setError(false);
+    if (next.length === 4) {
+      if (next === stored) {
+        onUnlock();
+      } else {
+        setTimeout(() => { setDigits(''); setError(true); }, 300);
+      }
+    }
+  };
+
+  const handleBackspace = () => { setDigits(d => d.slice(0, -1)); setError(false); };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "var(--bg-0)",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", zIndex: 9999 }}>
+      <div className="mono" style={{ fontSize: 14, letterSpacing: "0.3em", color: "var(--ink-4)", marginBottom: 32 }}>
+        ◉ BANSHEE 5
+      </div>
+      {/* Dots */}
+      <div style={{ display: "flex", gap: 14, marginBottom: 24 }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{ width: 14, height: 14, borderRadius: "50%",
+            background: i < digits.length ? (error ? "var(--sell)" : "var(--amber)") : "var(--bg-3)",
+            border: `1px solid ${error ? "var(--sell)" : "var(--line)"}`,
+            transition: "background 0.15s" }} />
+        ))}
+      </div>
+      {error && <div className="mono" style={{ fontSize: 11, color: "var(--sell)", marginBottom: 14, letterSpacing: "0.12em" }}>INCORRECT PIN</div>}
+      {/* Numpad */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 64px)", gap: 8 }}>
+        {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
+          <button key={i} onClick={() => d === '⌫' ? handleBackspace() : d && handleDigit(d)}
+            disabled={!d && d !== '0'}
+            style={{ height: 56, borderRadius: 6, border: "1px solid var(--line)",
+              background: d ? "var(--bg-2)" : "transparent",
+              color: "var(--ink)", fontFamily: "monospace", fontSize: 18,
+              cursor: d ? "pointer" : "default", opacity: d ? 1 : 0 }}>
+            {d}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
