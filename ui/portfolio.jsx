@@ -89,18 +89,15 @@ function KPIBlock({ label, value, sub }) {
 function GradeBreakdown({ analysis }) {
   const pm = usePalette();
   const m = analysis?.momentum_score;
-  const a = analysis?.alignment_score;
   const r = analysis?.risk_score;
   const hasRisk = r != null;
   const twrr = analysis?.twrr;
 
   const rows = [
-    { label: 'MOMENTUM', weight: hasRisk ? 35 : 50, score: m,
+    { label: 'MOMENTUM', weight: hasRisk ? 60 : 100, score: m,
       note: 'Current technical strength/bias of your holdings (from the radar). Higher = more assets trending up now.' },
-    { label: 'SECTOR ALIGNMENT', weight: hasRisk ? 35 : 50, score: a,
-      note: 'Placeholder — not yet built. Sits at a neutral 50, so it neither helps nor hurts.' },
   ];
-  if (hasRisk) rows.push({ label: 'RISK-ADJUSTED RETURN', weight: 30, score: r,
+  if (hasRisk) rows.push({ label: 'RISK-ADJUSTED RETURN', weight: 40, score: r,
     note: "From the basket's 1-year Sharpe ratio (return vs. volatility). Negative trailing-year performance drives this toward 0 — regardless of your entry prices." });
 
   const barColor = (s) => s == null ? pm.ink4 : s >= 70 ? pm.mint : s >= 40 ? pm.peach : pm.rose;
@@ -416,6 +413,44 @@ function ThemeToggle({ theme, onToggle }) {
   );
 }
 
+/* ── MarketRotation — informational note on where market money is flowing.
+   Pure context, NEVER a grade input. The backend returns null for all-crypto
+   baskets (sector rotation is an equity concept) or when data is unavailable,
+   so this renders nothing in those cases. ── */
+function MarketRotation({ rotation }) {
+  const pm = usePalette();
+  if (!rotation || !rotation.summary) return null;
+  const { summary, inflows = [], outflows = [], interpretation } = rotation;
+
+  const Chip = ({ name, roc, up }) => (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, fontSize: 11,
+      background: pm.bg3, borderRadius: 12, padding: '3px 9px',
+      border: `1px solid ${(up ? pm.mint : pm.rose)}44` }}>
+      <span style={{ color: up ? pm.mint : pm.rose, fontWeight: 700 }}>{up ? '↑' : '↓'} {name}</span>
+      <span style={{ color: pm.ink4 }}>{roc > 0 ? '+' : ''}{roc}%</span>
+    </span>
+  );
+
+  const hasChips = inflows.length > 0 || outflows.length > 0;
+  return (
+    <div style={{ background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
+        MARKET ROTATION <span style={{ color: pm.ink4, fontWeight: 400 }}>· context, not part of your grade</span>
+      </div>
+      <div style={{ fontSize: 13, color: pm.ink, fontWeight: 700, lineHeight: 1.5, marginBottom: hasChips ? 10 : 0 }}>{summary}</div>
+      {hasChips && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: interpretation ? 10 : 0 }}>
+          {inflows.map(s => <Chip key={'in' + s.name} name={s.name} roc={s.roc_21} up />)}
+          {outflows.map(s => <Chip key={'out' + s.name} name={s.name} roc={s.roc_21} up={false} />)}
+        </div>
+      )}
+      {interpretation && (
+        <div style={{ fontSize: 11, color: pm.ink3, fontStyle: 'italic', lineHeight: 1.5, borderLeft: `3px solid ${pm.lav}`, paddingLeft: 10 }}>{interpretation}</div>
+      )}
+    </div>
+  );
+}
+
 function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEditHoldings }) {
   const [analysis, setAnalysis] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -680,6 +715,9 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
           <SectorBars weights={weights} />
         </div>
       </div>
+
+      {/* ── Market rotation note (informational, not graded) ── */}
+      <MarketRotation rotation={analysis?.rotation} />
 
       {/* ── Level 4: Grade History ── */}
       {gradeHistory.length > 0 && (

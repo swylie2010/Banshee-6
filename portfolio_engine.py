@@ -143,18 +143,22 @@ def build_blended_benchmark(sector_weights: dict, closes: pd.DataFrame) -> pd.Se
 def score_portfolio(
     engine_result: dict,
     radar_data: dict,
-    alignment_score: float,
 ) -> dict:
     """
     engine_result: output of run()
     radar_data: { sym: { edge: float }, ... }  (from /radar endpoint)
-    alignment_score: 0.0-100.0, pre-computed by caller from rotation data
-    Returns: { score, grade, momentum_score, alignment_score, risk_score }
+
+    BASKET HEALTH grade = current momentum + trailing-year real risk only.
+    Sector alignment was dropped from the grade (it was a hardcoded placeholder
+    that conflated market rotation with basket quality); rotation is now surfaced
+    separately as an informational note, not a judgment on the basket.
+
+    Returns: { score, grade, momentum_score, risk_score }
     """
     weights_list = engine_result.get("weights", [])
     if not weights_list:
         return {"score": 0, "grade": "F", "momentum_score": 0,
-                "alignment_score": 0, "risk_score": None}
+                "risk_score": None}
 
     # Momentum: weighted average of edge scores
     total_w = sum(row["weight"] for row in weights_list) or 1
@@ -163,7 +167,6 @@ def score_portfolio(
         for row in weights_list
     )
     momentum_score = min(100, max(0, round(momentum_score, 1)))
-    alignment_score = min(100, max(0, round(alignment_score, 1)))
 
     sharpe = engine_result.get("sharpe")
     has_sharpe = sharpe is not None
@@ -171,14 +174,15 @@ def score_portfolio(
 
     if has_sharpe:
         risk_score = min(100, max(0, round((sharpe / 2.0) * 100, 1)))
-        score = momentum_score * 0.35 + alignment_score * 0.35 + risk_score * 0.30
+        # Momentum-led, real risk a meaningful counterweight.
+        score = momentum_score * 0.60 + risk_score * 0.40
     else:
-        score = momentum_score * 0.50 + alignment_score * 0.50
+        # No trailing-year risk history → grade is pure basket momentum.
+        score = momentum_score
 
     return {
-        "score":           round(score, 1),
-        "grade":           score_to_grade(score),
-        "momentum_score":  momentum_score,
-        "alignment_score": alignment_score,
-        "risk_score":      risk_score,
+        "score":          round(score, 1),
+        "grade":          score_to_grade(score),
+        "momentum_score": momentum_score,
+        "risk_score":     risk_score,
     }

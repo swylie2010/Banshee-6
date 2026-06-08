@@ -651,7 +651,7 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
     max_dd = analysis.get("max_drawdown")
     weights = analysis.get("weights", [])
     momentum_score = analysis.get("momentum_score", 0)
-    alignment_score = analysis.get("alignment_score", 0)
+    rotation = analysis.get("rotation") or {}
 
     holding_lines = []
     for w in weights:
@@ -671,7 +671,10 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
     if max_dd is not None:
         lines.append(f"MAX DRAWDOWN (real history): {max_dd*100:.2f}%")
     lines.append(f"MOMENTUM SCORE: {momentum_score:.0f}/100")
-    lines.append(f"SECTOR ALIGNMENT: {alignment_score:.0f}/100")
+    if rotation.get("summary"):
+        lines.append(f"MARKET ROTATION (context only, not part of the grade): {rotation['summary']}")
+        if rotation.get("interpretation"):
+            lines.append(f"  macro read: {rotation['interpretation']}")
     lines.append("")
     lines.append("HOLDINGS:")
     lines.extend(holding_lines)

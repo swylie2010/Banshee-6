@@ -104,37 +104,35 @@ def _make_engine_result():
         ]
     }
 
-def test_score_no_sharpe_uses_50_50_split():
+def test_score_no_sharpe_is_momentum_only():
     result = pe.score_portfolio(
         _make_engine_result(),
         radar_data={"AAPL": {"edge": 80}, "BTC": {"edge": 60}},
-        alignment_score=70.0,
     )
-    # momentum = 80*0.6 + 60*0.4 = 72, alignment = 70, no sharpe
-    # score = 72*0.5 + 70*0.5 = 71
-    assert abs(result["score"] - 71.0) < 0.5  # momentum=72*0.5 + alignment=70*0.5 = 71
+    # momentum = 80*0.6 + 60*0.4 = 72, no sharpe → grade is pure basket momentum
+    assert abs(result["score"] - 72.0) < 0.5
     assert result["grade"] == "B-"
     assert result["risk_score"] is None
+    # sector alignment is no longer a grade input
+    assert "alignment_score" not in result
 
-def test_score_with_sharpe_uses_35_35_30_split():
+def test_score_with_sharpe_uses_momentum_60_risk_40():
     er = _make_engine_result()
     er["sharpe"] = 1.5  # normalised = 75
     result = pe.score_portfolio(
         er,
         radar_data={"AAPL": {"edge": 80}, "BTC": {"edge": 60}},
-        alignment_score=70.0,
     )
-    # momentum=72*0.35=25.2, alignment=70*0.35=24.5, risk=75*0.30=22.5 → 72.2
-    assert abs(result["score"] - 72.2) < 1.0  # momentum=72*0.35 + alignment=70*0.35 + risk=75*0.30 ≈ 72.2
+    # momentum=72*0.60=43.2, risk=75*0.40=30.0 → 73.2
+    assert abs(result["score"] - 73.2) < 1.0
     assert result["risk_score"] == 75.0
 
 def test_score_missing_radar_defaults_to_50_edge():
     result = pe.score_portfolio(
         _make_engine_result(),
         radar_data={},  # no radar data
-        alignment_score=50.0,
     )
-    # both assets default to edge=50, alignment=50 → score ~50
+    # both assets default to edge=50, no sharpe → score ~50
     assert 45 <= result["score"] <= 55
 
 def test_score_perfect_portfolio():
@@ -143,7 +141,6 @@ def test_score_perfect_portfolio():
     result = pe.score_portfolio(
         er,
         radar_data={"AAPL": {"edge": 100}, "BTC": {"edge": 100}},
-        alignment_score=100.0,
     )
     assert abs(result["score"] - 100.0) < 0.01
     assert result["grade"] == "A+"

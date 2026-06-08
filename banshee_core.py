@@ -2268,6 +2268,49 @@ def fetch_all_radar_for_syms(syms: list) -> dict:
     return result
 
 
+def _join_names(names: list) -> str:
+    """'A' / 'A and B' — plain-English join for at most two names."""
+    if not names:
+        return ""
+    return names[0] if len(names) == 1 else " and ".join(names[:2])
+
+
+def _build_rotation_note(fred_key):
+    """Plain-English market sector-rotation note for the Portfolio page.
+
+    Pure information — where market money is flowing right now — NOT a grade
+    input and not a judgment on the user's basket. Mirrors the /rotation data
+    path. Returns None on any failure (the UI just omits the section)."""
+    try:
+        closes = fetch_sector_closes()
+        if closes.empty:
+            return None
+        rot = sector_rotation_engine.run(closes, fred_key)
+        sectors = rot.get("sectors") or []
+        if not sectors:
+            return None
+        # sectors arrive sorted by 21-day relative strength, strongest first.
+        inflows  = [s for s in sectors if s["roc_21"] > 0][:3]
+        outflows = [s for s in reversed(sectors) if s["roc_21"] < 0][:3]
+        parts = []
+        if inflows:
+            parts.append("into "  + _join_names([s["name"] for s in inflows]))
+        if outflows:
+            parts.append("out of " + _join_names([s["name"] for s in outflows]))
+        summary = ("Money is rotating " + ", ".join(parts) + ".") if parts \
+                  else "Sector flows are mixed — no clear rotation right now."
+        return {
+            "summary":        summary,
+            "inflows":        [{"name": s["name"], "roc_21": s["roc_21"]} for s in inflows],
+            "outflows":       [{"name": s["name"], "roc_21": s["roc_21"]} for s in outflows],
+            "interpretation": (rot.get("macro_env") or {}).get("interpretation"),
+            "spy_roc_21":     rot.get("spy_roc_21"),
+        }
+    except Exception as e:
+        print(f"[portfolio] rotation note failed: {e}", file=sys.stderr)
+        return None
+
+
 @app.get("/portfolios/{portfolio_id}/analysis")
 def get_portfolio_analysis(portfolio_id: str):
     import yfinance as yf
@@ -2389,11 +2432,18 @@ def get_portfolio_analysis(portfolio_id: str):
         if isinstance(_r, dict) and isinstance(_r.get("edge"), (int, float)):
             _r["edge"] = max(0.0, min(100.0, round(50 + _r["edge"] * 2.5, 1)))
 
-    # alignment_score: placeholder — no rotation-to-holding alignment computed yet
-    alignment_score = 50.0
+    # Score the portfolio — BASKET HEALTH = current momentum + trailing-year real
+    # risk. Sector alignment is NOT a grade input; it's surfaced separately below
+    # as an informational market-rotation note.
+    scored = pe.score_portfolio(engine_result, radar_data)
 
-    # Score the portfolio
-    scored = pe.score_portfolio(engine_result, radar_data, alignment_score)
+    # Market rotation note — informational context only (where market money is
+    # flowing), never a judgment on the basket. Gracefully absent for all-crypto
+    # books, since sector rotation is an equity-sector concept.
+    rotation_note = None
+    if any(r.get("cls") != "CRYPTO" for r in holdings_rows):
+        rotation_note = _build_rotation_note(
+            load_providers().get("FRED_API", {}).get("key"))
 
     # Cumulative return series (real weighted history) for the Returns chart
     returns_series = []
@@ -2468,6 +2518,7 @@ def get_portfolio_analysis(portfolio_id: str):
         **scored,
         "returns_series": returns_series,
         "performance": performance or None,
+        "rotation": rotation_note,
         "portfolio_id": portfolio_id,
         "name": portfolio.get("name", ""),
     }
