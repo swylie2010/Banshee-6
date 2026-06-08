@@ -9,6 +9,7 @@ plotly
 pandas
 numpy
 yfinance          # price history (Strategy Lab backtest)
+quantstats        # Sharpe, Alpha, Beta, Max Drawdown, TWRR for portfolio analysis
 ccxt              # crypto exchange data
 feedparser        # RSS feeds (Market Intel)
 requests
