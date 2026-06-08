@@ -4212,6 +4212,10 @@ function App() {
   const [page, setPage]               = useState("grid");   // "grid" | "hub" | "analysis" | "macro" | "settings" | "lab" | "risk" | "journal" | "manual"
   const [analysisTab, setAnalysisTab] = useState("smc");
   const [radarData, setRadarData]     = useState({});
+  const [snapshot, setSnapshot] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('banshee_snapshot') || '{}'); }
+    catch { return {}; }
+  });
   const [radarLoading, setRadarLoading] = useState(() => new Set(window.ASSETS.map(a => a.sym)));
   const [macroData, setMacroData]     = useState(null);
   const [customAsset, setCustomAsset] = useState(null);
@@ -4325,7 +4329,24 @@ function App() {
         return;
       }
       window.API.fetchRadar(a.sym, "swing").then(res => {
-        if (res && !res.error) setRadarData(prev => ({ ...prev, [a.sym]: res }));
+        if (res && !res.error) {
+          setRadarData(prev => ({ ...prev, [a.sym]: res }));
+          setSnapshot(prev => {
+            const entry = {
+              price:   typeof res.price   === "number" ? res.price   : prev[a.sym]?.price,
+              chg:     typeof res.chg_pct === "number" ? res.chg_pct : prev[a.sym]?.chg,
+              edge:    typeof res.edge    === "number" ? Math.round(normaliseEdge(res.edge)) : prev[a.sym]?.edge,
+              verdict: res.verdict ?? prev[a.sym]?.verdict,
+              bias:    res.bias    ?? prev[a.sym]?.bias,
+              rsi:     typeof res.rsi === "number" ? Math.round(res.rsi) : prev[a.sym]?.rsi,
+              name:    a.name,
+              cls:     a.cls,
+            };
+            const next = { ...prev, [a.sym]: entry };
+            try { localStorage.setItem('banshee_snapshot', JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
         setRadarLoading(prev => { const s = new Set(prev); s.delete(a.sym); return s; });
       });
     });
@@ -4398,6 +4419,7 @@ function App() {
           onOpen={openAsset}
           radarData={radarData}
           radarLoading={radarLoading}
+          snapshot={snapshot}
         />
         {page === "hub" && liveAsset && (
           <AssetHub
