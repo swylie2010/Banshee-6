@@ -61,3 +61,18 @@ def test_empty_symbol():
 def test_norm_symbol_pair_to_dash():
     assert bc._norm_symbol("btc/usd") == "BTC-USD"
     assert bc._norm_symbol("  nvda ") == "NVDA"
+
+
+# ── endpoint smoke test (monkeypatch _live_price so no network) ──
+def test_resolve_symbol_endpoint(monkeypatch):
+    monkeypatch.setattr(bc, "_live_price", lambda s: {"NVDA": 208.64}.get(s))
+    res = bc.resolve_symbol(sym="NVDA")
+    # FastAPI route returns a plain dict here
+    assert res["resolved"] is True and res["price"] == 208.64
+    assert res["suggestion"] is None
+
+def test_resolve_symbol_endpoint_unresolved(monkeypatch):
+    monkeypatch.setattr(bc, "_live_price", lambda s: {"BRK-B": 477.0}.get(s))
+    res = bc.resolve_symbol(sym="BRK.b")
+    assert res["resolved"] is False
+    assert res["suggestion"] == "BRK-B"

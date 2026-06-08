@@ -2210,7 +2210,7 @@ def _norm_symbol(raw):
     return s.replace("/", "-") if "/" in s else s
 
 def _suggest_symbol(raw):
-    """Dot->dash class-share fix (BRK.b -> BRK-B). None if not applicable."""
+    """Dot->dash fix (replaces any dot with a dash: BRK.b -> BRK-B). Safe because a suggestion only surfaces when it actually prices. None if no dot."""
     s = str(raw or "").strip().upper()
     return s.replace(".", "-") if "." in s else None
 
@@ -2219,7 +2219,7 @@ def _crypto_pair_candidate(raw):
     s = str(raw or "").strip().upper()
     return f"{s}/USD" if (s.isalpha() and 2 <= len(s) <= 5) else None
 
-def _prices(sym, price_of):
+def _resolves(sym, price_of):
     p = price_of(_norm_symbol(sym))
     return bool(p and p > 0)
 
@@ -2243,13 +2243,13 @@ def _resolve_one(raw, price_of):
     if not resolved:
         # offer the first fix-up that actually prices: dot->dash, then X/USD
         for cand in (_suggest_symbol(raw), _crypto_pair_candidate(raw)):
-            if cand and _prices(cand, price_of):
+            if cand and _resolves(cand, price_of):
                 suggestion, reason = cand, "unresolved"
                 break
     else:
         # resolved, but a bare ticker that also exists as a coin is ambiguous
         pair = _crypto_pair_candidate(raw)
-        if pair and _prices(pair, price_of):
+        if pair and _resolves(pair, price_of):
             suggestion, reason = pair, "crypto_ambiguity"
 
     return {
@@ -2260,6 +2260,41 @@ def _resolve_one(raw, price_of):
         "suggestion": suggestion,
         "reason": reason,
     }
+
+
+def _live_price(sym):
+    """Last price for a NORMALIZED symbol. Tries yfinance first (equities + major
+    crypto in -USD form); for crypto pairs Yahoo can't serve (TAO-USD, SUI-USD)
+    falls back to Banshee's radar path — the same fallback the analysis endpoint
+    uses. Returns float|None. The only impure part of the resolver."""
+    s = str(sym or "").strip().upper()
+    if not s:
+        return None
+    try:
+        import yfinance as yf
+        h = yf.Ticker(s).history(period="5d")
+        if len(h):
+            last = float(h["Close"].iloc[-1])
+            if last > 0:
+                return last
+    except Exception:
+        pass
+    # crypto Yahoo can't price -> radar (display form uses '/')
+    if s.endswith("-USD") or "/" in s:
+        pair = s.replace("-", "/")
+        try:
+            rd = fetch_all_radar_for_syms([pair])
+            p = rd.get(pair, {}).get("price")
+            if isinstance(p, (int, float)) and p > 0:
+                return float(p)
+        except Exception:
+            pass
+    return None
+
+@app.get("/resolve-symbol")
+def resolve_symbol(sym: str):
+    """Entry-time symbol validation for the portfolio ledger editor."""
+    return _resolve_one(sym, _live_price)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
