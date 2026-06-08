@@ -2629,6 +2629,364 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
   );
 };
 
+/* ── PortfolioSetupModal ─────────────────────────────────── */
+function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
+  // Ice cream palette constants (inline — scoped to modal only)
+  const PM = {
+    bg0:   '#fdf8ff',
+    bg1:   '#f5f0ff',
+    bg2:   '#ece5ff',
+    line:  '#c8bce8',
+    ink:   '#1e1640',
+    ink3:  '#7a6fb0',
+    mint:  '#5dd6b4',
+    rose:  '#f080a0',
+    peach: '#f4a860',
+    gold:  '#e8b840',
+  };
+
+  // Build initial holdings from preset.symbols, merged with existingPortfolio.holdings
+  function buildInitialHoldings() {
+    const existing = existingPortfolio?.holdings ?? [];
+    return (preset.symbols ?? []).map(({ sym, cls }) => {
+      const found = existing.find(h => h.sym === sym);
+      return {
+        sym,
+        cls,
+        shares:      found ? String(found.shares ?? '')      : '',
+        entry_price: found ? String(found.entry_price ?? '') : '',
+        entry_date:  found ? String(found.entry_date ?? '')  : '',
+      };
+    });
+  }
+
+  const [holdings,     setHoldings]     = React.useState(buildInitialHoldings);
+  const [thesis,       setThesis]       = React.useState(existingPortfolio?.thesis ?? '');
+  const [saving,       setSaving]       = React.useState(false);
+  const [pendingSync,  setPendingSync]  = React.useState(null); // { type: 'add'|'remove', sym }
+  const [addSym,       setAddSym]       = React.useState('');
+  const [addingRow,    setAddingRow]    = React.useState(false);
+
+  // Close on Escape
+  React.useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, []);
+
+  function getPrice(sym) {
+    return window.RADAR_CACHE?.[sym]?.price ?? '—';
+  }
+
+  function updateHolding(sym, field, value) {
+    setHoldings(prev => prev.map(h => h.sym === sym ? { ...h, [field]: value } : h));
+  }
+
+  function handleDeleteRow(sym) {
+    setHoldings(prev => prev.filter(h => h.sym !== sym));
+    setPendingSync({ type: 'remove', sym });
+  }
+
+  function handleAddSymbol() {
+    const sym = addSym.trim().toUpperCase();
+    if (!sym || holdings.some(h => h.sym === sym)) { setAddSym(''); setAddingRow(false); return; }
+    setHoldings(prev => [...prev, { sym, cls: 'EQUITY', shares: '', entry_price: '', entry_date: '' }]);
+    setAddSym('');
+    setAddingRow(false);
+    setPendingSync({ type: 'add', sym });
+  }
+
+  async function handleSyncYes() {
+    if (!pendingSync) return;
+    const { type, sym } = pendingSync;
+    // Build updated preset symbols
+    let updatedSymbols = preset.symbols ?? [];
+    if (type === 'remove') {
+      updatedSymbols = updatedSymbols.filter(s => s.sym !== sym);
+    } else {
+      if (!updatedSymbols.some(s => s.sym === sym)) {
+        updatedSymbols = [...updatedSymbols, { sym, cls: 'EQUITY' }];
+      }
+    }
+    // Fire-and-forget: update just this preset on the backend.
+    // savePresets needs the full array (which app.jsx owns), so we call the
+    // endpoint directly here. app.jsx will reconcile on next fetchPresets load.
+    try {
+      const base = window.API_BASE ?? 'http://localhost:8765';
+      await fetch(`${base}/presets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ ...preset, symbols: updatedSymbols }]),
+      });
+    } catch (e) {
+      console.warn('[PortfolioSetupModal] sync preset:', e.message);
+    }
+    setPendingSync(null);
+  }
+
+  function handleSyncNo() {
+    setPendingSync(null);
+  }
+
+  async function handleAnalyze() {
+    setSaving(true);
+    const body = {
+      preset_id: preset.id,
+      name:      preset.name,
+      thesis,
+      holdings:  holdings.map(h => ({
+        sym:         h.sym,
+        cls:         h.cls,
+        shares:      parseFloat(h.shares) || 0,
+        entry_price: h.entry_price ? parseFloat(h.entry_price) : null,
+        entry_date:  h.entry_date || null,
+      })),
+    };
+    try {
+      let saved;
+      if (existingPortfolio?.id) {
+        saved = await window.API.updatePortfolio(existingPortfolio.id, body);
+      } else {
+        saved = await window.API.createPortfolio(body);
+      }
+      onSave(saved);
+    } catch (e) {
+      console.warn('[PortfolioSetupModal] save error:', e);
+      setSaving(false);
+    }
+  }
+
+  // Styles
+  const S = {
+    overlay: {
+      position: 'fixed', inset: 0,
+      background: 'rgba(30,22,64,0.6)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 2000,
+    },
+    box: {
+      background: PM.bg0,
+      borderRadius: 12,
+      padding: 28,
+      width: 720,
+      maxWidth: 'calc(100vw - 40px)',
+      maxHeight: '90vh',
+      overflowY: 'auto',
+      color: PM.ink,
+    },
+    header: {
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      marginBottom: 20,
+    },
+    title: {
+      font: '700 13px/1 monospace', letterSpacing: 2, color: PM.ink,
+    },
+    closeBtn: {
+      background: 'transparent', border: 'none', color: PM.ink3,
+      fontSize: 18, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
+    },
+    section: { marginBottom: 20 },
+    sectionLabel: {
+      font: '700 11px/1 monospace', letterSpacing: 1, color: PM.ink3,
+      marginBottom: 6, display: 'block',
+    },
+    textarea: {
+      width: '100%', minHeight: 60, padding: '8px 12px',
+      border: `1px solid ${PM.line}`, borderRadius: 8,
+      background: PM.bg2, color: PM.ink, fontSize: 12,
+      resize: 'vertical', boxSizing: 'border-box', fontFamily: 'monospace',
+    },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    th: {
+      font: '700 11px/1 monospace', color: PM.ink3, letterSpacing: 1,
+      padding: '4px 8px', textAlign: 'left', borderBottom: `1px solid ${PM.line}`,
+    },
+    td: { padding: '4px 8px', verticalAlign: 'middle' },
+    readOnly: {
+      font: '700 12px/1 monospace', color: PM.ink,
+    },
+    readOnlySub: {
+      font: '11px/1 monospace', color: PM.ink3,
+    },
+    input: {
+      padding: '4px 8px', border: `1px solid ${PM.line}`, borderRadius: 6,
+      background: PM.bg1, color: PM.ink, fontSize: 12, width: '100%',
+      boxSizing: 'border-box', fontFamily: 'monospace',
+    },
+    deleteBtn: {
+      color: PM.rose, cursor: 'pointer', padding: '0 6px',
+      background: 'transparent', border: 'none', fontSize: 14, lineHeight: 1,
+    },
+    addRowBtn: {
+      background: 'transparent', border: `1px dashed ${PM.line}`,
+      color: PM.ink3, borderRadius: 6, padding: '4px 12px',
+      font: '12px monospace', cursor: 'pointer', marginTop: 8,
+    },
+    footer: {
+      display: 'flex', justifyContent: 'flex-end', gap: 10,
+      marginTop: 24, paddingTop: 16, borderTop: `1px solid ${PM.line}`,
+    },
+    cancelBtn: {
+      background: 'transparent', border: `1px solid ${PM.line}`,
+      color: PM.ink3, borderRadius: 6, padding: '8px 14px',
+      font: '12px monospace', cursor: 'pointer',
+    },
+    analyzeBtn: {
+      background: PM.peach, color: PM.ink, border: 'none',
+      borderRadius: 6, padding: '8px 20px',
+      font: '700 12px monospace', cursor: 'pointer',
+      opacity: saving ? 0.6 : 1,
+    },
+    syncBanner: {
+      position: 'sticky', bottom: 0,
+      background: PM.gold, color: PM.ink,
+      borderRadius: 8, padding: '10px 16px',
+      marginTop: 12, font: '12px monospace',
+      display: 'flex', alignItems: 'center', gap: 12,
+    },
+    syncBannerText: { flex: 1, fontSize: 12, fontFamily: 'monospace' },
+    syncBtn: {
+      background: PM.ink, color: PM.bg0, border: 'none',
+      borderRadius: 4, padding: '4px 10px',
+      font: '700 11px monospace', cursor: 'pointer',
+    },
+    syncBtnNo: {
+      background: 'transparent', border: `1px solid ${PM.ink}`, color: PM.ink,
+      borderRadius: 4, padding: '4px 10px',
+      font: '11px monospace', cursor: 'pointer',
+    },
+  };
+
+  return (
+    <div style={S.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={S.box}>
+
+        {/* Header */}
+        <div style={S.header}>
+          <span style={S.title}>PORTFOLIO SETUP — {preset.name}</span>
+          <button style={S.closeBtn} onClick={onClose} title="Close">✕</button>
+        </div>
+
+        {/* Investment Thesis */}
+        <div style={S.section}>
+          <span style={S.sectionLabel}>INVESTMENT THESIS (optional)</span>
+          <textarea
+            style={S.textarea}
+            value={thesis}
+            onChange={e => setThesis(e.target.value)}
+            placeholder="Why do you hold these assets? What's the overall thesis?"
+          />
+        </div>
+
+        {/* Holdings Table */}
+        <div style={S.section}>
+          <table style={S.table}>
+            <thead>
+              <tr>
+                <th style={S.th}>SYM</th>
+                <th style={S.th}>CLS</th>
+                <th style={S.th}>PRICE</th>
+                <th style={S.th}>SHARES</th>
+                <th style={S.th}>ENTRY $</th>
+                <th style={S.th}>ENTRY DATE</th>
+                <th style={{...S.th, width: 32}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdings.map(h => (
+                <tr key={h.sym}>
+                  <td style={S.td}><span style={S.readOnly}>{h.sym}</span></td>
+                  <td style={S.td}><span style={S.readOnlySub}>{h.cls}</span></td>
+                  <td style={S.td}><span style={S.readOnlySub}>{getPrice(h.sym)}</span></td>
+                  <td style={S.td}>
+                    <input
+                      style={S.input}
+                      type="number"
+                      min="0"
+                      value={h.shares}
+                      onChange={e => updateHolding(h.sym, 'shares', e.target.value)}
+                      placeholder="0"
+                    />
+                  </td>
+                  <td style={S.td}>
+                    <input
+                      style={S.input}
+                      type="number"
+                      min="0"
+                      value={h.entry_price}
+                      onChange={e => updateHolding(h.sym, 'entry_price', e.target.value)}
+                      placeholder="optional"
+                    />
+                  </td>
+                  <td style={S.td}>
+                    <input
+                      style={S.input}
+                      type="text"
+                      value={h.entry_date}
+                      onChange={e => updateHolding(h.sym, 'entry_date', e.target.value)}
+                      placeholder="YYYY-MM-DD"
+                    />
+                  </td>
+                  <td style={S.td}>
+                    <button style={S.deleteBtn} onClick={() => handleDeleteRow(h.sym)} title={`Remove ${h.sym}`}>×</button>
+                  </td>
+                </tr>
+              ))}
+              {/* Inline add row */}
+              {addingRow && (
+                <tr>
+                  <td colSpan={7} style={S.td}>
+                    <input
+                      style={{ ...S.input, width: 120 }}
+                      type="text"
+                      autoFocus
+                      value={addSym}
+                      onChange={e => setAddSym(e.target.value.toUpperCase())}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleAddSymbol();
+                        if (e.key === 'Escape') { setAddingRow(false); setAddSym(''); }
+                      }}
+                      placeholder="e.g. AAPL"
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {!addingRow && (
+            <button style={S.addRowBtn} onClick={() => setAddingRow(true)}>+ ADD SYMBOL</button>
+          )}
+        </div>
+
+        {/* Sync Prompt Banner */}
+        {pendingSync && (
+          <div style={S.syncBanner}>
+            <span style={S.syncBannerText}>
+              {pendingSync.type === 'remove'
+                ? `Remove ${pendingSync.sym} from the ${preset.name} preset too? (You might want to keep watching it.)`
+                : `Add ${pendingSync.sym} to the ${preset.name} preset too?`
+              }
+            </span>
+            <button style={S.syncBtn} onClick={handleSyncYes}>YES</button>
+            <button style={S.syncBtnNo} onClick={handleSyncNo}>NO</button>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={S.footer}>
+          <button style={S.cancelBtn} onClick={onClose}>CANCEL</button>
+          <button style={S.analyzeBtn} onClick={handleAnalyze} disabled={saving}>
+            {saving ? 'SAVING…' : 'ANALYZE ▸'}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+window.PortfolioSetupModal = PortfolioSetupModal;
+
 /* ── PIN Lock Screen ─────────────────────────────────────── */
 window.PinLockScreen = function PinLockScreen({ onUnlock }) {
   const [digits, setDigits] = React.useState('');
