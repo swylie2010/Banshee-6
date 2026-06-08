@@ -488,14 +488,25 @@ function mergeRadar(base, live) {
 }
 
 /* ── Asset grid ───────────────────────────────────────────── */
-function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radarLoading }) {
+function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radarLoading, snapshot = {} }) {
   const wl = watchlists.find(w => w.id === watchlist);
   const syms = wl.syms;
   const assets = syms
     .map(s => {
-      const base = window.ASSETS.find(a => a.sym === s)
-        || { sym: s, name: s, cls: 'EQUITY', price: 0, chg: 0, edge: 50, verdict: 'WAIT', bias: '→ FLAT', vol: 1, rsi: 50, atr: 1 };
-      return { ...mergeRadar(base, radarData[s]), _loading: radarLoading.has(s) };
+      const cached = snapshot[s];
+      const base = window.ASSETS.find(a => a.sym === s) || {
+        sym: s,
+        name:    cached?.name    || s,
+        cls:     cached?.cls     || 'EQUITY',
+        price:   cached?.price   || 0,
+        chg:     cached?.chg     || 0,
+        edge:    cached?.edge    || 50,
+        verdict: cached?.verdict || 'WAIT',
+        bias:    cached?.bias    || '→ FLAT',
+        vol: 1, rsi: cached?.rsi || 50, atr: 1,
+      };
+      const _dataState = radarData[s] ? "LIVE" : cached ? "CACHED" : "INIT";
+      return { ...mergeRadar(base, radarData[s]), _loading: radarLoading.has(s), _dataState };
     })
     .filter(Boolean);
 
