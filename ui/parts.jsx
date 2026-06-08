@@ -2638,94 +2638,144 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
         ink3:'#453f5e', mint:'#1c8a66', rose:'#ab3257', peach:'#b06a1c', gold:'#927014',
         btn:'#5a41a4', btnInk:'#ffffff' });
 
-  // Build initial holdings from the preset symbols, merged with existingPortfolio.holdings.
-  // Presets may carry either `symbols` ([{sym,cls}]) or `syms` ([str]); fall back to the
-  // existing portfolio's holdings so the editor is never blank for a saved portfolio.
-  function buildInitialHoldings() {
-    const existing = existingPortfolio?.holdings ?? [];
-    const cryptoCls = s => /[\/\-]USDT?$/i.test(s) ? 'CRYPTO' : 'EQUITY';
-    let src = [];
-    if (Array.isArray(preset?.symbols) && preset.symbols.length) {
-      src = preset.symbols.map(x => ({ sym: x.sym, cls: x.cls || cryptoCls(x.sym) }));
-    } else if (Array.isArray(preset?.syms) && preset.syms.length) {
-      src = preset.syms.map(s => ({ sym: s, cls: cryptoCls(s) }));
+  const cryptoCls = s => /[\/\-]USDT?$/i.test(String(s)) ? 'CRYPTO' : 'EQUITY';
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+
+  // sym -> asset class, preserved from the prior holdings snapshot / preset so the
+  // derived snapshot we save keeps sector tags (TECH/FINANCE) alive for the endpoint.
+  const clsMap = React.useMemo(() => {
+    const m = {};
+    (existingPortfolio?.holdings ?? []).forEach(h => { if (h.cls) m[h.sym] = h.cls; });
+    (Array.isArray(preset?.symbols) ? preset.symbols : []).forEach(x => {
+      if (x.cls && !m[x.sym]) m[x.sym] = x.cls;
+    });
+    return m;
+  }, []);
+
+  // Build the initial editable transaction rows. Precedence:
+  //   1. an existing persisted `transactions` array (Phase 2 portfolios)
+  //   2. migrate legacy `holdings` -> opening BUY rows (pre-Phase-2 portfolios)
+  //   3. brand-new from a preset -> one opening BUY row per watchlist symbol
+  function buildInitialTransactions() {
+    const toStr = v => (v === null || v === undefined) ? '' : String(v);
+
+    const existingTxns = existingPortfolio?.transactions;
+    if (Array.isArray(existingTxns) && existingTxns.length) {
+      return existingTxns.map((t, i) => ({
+        id:      t.id || `tx_${i}`,
+        type:    t.type || 'BUY',
+        sym:     t.sym || '',
+        shares:  toStr(t.shares),
+        price:   toStr(t.price),
+        amount:  toStr(t.amount),
+        date:    t.date || '',
+        opening: !!t.opening,
+      }));
     }
-    existing.forEach(h => {
-      if (!src.some(s => s.sym === h.sym)) src.push({ sym: h.sym, cls: h.cls || cryptoCls(h.sym) });
-    });
-    return src.map(({ sym, cls }) => {
-      const found = existing.find(h => h.sym === sym);
-      return {
-        sym,
-        cls,
-        shares:      found ? String(found.shares ?? '')      : '',
-        entry_price: found ? String(found.entry_price ?? '') : '',
-        entry_date:  found ? String(found.entry_date ?? '')  : '',
-      };
-    });
+
+    const existingHoldings = existingPortfolio?.holdings ?? [];
+    if (existingHoldings.length) {
+      const dates = existingHoldings.map(h => h.entry_date).filter(Boolean);
+      const earliest = dates.length ? dates.reduce((a, b) => a < b ? a : b) : '';
+      return existingHoldings.map((h, i) => ({
+        id:      `tx_open_${i}`,
+        type:    'BUY',
+        sym:     h.sym,
+        shares:  toStr(h.shares),
+        price:   toStr(h.entry_price),
+        amount:  '',
+        date:    h.entry_date || earliest,
+        opening: true,
+      }));
+    }
+
+    let syms = [];
+    if (Array.isArray(preset?.symbols) && preset.symbols.length) syms = preset.symbols.map(x => x.sym);
+    else if (Array.isArray(preset?.syms) && preset.syms.length) syms = preset.syms;
+    return syms.map((s, i) => ({
+      id: `tx_seed_${i}`, type: 'BUY', sym: s,
+      shares: '', price: '', amount: '', date: '', opening: true,
+    }));
   }
 
-  const [holdings,     setHoldings]     = React.useState(buildInitialHoldings);
-  const [thesis,       setThesis]       = React.useState(existingPortfolio?.thesis ?? '');
-  const [saving,       setSaving]       = React.useState(false);
-  const [pendingSync,  setPendingSync]  = React.useState(null); // { type: 'add'|'remove', sym }
-  const [addSym,       setAddSym]       = React.useState('');
-  const [addingRow,    setAddingRow]    = React.useState(false);
+  const [txns,        setTxns]        = React.useState(buildInitialTransactions);
+  const [thesis,      setThesis]      = React.useState(existingPortfolio?.thesis ?? '');
+  const [saving,      setSaving]      = React.useState(false);
+  const [pendingSync, setPendingSync] = React.useState(null); // { type:'add', sym }
+  const [draft,       setDraft]       = React.useState(null);  // new-transaction draft or null
+  const idRef = React.useRef(0);
+  const newId = () => `tx_new_${idRef.current++}`;
 
-  // Close on Escape — but not when the add-row input is open
+  // Close on Escape — but not while the add-transaction draft is open
   React.useEffect(() => {
     const fn = e => {
       if (e.key !== 'Escape') return;
-      if (addingRow) return; // add-row input handles its own Escape
+      if (draft) { setDraft(null); return; }
       onClose();
     };
     window.addEventListener('keydown', fn);
     return () => window.removeEventListener('keydown', fn);
-  }, [addingRow]);
+  }, [draft]);
 
   function getPrice(sym) {
-    return window.RADAR_CACHE?.[sym]?.price ?? '—';
+    return window.RADAR_CACHE?.[sym]?.price ?? '';
   }
 
-  function updateHolding(sym, field, value) {
-    setHoldings(prev => prev.map(h => h.sym === sym ? { ...h, [field]: value } : h));
+  const isTrade = t => t.type === 'BUY' || t.type === 'SELL';
+
+  // Date-sorted view (stable by original index; empty dates sort first so
+  // unfilled seed/opening rows stay visible at the top).
+  const sorted = txns
+    .map((t, i) => [t, i])
+    .sort((a, b) => (a[0].date || '').localeCompare(b[0].date || '') || a[1] - b[1])
+    .map(x => x[0]);
+
+  function updateTxn(id, field, value) {
+    setTxns(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   }
 
-  function handleDeleteRow(sym) {
-    setHoldings(prev => prev.filter(h => h.sym !== sym));
-    setPendingSync({ type: 'remove', sym });
+  function deleteTxn(id) {
+    setTxns(prev => prev.filter(t => t.id !== id));
   }
 
-  function handleAddSymbol() {
-    const sym = addSym.trim().toUpperCase();
-    if (!sym || holdings.some(h => h.sym === sym)) { setAddSym(''); setAddingRow(false); return; }
-    setHoldings(prev => [...prev, { sym, cls: 'EQUITY', shares: '', entry_price: '', entry_date: '' }]);
-    setAddSym('');
-    setAddingRow(false);
-    setPendingSync({ type: 'add', sym });
+  function startAdd() {
+    setDraft({ type: 'BUY', sym: '', shares: '', price: '', amount: '', date: todayISO() });
+  }
+
+  function commitAdd() {
+    if (!draft) return;
+    const d = draft;
+    const trade = d.type === 'BUY' || d.type === 'SELL';
+    // light, non-blocking validation: a trade needs a symbol; cash needs an amount
+    if (trade && !d.sym.trim()) return;
+    if (!trade && d.amount === '') return;
+    const sym = trade ? d.sym.trim().toUpperCase() : '';
+    const row = { id: newId(), type: d.type, sym,
+                  shares: d.shares, price: d.price, amount: d.amount,
+                  date: d.date || todayISO(), opening: false };
+    setTxns(prev => [...prev, row]);
+    setDraft(null);
+    // Watchlist sync: prompt only when a BUY introduces a symbol the preset
+    // isn't already watching.
+    if (d.type === 'BUY' && sym) {
+      const watched = (preset?.symbols ?? []).some(x => x.sym === sym)
+                   || (preset?.syms ?? []).some(s => s === sym);
+      if (!watched) setPendingSync({ type: 'add', sym });
+    }
   }
 
   async function handleSyncYes() {
     if (!pendingSync) return;
-    const { type, sym } = pendingSync;
-    // Build updated preset symbols
+    const { sym } = pendingSync;
     let updatedSymbols = preset.symbols ?? [];
-    if (type === 'remove') {
-      updatedSymbols = updatedSymbols.filter(s => s.sym !== sym);
-    } else {
-      if (!updatedSymbols.some(s => s.sym === sym)) {
-        updatedSymbols = [...updatedSymbols, { sym, cls: 'EQUITY' }];
-      }
+    if (!updatedSymbols.some(s => s.sym === sym)) {
+      updatedSymbols = [...updatedSymbols, { sym, cls: cryptoCls(sym) }];
     }
-    // Fetch the full presets list first, then patch the matching preset and
-    // save the entire list back. The backend's POST /presets endpoint replaces
-    // the whole file, so sending only one preset would delete all others.
+    // Fetch the full presets list, patch the one preset, save the whole list back
+    // (POST /presets replaces the entire file).
     try {
       const allPresets = (await window.API.fetchPresets()) ?? [];
-      const updated = allPresets.map(p =>
-        p.id === preset.id ? { ...p, symbols: updatedSymbols } : p
-      );
-      // If this preset isn't in the list yet, append it.
+      const updated = allPresets.map(p => p.id === preset.id ? { ...p, symbols: updatedSymbols } : p);
       if (!allPresets.some(p => p.id === preset.id)) {
         updated.push({ ...preset, symbols: updatedSymbols });
       }
@@ -2736,24 +2786,45 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
     setPendingSync(null);
   }
 
-  function handleSyncNo() {
-    setPendingSync(null);
-  }
+  function handleSyncNo() { setPendingSync(null); }
 
   async function handleAnalyze() {
     setSaving(true);
+
+    // Build the authoritative transactions payload. Skip incomplete rows rather
+    // than erroring (a trade needs sym+date; a cash row needs a date).
+    const txOut = txns.map(t => {
+      const base = { id: t.id, type: t.type, date: t.date || null };
+      if (t.opening) base.opening = true;
+      if (isTrade(t)) {
+        return { ...base,
+          sym:    t.sym.trim().toUpperCase(),
+          shares: t.shares !== '' ? parseFloat(t.shares) : 0,
+          price:  t.price  !== '' ? parseFloat(t.price)  : null };
+      }
+      return { ...base, amount: t.amount !== '' ? parseFloat(t.amount) : 0 };
+    }).filter(t => (t.type === 'BUY' || t.type === 'SELL') ? (t.sym && t.date) : !!t.date);
+
+    // Derived holdings snapshot: net shares per symbol (BUY - SELL), carrying cls
+    // so the analysis endpoint's sector-class map survives. Money math always
+    // re-derives from `transactions`; this is a denormalized cache only.
+    const net = {};
+    txOut.forEach(t => {
+      if (t.type === 'BUY')  net[t.sym] = (net[t.sym] || 0) + (t.shares || 0);
+      if (t.type === 'SELL') net[t.sym] = (net[t.sym] || 0) - (t.shares || 0);
+    });
+    const holdingsSnap = Object.keys(net)
+      .filter(s => net[s] > 1e-9)
+      .map(s => ({ sym: s, cls: clsMap[s] || cryptoCls(s), shares: net[s] }));
+
     const body = {
-      preset_id: preset.id,
-      name:      preset.name,
+      preset_id:    preset.id,
+      name:         preset.name,
       thesis,
-      holdings:  holdings.map(h => ({
-        sym:         h.sym,
-        cls:         h.cls,
-        shares:      parseFloat(h.shares) || 0,
-        entry_price: h.entry_price ? parseFloat(h.entry_price) : null,
-        entry_date:  h.entry_date || null,
-      })),
+      transactions: txOut,
+      holdings:     holdingsSnap,
     };
+
     try {
       let saved;
       if (existingPortfolio?.id) {
@@ -2775,104 +2846,61 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
 
   // Styles
   const S = {
-    overlay: {
-      position: 'fixed', inset: 0,
-      background: 'rgba(30,22,64,0.6)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 2000,
-    },
-    box: {
-      background: PM.bg0,
-      borderRadius: 12,
-      padding: 28,
-      width: 720,
-      maxWidth: 'calc(100vw - 40px)',
-      maxHeight: '90vh',
-      overflowY: 'auto',
-      color: PM.ink,
-    },
-    header: {
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      marginBottom: 20,
-    },
-    title: {
-      font: '700 13px/1 monospace', letterSpacing: 2, color: PM.ink,
-    },
-    closeBtn: {
-      background: 'transparent', border: 'none', color: PM.ink3,
-      fontSize: 18, cursor: 'pointer', padding: '0 4px', lineHeight: 1,
-    },
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(30,22,64,0.6)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 },
+    box: { background: PM.bg0, borderRadius: 12, padding: 28, width: 760,
+      maxWidth: 'calc(100vw - 40px)', maxHeight: '90vh', overflowY: 'auto', color: PM.ink },
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    title: { font: '700 13px/1 monospace', letterSpacing: 2, color: PM.ink },
+    closeBtn: { background: 'transparent', border: 'none', color: PM.ink3,
+      fontSize: 18, cursor: 'pointer', padding: '0 4px', lineHeight: 1 },
     section: { marginBottom: 20 },
-    sectionLabel: {
-      font: '700 11px/1 monospace', letterSpacing: 1, color: PM.ink3,
-      marginBottom: 6, display: 'block',
-    },
-    textarea: {
-      width: '100%', minHeight: 60, padding: '8px 12px',
-      border: `1px solid ${PM.line}`, borderRadius: 8,
-      background: PM.bg2, color: PM.ink, fontSize: 12,
-      resize: 'vertical', boxSizing: 'border-box', fontFamily: 'monospace',
-    },
+    sectionLabel: { font: '700 11px/1 monospace', letterSpacing: 1, color: PM.ink3,
+      marginBottom: 6, display: 'block' },
+    textarea: { width: '100%', minHeight: 60, padding: '8px 12px',
+      border: `1px solid ${PM.line}`, borderRadius: 8, background: PM.bg2, color: PM.ink,
+      fontSize: 12, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'monospace' },
     table: { width: '100%', borderCollapse: 'collapse' },
-    th: {
-      font: '700 11px/1 monospace', color: PM.ink3, letterSpacing: 1,
-      padding: '4px 8px', textAlign: 'left', borderBottom: `1px solid ${PM.line}`,
-    },
+    th: { font: '700 11px/1 monospace', color: PM.ink3, letterSpacing: 1,
+      padding: '4px 8px', textAlign: 'left', borderBottom: `1px solid ${PM.line}` },
     td: { padding: '4px 8px', verticalAlign: 'middle' },
-    readOnly: {
-      font: '700 12px/1 monospace', color: PM.ink,
-    },
-    readOnlySub: {
-      font: '11px/1 monospace', color: PM.ink3,
-    },
-    input: {
-      padding: '4px 8px', border: `1px solid ${PM.line}`, borderRadius: 6,
+    typeText: { font: '700 11px/1 monospace', letterSpacing: 0.5 },
+    openTag: { font: '700 9px/1 monospace', color: PM.ink3, marginLeft: 6,
+      border: `1px solid ${PM.line}`, borderRadius: 4, padding: '1px 4px', letterSpacing: 0.5 },
+    muted: { font: '12px/1 monospace', color: PM.ink3 },
+    input: { padding: '4px 8px', border: `1px solid ${PM.line}`, borderRadius: 6,
       background: PM.bg1, color: PM.ink, fontSize: 12, width: '100%',
-      boxSizing: 'border-box', fontFamily: 'monospace',
-    },
-    deleteBtn: {
-      color: PM.rose, cursor: 'pointer', padding: '0 6px',
-      background: 'transparent', border: 'none', fontSize: 14, lineHeight: 1,
-    },
-    addRowBtn: {
-      background: 'transparent', border: `1px dashed ${PM.line}`,
-      color: PM.ink3, borderRadius: 6, padding: '4px 12px',
-      font: '12px monospace', cursor: 'pointer', marginTop: 8,
-    },
-    footer: {
-      display: 'flex', justifyContent: 'flex-end', gap: 10,
-      marginTop: 24, paddingTop: 16, borderTop: `1px solid ${PM.line}`,
-    },
-    cancelBtn: {
-      background: 'transparent', border: `1px solid ${PM.line}`,
-      color: PM.ink3, borderRadius: 6, padding: '8px 14px',
-      font: '12px monospace', cursor: 'pointer',
-    },
-    analyzeBtn: {
-      background: PM.btn, color: PM.btnInk, border: 'none',
-      borderRadius: 6, padding: '8px 20px',
-      font: '700 12px monospace', cursor: 'pointer',
-      opacity: saving ? 0.6 : 1,
-    },
-    syncBanner: {
-      position: 'sticky', bottom: 0,
-      background: PM.gold, color: PM.ink,
-      borderRadius: 8, padding: '10px 16px',
-      marginTop: 12, font: '12px monospace',
-      display: 'flex', alignItems: 'center', gap: 12,
-    },
+      boxSizing: 'border-box', fontFamily: 'monospace' },
+    select: { padding: '4px 8px', border: `1px solid ${PM.line}`, borderRadius: 6,
+      background: PM.bg1, color: PM.ink, fontSize: 12, fontFamily: 'monospace' },
+    deleteBtn: { color: PM.rose, cursor: 'pointer', padding: '0 6px',
+      background: 'transparent', border: 'none', fontSize: 14, lineHeight: 1 },
+    addRowBtn: { background: 'transparent', border: `1px dashed ${PM.line}`,
+      color: PM.ink3, borderRadius: 6, padding: '4px 12px', font: '12px monospace',
+      cursor: 'pointer', marginTop: 8 },
+    draftRow: { background: PM.bg2, borderRadius: 8, padding: 12, marginTop: 8,
+      display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+    draftAddBtn: { background: PM.btn, color: PM.btnInk, border: 'none', borderRadius: 6,
+      padding: '5px 14px', font: '700 11px monospace', cursor: 'pointer' },
+    draftCancelBtn: { background: 'transparent', border: `1px solid ${PM.line}`, color: PM.ink3,
+      borderRadius: 6, padding: '5px 12px', font: '11px monospace', cursor: 'pointer' },
+    footer: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24,
+      paddingTop: 16, borderTop: `1px solid ${PM.line}` },
+    cancelBtn: { background: 'transparent', border: `1px solid ${PM.line}`, color: PM.ink3,
+      borderRadius: 6, padding: '8px 14px', font: '12px monospace', cursor: 'pointer' },
+    analyzeBtn: { background: PM.btn, color: PM.btnInk, border: 'none', borderRadius: 6,
+      padding: '8px 20px', font: '700 12px monospace', cursor: 'pointer', opacity: saving ? 0.6 : 1 },
+    syncBanner: { position: 'sticky', bottom: 0, background: PM.gold, color: PM.ink,
+      borderRadius: 8, padding: '10px 16px', marginTop: 12, font: '12px monospace',
+      display: 'flex', alignItems: 'center', gap: 12 },
     syncBannerText: { flex: 1, fontSize: 12, fontFamily: 'monospace' },
-    syncBtn: {
-      background: PM.ink, color: PM.bg0, border: 'none',
-      borderRadius: 4, padding: '4px 10px',
-      font: '700 11px monospace', cursor: 'pointer',
-    },
-    syncBtnNo: {
-      background: 'transparent', border: `1px solid ${PM.ink}`, color: PM.ink,
-      borderRadius: 4, padding: '4px 10px',
-      font: '11px monospace', cursor: 'pointer',
-    },
+    syncBtn: { background: PM.ink, color: PM.bg0, border: 'none', borderRadius: 4,
+      padding: '4px 10px', font: '700 11px monospace', cursor: 'pointer' },
+    syncBtnNo: { background: 'transparent', border: `1px solid ${PM.ink}`, color: PM.ink,
+      borderRadius: 4, padding: '4px 10px', font: '11px monospace', cursor: 'pointer' },
   };
+
+  const TYPES = ['BUY', 'SELL', 'DEPOSIT', 'WITHDRAW'];
 
   return (
     <div style={S.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -2895,83 +2923,104 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
           />
         </div>
 
-        {/* Holdings Table */}
+        {/* Transaction Ledger */}
         <div style={S.section}>
+          <span style={S.sectionLabel}>TRANSACTION LEDGER — BUY / SELL / DEPOSIT / WITHDRAW</span>
           <table style={S.table}>
             <thead>
               <tr>
+                <th style={{ ...S.th, width: 130 }}>DATE</th>
+                <th style={{ ...S.th, width: 90 }}>TYPE</th>
                 <th style={S.th}>SYM</th>
-                <th style={S.th}>CLS</th>
-                <th style={S.th}>PRICE</th>
-                <th style={S.th}>SHARES</th>
-                <th style={S.th}>ENTRY $</th>
-                <th style={S.th}>ENTRY DATE</th>
-                <th style={{...S.th, width: 32}}></th>
+                <th style={{ ...S.th, width: 90 }}>SHARES</th>
+                <th style={{ ...S.th, width: 120 }}>PRICE / AMT</th>
+                <th style={{ ...S.th, width: 32 }}></th>
               </tr>
             </thead>
             <tbody>
-              {holdings.map(h => (
-                <tr key={h.sym}>
-                  <td style={S.td}><span style={S.readOnly}>{h.sym}</span></td>
-                  <td style={S.td}><span style={S.readOnlySub}>{h.cls}</span></td>
-                  <td style={S.td}><span style={S.readOnlySub}>{getPrice(h.sym)}</span></td>
-                  <td style={S.td}>
-                    <input
-                      style={S.input}
-                      type="number"
-                      min="0"
-                      value={h.shares}
-                      onChange={e => updateHolding(h.sym, 'shares', e.target.value)}
-                      placeholder="0"
-                    />
-                  </td>
-                  <td style={S.td}>
-                    <input
-                      style={S.input}
-                      type="number"
-                      min="0"
-                      value={h.entry_price}
-                      onChange={e => updateHolding(h.sym, 'entry_price', e.target.value)}
-                      placeholder="optional"
-                    />
-                  </td>
+              {sorted.map(t => (
+                <tr key={t.id}>
                   <td style={S.td}>
                     <input
                       style={S.input}
                       type="date"
-                      value={/^\d{4}-\d{2}-\d{2}$/.test(h.entry_date || '') ? h.entry_date : ''}
                       max="2100-12-31"
-                      onChange={e => updateHolding(h.sym, 'entry_date', e.target.value)}
+                      value={/^\d{4}-\d{2}-\d{2}$/.test(t.date || '') ? t.date : ''}
+                      onChange={e => updateTxn(t.id, 'date', e.target.value)}
                     />
                   </td>
                   <td style={S.td}>
-                    <button style={S.deleteBtn} onClick={() => handleDeleteRow(h.sym)} title={`Remove ${h.sym}`}>×</button>
+                    <span style={{ ...S.typeText,
+                      color: t.type === 'BUY' ? PM.mint : t.type === 'SELL' ? PM.rose : PM.ink3 }}>
+                      {t.type}
+                    </span>
+                    {t.opening && <span style={S.openTag} title="opening balance">OPEN</span>}
+                  </td>
+                  <td style={S.td}>
+                    {isTrade(t)
+                      ? <input style={S.input} type="text" value={t.sym}
+                          onChange={e => updateTxn(t.id, 'sym', e.target.value.toUpperCase())}
+                          placeholder="SYM" />
+                      : <span style={S.muted}>—</span>}
+                  </td>
+                  <td style={S.td}>
+                    {isTrade(t)
+                      ? <input style={S.input} type="number" min="0" value={t.shares}
+                          onChange={e => updateTxn(t.id, 'shares', e.target.value)} placeholder="0" />
+                      : <span style={S.muted}>—</span>}
+                  </td>
+                  <td style={S.td}>
+                    {isTrade(t)
+                      ? <input style={S.input} type="number" min="0" value={t.price}
+                          onChange={e => updateTxn(t.id, 'price', e.target.value)}
+                          placeholder={getPrice(t.sym) ? String(getPrice(t.sym)) : 'price'} />
+                      : <input style={S.input} type="number" min="0" value={t.amount}
+                          onChange={e => updateTxn(t.id, 'amount', e.target.value)} placeholder="$ amount" />}
+                  </td>
+                  <td style={S.td}>
+                    <button style={S.deleteBtn} onClick={() => deleteTxn(t.id)} title="Remove transaction">×</button>
                   </td>
                 </tr>
               ))}
-              {/* Inline add row */}
-              {addingRow && (
-                <tr>
-                  <td colSpan={7} style={S.td}>
-                    <input
-                      style={{ ...S.input, width: 120 }}
-                      type="text"
-                      autoFocus
-                      value={addSym}
-                      onChange={e => setAddSym(e.target.value.toUpperCase())}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleAddSymbol();
-                        if (e.key === 'Escape') { setAddingRow(false); setAddSym(''); }
-                      }}
-                      placeholder="e.g. AAPL"
-                    />
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
-          {!addingRow && (
-            <button style={S.addRowBtn} onClick={() => setAddingRow(true)}>+ ADD SYMBOL</button>
+
+          {/* Add-transaction draft */}
+          {draft ? (
+            <div style={S.draftRow}>
+              <select style={S.select} value={draft.type}
+                onChange={e => setDraft({ ...draft, type: e.target.value })}>
+                {TYPES.map(ty => <option key={ty} value={ty}>{ty}</option>)}
+              </select>
+              <input style={{ ...S.input, width: 120 }} type="date" max="2100-12-31"
+                value={draft.date}
+                onChange={e => setDraft({ ...draft, date: e.target.value })} />
+              {(draft.type === 'BUY' || draft.type === 'SELL') ? (
+                <>
+                  <input style={{ ...S.input, width: 90 }} type="text" autoFocus
+                    value={draft.sym} placeholder="SYM"
+                    onChange={e => setDraft({ ...draft, sym: e.target.value.toUpperCase() })}
+                    onKeyDown={e => { if (e.key === 'Enter') commitAdd(); }} />
+                  <input style={{ ...S.input, width: 80 }} type="number" min="0"
+                    value={draft.shares} placeholder="shares"
+                    onChange={e => setDraft({ ...draft, shares: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') commitAdd(); }} />
+                  <input style={{ ...S.input, width: 90 }} type="number" min="0"
+                    value={draft.price} placeholder="price"
+                    onChange={e => setDraft({ ...draft, price: e.target.value })}
+                    onKeyDown={e => { if (e.key === 'Enter') commitAdd(); }} />
+                </>
+              ) : (
+                <input style={{ ...S.input, width: 120 }} type="number" min="0" autoFocus
+                  value={draft.amount} placeholder="$ amount"
+                  onChange={e => setDraft({ ...draft, amount: e.target.value })}
+                  onKeyDown={e => { if (e.key === 'Enter') commitAdd(); }} />
+              )}
+              <button style={S.draftAddBtn} onClick={commitAdd}>ADD</button>
+              <button style={S.draftCancelBtn} onClick={() => setDraft(null)}>CANCEL</button>
+            </div>
+          ) : (
+            <button style={S.addRowBtn} onClick={startAdd}>+ ADD TRANSACTION</button>
           )}
         </div>
 
@@ -2979,10 +3028,7 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
         {pendingSync && (
           <div style={S.syncBanner}>
             <span style={S.syncBannerText}>
-              {pendingSync.type === 'remove'
-                ? `Remove ${pendingSync.sym} from the ${preset.name} preset too? (You might want to keep watching it.)`
-                : `Add ${pendingSync.sym} to the ${preset.name} preset too?`
-              }
+              Add {pendingSync.sym} to the {preset.name} watchlist too?
             </span>
             <button style={S.syncBtn} onClick={handleSyncYes}>YES</button>
             <button style={S.syncBtnNo} onClick={handleSyncNo}>NO</button>
@@ -3001,7 +3047,6 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
     </div>
   );
 }
-
 window.PortfolioSetupModal = PortfolioSetupModal;
 
 /* ── PIN Lock Screen ─────────────────────────────────────── */
