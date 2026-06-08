@@ -280,7 +280,7 @@ def log_signal_outcome(
 ) -> str:
     """
     Record the outcome quality of any paper trade — open or closed.
-    This is the OpenClaw training data foundation: distinguish execution failures
+    This is the Autonomous Agent training data foundation: distinguish execution failures
     from direction failures so patterns can be learned over time.
 
     Use this any time something notable happens on a trade:
@@ -356,7 +356,7 @@ def get_signal_log() -> str:
 
     Use this to ask: 'How often is Banshee directionally correct?'
     and 'In which regimes does it get direction wrong?'
-    This is the core OpenClaw training data read path.
+    This is the core Autonomous Agent training data read path.
     """
     import json
     raw = _get("/journal/signal-log")
@@ -398,13 +398,13 @@ def get_signal_log() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# OPENCLAW STEP 3 — FEEDBACK SYNTHESIS
+# AUTONOMOUS AGENT STEP 3 — FEEDBACK SYNTHESIS
 # ─────────────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
 def get_feedback_synthesis() -> str:
     """
-    OpenClaw Step 3: AI-powered feedback synthesis.
+    Autonomous Agent Step 3: AI-powered feedback synthesis.
 
     Cross-references all judged closed trades with the Daily Predator briefing
     that was active on each trade's exit day. Returns a narrative identifying:

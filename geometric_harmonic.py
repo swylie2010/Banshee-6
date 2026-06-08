@@ -338,6 +338,9 @@ def run(df: pd.DataFrame, n_local: int = 233,
         "gh_circles": [
             {
                 "cx_bar":       round(c["cx"], 2),
+                "cx_ts":        (str(df.loc[int(round(c["cx"])), ts_col])[:10]
+                                 if ts_col in df.columns and 0 <= int(round(c["cx"])) < len(df)
+                                 else str(int(round(c["cx"])))),
                 "center_price": round(dp(c["cy"]), 4),
                 "r_base":       round(float(np.hypot(mid_x - c["cx"], mid_y - c["cy"])), 4),
                 "origin":       c["origin"],

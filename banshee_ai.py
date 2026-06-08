@@ -8,7 +8,7 @@ within the context of global risk.
 
 import math
 from datetime import datetime, timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Literal, List
 
 
@@ -19,12 +19,24 @@ class AssetNote(BaseModel):
 
 
 class PortfolioReview(BaseModel):
-    thought_process: str
-    overall_health_score: int        # 0-100
-    primary_observation: str
-    goals_alignment: str
-    thesis_alignment_note: str       # empty string if no thesis provided
-    asset_breakdown: List[AssetNote]
+    thought_process: str = ""
+    overall_health_score: int = 50   # 0-100
+    primary_observation: str = ""    # what the portfolio IS / is positioned to do
+    whats_working: str = ""          # concrete strengths
+    key_risks: str = ""              # concrete weaknesses / what's dragging it
+    goals_alignment: str = ""        # vs the blended benchmark
+    thesis_alignment_note: str = ""  # empty string if no thesis provided
+    possible_intents: List[str] = [] # 2-3 framed guesses at the investor's "why"
+    asset_breakdown: List[AssetNote] = []
+
+    @field_validator("overall_health_score", mode="before")
+    @classmethod
+    def _coerce_score(cls, v):
+        # The AI (and our fallback) may hand back a float like 31.8; round to int.
+        try:
+            return int(round(float(v)))
+        except (TypeError, ValueError):
+            return 50
 
 
 
@@ -249,7 +261,7 @@ def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
     Pass system_prompt_override to replace the default Banshee system prompt.
     """
     system_prompt = system_prompt_override or (
-        "You are OpenClaw / Banshee: an autonomous quantitative agent. "
+        "You are the Banshee Autonomous Agent, a quantitative trading agent. "
         "You MUST strictly obey the Macro Hostility Check. If an asset is flagged as HOSTILE, "
         "you are absolutely forbidden from recommending a long position, regardless of how bullish the Micro Technicals are... "
         "HOWEVER, if the Asymmetry Score (Human Edge Factor) indicates HIGH ASYMMETRY (20% Wallet), "
@@ -653,11 +665,11 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
         f"TOTAL VALUE: ${total_value:,.0f}",
     ]
     if twrr is not None:
-        lines.append(f"TWRR: {twrr*100:.2f}%")
+        lines.append(f"TOTAL RETURN SINCE ENTRY: {twrr*100:.2f}% (cumulative gain on entry prices)")
     if sharpe is not None:
-        lines.append(f"SHARPE: {sharpe:.2f}")
+        lines.append(f"SHARPE (real history): {sharpe:.2f}")
     if max_dd is not None:
-        lines.append(f"MAX DRAWDOWN: {max_dd*100:.2f}%")
+        lines.append(f"MAX DRAWDOWN (real history): {max_dd*100:.2f}%")
     lines.append(f"MOMENTUM SCORE: {momentum_score:.0f}/100")
     lines.append(f"SECTOR ALIGNMENT: {alignment_score:.0f}/100")
     lines.append("")
@@ -682,14 +694,32 @@ def portfolio_review(cfg: dict, portfolio: dict, analysis: dict) -> PortfolioRev
     )
 
     system = (
-        "You are a portfolio analyst reviewing a trading portfolio. "
-        "Be direct, specific, and honest. Avoid generic financial advice. "
+        "You are a sharp, experienced portfolio analyst. Be direct, specific, and grounded "
+        "in the actual holdings and numbers shown — never generic boilerplate. Give a BALANCED "
+        "read: describe what the portfolio IS doing and is positioned for, not only its faults. "
+        "The investor should be able to compare their own view against yours, agree or disagree, "
+        "and learn something. "
         f"{thesis_instruction} "
-        "Return your analysis as a JSON object matching the PortfolioReview schema exactly: "
-        "thought_process (your reasoning), overall_health_score (0-100 integer), "
-        "primary_observation (one sentence), goals_alignment (one sentence), "
-        "thesis_alignment_note (one sentence evaluating thesis, empty string if no thesis), "
-        "asset_breakdown (array of {sym, note, sentiment} for each holding)."
+        "Return ONLY a JSON object with these keys:\n"
+        "- thought_process: your private reasoning (a few sentences).\n"
+        "- overall_health_score: integer 0-100.\n"
+        "- primary_observation: what this portfolio fundamentally IS and is positioned to do — "
+        "its character, tilt, concentration. 1-2 sentences.\n"
+        "- whats_working: the genuine strengths or what it is doing right, specific to these "
+        "holdings/metrics. If little is working, say honestly what little there is. 1-2 sentences.\n"
+        "- key_risks: the main weaknesses or what is dragging it. 1-2 sentences.\n"
+        "- goals_alignment: how it stacks up versus the blended benchmark. 1 sentence.\n"
+        "- thesis_alignment_note: evaluate the stated thesis (empty string if none). 1-2 sentences.\n"
+        "- possible_intents: 2-3 SHORT, distinct guesses at WHY the composition looks the way it does — "
+        "especially when it diverges from the thesis. Infer strategy from the mix (e.g. 'Rotating toward "
+        "defense as risk-off sets in', 'Hedging the growth names with gold/cash', 'Holding winners while "
+        "diversifying the core idea', 'Riding a drawdown waiting for recovery'). Frame each as a possibility "
+        "the investor can confirm or correct — never as fact. The goal is to make them feel understood or "
+        "prompt a useful rethink. Empty array only if the portfolio is too small/simple to infer anything.\n"
+        "- asset_breakdown: array of {sym, note, sentiment} — one short, specific note per holding; "
+        "sentiment is 'positive', 'neutral', or 'negative'.\n"
+        "Note: 'total return since entry' is a real cumulative gain on the investor's entry prices; "
+        "Sharpe and max drawdown are computed from real 1-year price history."
     )
 
     raw = call_ai(cfg, prompt, system_prompt_override=system)
@@ -705,11 +735,13 @@ def portfolio_review(cfg: dict, portfolio: dict, analysis: dict) -> PortfolioRev
         except Exception:
             pass
 
-    # Fallback: return a minimal valid response
+    # Fallback: return a minimal valid response (score coerced to int by the model)
     return PortfolioReview(
         thought_process="Analysis unavailable.",
         overall_health_score=analysis.get("score", 50),
-        primary_observation="Could not parse AI response.",
+        primary_observation="The AI response could not be parsed; metrics above are still valid.",
+        whats_working="",
+        key_risks="",
         goals_alignment="Unable to assess.",
         thesis_alignment_note="",
         asset_breakdown=[]

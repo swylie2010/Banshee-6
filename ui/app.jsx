@@ -250,9 +250,9 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
   const wl = watchlists.find(w => w.id === watchlist);
   const symAssets = wl.syms
     .map(s => {
-      const base = window.ASSETS.find(a => a.sym === s)
-        || { sym: s, name: s, cls: 'EQUITY', price: 0, chg: 0, edge: 50, verdict: 'WAIT', bias: '→ FLAT', vol: 1, rsi: 50, atr: 1 };
-      return mergeRadar(base, radarData[s]);
+      const key  = canonSym(s);
+      const base = resolveBaseAsset(key);
+      return { ...mergeRadar(base, radarData[key]), sym: key, _origSym: s };
     })
     .filter(Boolean);
 
@@ -327,7 +327,7 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
           >
             CUSTOM PRESETS
           </button>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8, maxHeight: 240, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8, maxHeight: 168, overflowY: "auto" }}>
             {watchlists.map(w => {
               const active = w.id === watchlist;
               return (
@@ -364,14 +364,14 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
         </div>
         <div style={{
           padding: "0 14px 14px 14px",
-          flex: 1, overflowY: "auto",
+          flex: 1, minHeight: 96, overflowY: "auto",
           display: "flex", flexDirection: "column", gap: 4,
         }}>
           {symAssets.map(a => {
             const c = window.verdictColors(a.verdict);
             const active = focusedSym === a.sym;
             return (
-              <button key={a.sym}
+              <button key={a._origSym || a.sym}
                 onClick={() => setFocusedSym(a.sym)}
                 style={{
                   display: "grid", gridTemplateColumns: "auto 1fr auto",
@@ -487,26 +487,62 @@ function mergeRadar(base, live) {
   };
 }
 
+/* Resolve a user/preset symbol string to a known asset in window.ASSETS.
+ * Matches (in priority order): exact sym, pair ("BTC/USD"→BTC), exact name,
+ * then name-prefix ("Bitcoin"/"Apple"→ticker). Returns null if unknown.
+ * The trailing "/USD" is the user's "force crypto" disambiguator — preserved,
+ * never used to reject a match. */
+function resolveKnownAsset(input) {
+  if (!input) return null;
+  const up = String(input).trim().toUpperCase();
+  return window.ASSETS.find(a => a.sym.toUpperCase() === up)
+      || window.ASSETS.find(a => (a.pair || "").toUpperCase() === up)
+      || window.ASSETS.find(a => a.name.toUpperCase() === up)
+      || (up.length >= 3 ? window.ASSETS.find(a => a.name.toUpperCase().startsWith(up)) : null)
+      || null;
+}
+
+/* Canonical radar/lookup key for a stored symbol: the known asset's sym when
+ * recognised (so we reuse data already fetched for the default 20), else the
+ * stored string itself (custom symbols are fetched + keyed as-is). */
+function canonSym(stored) {
+  const known = resolveKnownAsset(stored);
+  return known ? known.sym : stored;
+}
+
+/* Build a base asset object for any canonical key — the known asset when
+ * recognised, otherwise a stub seeded from the cached snapshot. */
+function resolveBaseAsset(key, snapshot = {}) {
+  const known = window.ASSETS.find(a => a.sym === key) || resolveKnownAsset(key);
+  if (known) return { ...known, sym: key };
+  const cached   = snapshot[key] || {};
+  const isCrypto = /[\/\-]USDT?$/i.test(key);
+  const display  = key.replace(/[\/\-]USDT?$/i, "");
+  return {
+    sym: key, pair: key,
+    name:    cached.name    || display,
+    cls:     cached.cls     || (isCrypto ? "CRYPTO" : "EQUITY"),
+    price:   cached.price   || 0,
+    chg:     cached.chg     || 0,
+    edge:    cached.edge    || 50,
+    verdict: cached.verdict || "WAIT",
+    bias:    cached.bias    || "→ FLAT",
+    vol: 1, rsi: cached.rsi || 50, atr: 1,
+  };
+}
+
 /* ── Asset grid ───────────────────────────────────────────── */
 function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radarLoading, snapshot = {}, isCustomPreset = false, onPortfolioClick }) {
   const wl = watchlists.find(w => w.id === watchlist);
   const syms = wl.syms;
   const assets = syms
     .map(s => {
-      const cached = snapshot[s];
-      const base = window.ASSETS.find(a => a.sym === s) || {
-        sym: s,
-        name:    cached?.name    || s,
-        cls:     cached?.cls     || 'EQUITY',
-        price:   cached?.price   || 0,
-        chg:     cached?.chg     || 0,
-        edge:    cached?.edge    || 50,
-        verdict: cached?.verdict || 'WAIT',
-        bias:    cached?.bias    || '→ FLAT',
-        vol: 1, rsi: cached?.rsi || 50, atr: 1,
-      };
-      const _dataState = radarData[s] ? "LIVE" : cached ? "CACHED" : "INIT";
-      return { ...mergeRadar(base, radarData[s]), _loading: radarLoading.has(s), _dataState };
+      const key    = canonSym(s);                 // "BTC/USD" → "BTC"; "TAO/USD" → "TAO/USD"
+      const cached = snapshot[key];
+      const base   = resolveBaseAsset(key, snapshot);
+      const _dataState = radarData[key] ? "LIVE" : cached ? "CACHED" : "INIT";
+      return { ...mergeRadar(base, radarData[key]), sym: key, _origSym: s,
+               _loading: radarLoading.has(key), _dataState };
     })
     .filter(Boolean);
 
@@ -570,7 +606,7 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
         alignContent: "start",
       }}>
         {assets.map(a => (
-          <window.AssetCard key={a.sym} asset={a}
+          <window.AssetCard key={a._origSym || a.sym} asset={a}
             selected={focusedSym === a.sym}
             onClick={() => onOpen(a.sym)} />
         ))}
@@ -4258,6 +4294,7 @@ function App() {
   const [portfolioSetupOpen, setPortfolioSetupOpen] = React.useState(false);
   const [activePortfolio, setActivePortfolio] = React.useState(null);
   const [currentPortfolioId, setCurrentPortfolioId] = React.useState(null);
+  const [pfNonce, setPfNonce] = React.useState(0);   // bumped on save → forces PortfolioPage re-fetch
 
   const watchlists = React.useMemo(
     () => [...customPresets, ...window.WATCHLISTS],
@@ -4325,11 +4362,15 @@ function App() {
 
   /* symbol search via sidebar */
   async function handleSymbolSearch(sym) {
-    const existing = window.ASSETS.find(a => a.sym === sym);
-    if (existing) {
-      setFocusedSym(sym); setOpenSym(sym); setPage("hub"); setCustomAsset(null);
+    /* resolve names/pairs to a known ticker first: "BITCOIN"/"BTC/USD"/"APPLE"
+     * all open the matching default asset directly. */
+    const known = resolveKnownAsset(sym);
+    if (known) {
+      setFocusedSym(known.sym); setOpenSym(known.sym); setPage("hub"); setCustomAsset(null);
       return;
     }
+    /* unknown ticker — fetch radar as typed (keeps the user's "/USD" suffix,
+     * which forces crypto resolution on the backend, e.g. HYPE/USD ≠ HYPE stock). */
     const res = await window.API.fetchRadar(sym, "swing");
     if (res && !res.error && typeof res.price === "number") {
       const asset = {
@@ -4386,6 +4427,44 @@ function App() {
     });
   }, []);
 
+  /* fetch radar for custom watchlist symbols not covered by the default ASSETS
+   * loop above (e.g. "TAO/USD", "PAXG/USD"). Keyed by canonical symbol; known
+   * assets are skipped because the mount effect already fetched them. Runs when
+   * the active watchlist or preset list changes. */
+  useEffect(() => {
+    const wl = watchlists.find(w => w.id === watchlist);
+    if (!wl) return;
+    const knownSyms = new Set(window.ASSETS.map(a => a.sym));
+    const pending = [...new Set(wl.syms.map(canonSym))]
+      .filter(key => !knownSyms.has(key) && !radarData[key] && !RADAR_SKIP.has(key));
+    if (!pending.length) return;
+    setRadarLoading(prev => { const s = new Set(prev); pending.forEach(k => s.add(k)); return s; });
+    pending.forEach(key => {
+      window.API.fetchRadar(key, "swing").then(res => {
+        if (res && !res.error) {
+          setRadarData(prev => ({ ...prev, [key]: res }));
+          setSnapshot(prev => {
+            const isCrypto = /[\/\-]USDT?$/i.test(key);
+            const entry = {
+              price:   typeof res.price   === "number" ? res.price   : prev[key]?.price,
+              chg:     typeof res.chg_pct === "number" ? res.chg_pct : prev[key]?.chg,
+              edge:    typeof res.edge    === "number" ? Math.round(normaliseEdge(res.edge)) : prev[key]?.edge,
+              verdict: res.verdict ?? prev[key]?.verdict,
+              bias:    res.bias    ?? prev[key]?.bias,
+              rsi:     typeof res.rsi === "number" ? Math.round(res.rsi) : prev[key]?.rsi,
+              name:    prev[key]?.name || key.replace(/[\/\-]USDT?$/i, ""),
+              cls:     prev[key]?.cls  || (isCrypto ? "CRYPTO" : "EQUITY"),
+            };
+            const next = { ...prev, [key]: entry };
+            try { localStorage.setItem('banshee_snapshot', JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
+        setRadarLoading(prev => { const s = new Set(prev); s.delete(key); return s; });
+      });
+    });
+  }, [watchlist, watchlists]);
+
   const handlePortfolioClick = async () => {
     const data = await window.API.fetchPortfolios();
     const existing = (data.portfolios || []).find(p => p.preset_id === watchlist);
@@ -4394,6 +4473,7 @@ function App() {
       setCurrentPortfolioId(existing.id);
       setPage('portfolio');
     } else {
+      setActivePortfolio(null);
       setPortfolioSetupOpen(true);
     }
   };
@@ -4414,7 +4494,7 @@ function App() {
   const liveAsset = openSym
     ? (customAsset?.sym === openSym
         ? customAsset
-        : mergeRadar(window.ASSETS.find(a => a.sym === openSym), radarData[openSym]))
+        : mergeRadar(resolveBaseAsset(openSym, snapshot), radarData[openSym]))
     : null;
 
   function handleGoRisk(simulate = false) {
@@ -4510,9 +4590,11 @@ function App() {
         )}
         {page === "portfolio" && (
           <window.PortfolioPage
+            key={`${currentPortfolioId}:${pfNonce}`}
             portfolioId={currentPortfolioId}
             portfolio={activePortfolio}
             onBack={() => setPage('grid')}
+            onEditHoldings={() => setPortfolioSetupOpen(true)}
           />
         )}
         {presetsOpen && (
@@ -4527,10 +4609,12 @@ function App() {
         {portfolioSetupOpen && (
           <window.PortfolioSetupModal
             preset={customPresets.find(p => p.id === watchlist)}
-            existingPortfolio={null}
+            existingPortfolio={activePortfolio}
             onSave={(portfolio) => {
+              if (!portfolio || portfolio.error || !portfolio.id) return;
               setActivePortfolio(portfolio);
               setCurrentPortfolioId(portfolio.id);
+              setPfNonce(n => n + 1);          // force a fresh analysis fetch even if id is unchanged
               setPortfolioSetupOpen(false);
               setPage('portfolio');
             }}

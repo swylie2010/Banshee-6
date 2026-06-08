@@ -900,8 +900,17 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
     _class_confirmed = (symbol in _saved_profiles and
                         "asset_class" in _saved_profiles.get(symbol, {}))
 
+    _chg_pct = 0.0
+    if not df_fast.empty and len(df_fast) >= 2 and "close" in df_fast.columns:
+        _prev = float(df_fast.iloc[-2]["close"])
+        _last = float(df_fast.iloc[-1]["close"])
+        if _prev > 0:
+            _chg_pct = round((_last - _prev) / _prev * 100, 2)
+
     payload = {
         "symbol": symbol, "mode": mode, "price": round(price, 6), "verdict": verdict,
+        "rsi": round(indicators["rsi"], 1),
+        "chg_pct": _chg_pct,
         "pre_signal": pre_signal, "regime_bucket": regime_bucket,
         "asset_class": _asset_class, "asset_class_confirmed": _class_confirmed,
         "eth_btc_gate_enabled": bool(profile.get("eth_btc_gate", False)),

@@ -3,7 +3,7 @@ knowledge_graph.py — Banshee Pro Ontology & Rule Engine
 =========================================================
 This module houses the deterministic rulesets of a Wall Street Portfolio Manager.
 It converts raw data into semantic constants ('ALL CLEAR', 'CAUTION', 'CRACK DETECTED')
-to ensure AI components (and future autonomous agents like OpenClaw) operate within
+to ensure AI components (and future autonomous agents) operate within
 impenetrable risk frameworks.
 """
 
@@ -339,7 +339,7 @@ def get_regime_weights(sensors: dict) -> tuple:
 
 def calculate_asymmetry_score(micro_data: dict, domino_phase: int) -> dict:
     """
-    Calculates the Asymmetry Score ("The Human Edge / OpenClaw 20% Wallet").
+    Calculates the Asymmetry Score ("The Human Edge / Autonomous Agent 20% Wallet").
     Identifies setups with low probability but extreme payout (high asymmetry).
     Factors in divergences (W/M formations), support proximity, squeeze mechanics,
     and macro/micro conflicts.

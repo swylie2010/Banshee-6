@@ -1,4 +1,4 @@
-# OpenClaw Session Protocol
+# Autonomous Agent Session Protocol
 **Read this at the start of every session before using any Banshee tools.**
 
 ---

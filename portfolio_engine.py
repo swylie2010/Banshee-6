@@ -34,12 +34,36 @@ def score_to_grade(score: float) -> str:
     return "F"
 
 
-def run(holdings: pd.DataFrame, benchmark_returns: pd.Series) -> dict:
+def risk_metrics(portfolio_returns, benchmark_returns) -> dict:
+    """Sharpe / max-drawdown / alpha / beta from a REAL daily portfolio return
+    series (weighted blend of the holdings' actual price history). Returns all
+    None when there isn't enough history — honest beats fabricated.
+
+    portfolio_returns: daily returns Series for the actual portfolio (or None).
+    benchmark_returns: blended benchmark daily returns Series (or empty).
+    """
+    out = {"sharpe": None, "alpha": None, "beta": None, "max_drawdown": None}
+    if portfolio_returns is None or len(portfolio_returns) < 30:
+        return out
+    try:
+        import quantstats as qs
+        out["sharpe"]       = round(float(qs.stats.sharpe(portfolio_returns)), 3)
+        out["max_drawdown"] = round(float(qs.stats.max_drawdown(portfolio_returns)), 4)
+        if benchmark_returns is not None and not benchmark_returns.empty:
+            out["alpha"], out["beta"] = _compute_alpha_beta(portfolio_returns, benchmark_returns)
+    except Exception:
+        pass
+    return out
+
+
+def run(holdings: pd.DataFrame, benchmark_returns: pd.Series, portfolio_returns=None) -> dict:
     """
     holdings: DataFrame with columns:
         sym (str), shares (float), entry_price (float|None),
         entry_date (str|None), current_price (float), cls (str)
     benchmark_returns: pre-fetched daily returns Series (DatetimeIndex)
+    portfolio_returns: REAL daily return series for the actual weighted portfolio,
+                       used for risk metrics. None → risk metrics come back None.
     Returns dict with keys: sharpe, alpha, beta, max_drawdown, twrr,
                             total_value, weights (list of dicts)
     """
@@ -63,19 +87,10 @@ def run(holdings: pd.DataFrame, benchmark_returns: pd.Series) -> dict:
         ]
         twrr = round(sum(gains), 4) if gains else None
 
-    # Risk metrics via quantstats (only if benchmark available)
-    sharpe = alpha = beta = max_dd = None
-    if twrr is not None and not benchmark_returns.empty and len(benchmark_returns) >= 30:
-        try:
-            import quantstats as qs
-            n = len(benchmark_returns)
-            # Synthesise daily portfolio returns: scale benchmark by (1 + TWRR/n) per day
-            port_returns = benchmark_returns * (1 + twrr / n)
-            sharpe = round(float(qs.stats.sharpe(port_returns)), 3)
-            max_dd = round(float(qs.stats.max_drawdown(port_returns)), 4)
-            alpha, beta = _compute_alpha_beta(port_returns, benchmark_returns)
-        except Exception:
-            pass
+    # Risk metrics from the REAL weighted return series (not a synthetic scale of
+    # the benchmark). None when history/returns unavailable.
+    rm = risk_metrics(portfolio_returns, benchmark_returns)
+    sharpe, alpha, beta, max_dd = rm["sharpe"], rm["alpha"], rm["beta"], rm["max_drawdown"]
 
     return {
         "sharpe":       sharpe,

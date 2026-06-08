@@ -1,3 +1,10 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Banshee — the PUBLIC repo is the runnable app only.
+# Everything personal stays private: research, our planning/specs, project
+# memory, calibration, operational data, and secrets. If it's about us, our
+# work, or our memory — it does not belong on GitHub.
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Python
 __pycache__/
 *.pyc
@@ -5,19 +12,37 @@ __pycache__/
 .venv/
 venv/
 env/
+.pytest_cache/
 
 # Secrets — never commit these
 .env
 *.env
+.banshee_keys.json
+banshee_keys.json
+.banshee_kill_switch.json
 
-# Local operational data (machine-specific, changes constantly)
+# Operational / personal data (machine-specific, changes constantly)
 daily_briefings.jsonl
 paper_trades.json
 banshee_presets.json
 watchlist_presets.json
+banshee_portfolio.json
+strategies.json
 
-# Raw downloaded market data (large, ephemeral — regenerate with calibrate.py)
-tv_extract/ohlcv/
+# Research & private design work — informs the app, but isn't part of it
+Research and Resources/
+Appearance ideas/
+
+# Our planning, specs, and project memory (development process, not the product)
+docs/
+wiki/
+ACTIVE_TASK.md
+Banshee_Pro_v1.6_Plan.md
+PLAN_session_and_lab.md
+.superpowers/
+
+# Personal calibration + raw market captures (regenerate with calibrate.py)
+tv_extract/
 
 # OS noise
 Thumbs.db

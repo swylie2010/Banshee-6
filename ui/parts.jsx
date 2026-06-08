@@ -2631,24 +2631,29 @@ window.PresetsModal = function PresetsModal({ customPresets, saveCustomPresets, 
 
 /* ── PortfolioSetupModal ─────────────────────────────────── */
 function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
-  // Ice cream palette constants (inline — scoped to modal only)
-  const PM = {
-    bg0:   '#fdf8ff',
-    bg1:   '#f5f0ff',
-    bg2:   '#ece5ff',
-    line:  '#c8bce8',
-    ink:   '#1e1640',
-    ink3:  '#7a6fb0',
-    mint:  '#5dd6b4',
-    rose:  '#f080a0',
-    peach: '#f4a860',
-    gold:  '#e8b840',
-  };
+  // Follow the portfolio page's active theme (light = muted lavender, dark = Banshee)
+  const PM = (window.portfolioPalette
+    ? window.portfolioPalette(localStorage.getItem('banshee_portfolio_theme') || 'light')
+    : { bg0:'#c4c3d0', bg1:'#d2d1dd', bg2:'#dcdbe6', line:'#9f9db3', ink:'#191526',
+        ink3:'#453f5e', mint:'#1c8a66', rose:'#ab3257', peach:'#b06a1c', gold:'#927014',
+        btn:'#5a41a4', btnInk:'#ffffff' });
 
-  // Build initial holdings from preset.symbols, merged with existingPortfolio.holdings
+  // Build initial holdings from the preset symbols, merged with existingPortfolio.holdings.
+  // Presets may carry either `symbols` ([{sym,cls}]) or `syms` ([str]); fall back to the
+  // existing portfolio's holdings so the editor is never blank for a saved portfolio.
   function buildInitialHoldings() {
     const existing = existingPortfolio?.holdings ?? [];
-    return (preset.symbols ?? []).map(({ sym, cls }) => {
+    const cryptoCls = s => /[\/\-]USDT?$/i.test(s) ? 'CRYPTO' : 'EQUITY';
+    let src = [];
+    if (Array.isArray(preset?.symbols) && preset.symbols.length) {
+      src = preset.symbols.map(x => ({ sym: x.sym, cls: x.cls || cryptoCls(x.sym) }));
+    } else if (Array.isArray(preset?.syms) && preset.syms.length) {
+      src = preset.syms.map(s => ({ sym: s, cls: cryptoCls(s) }));
+    }
+    existing.forEach(h => {
+      if (!src.some(s => s.sym === h.sym)) src.push({ sym: h.sym, cls: h.cls || cryptoCls(h.sym) });
+    });
+    return src.map(({ sym, cls }) => {
       const found = existing.find(h => h.sym === sym);
       return {
         sym,
@@ -2756,6 +2761,11 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
       } else {
         saved = await window.API.createPortfolio(body);
       }
+      if (!saved || saved.error || !saved.id) {
+        console.warn('[PortfolioSetupModal] save failed:', saved && saved.error);
+        setSaving(false);
+        return;
+      }
       onSave(saved);
     } catch (e) {
       console.warn('[PortfolioSetupModal] save error:', e);
@@ -2839,7 +2849,7 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
       font: '12px monospace', cursor: 'pointer',
     },
     analyzeBtn: {
-      background: PM.peach, color: PM.ink, border: 'none',
+      background: PM.btn, color: PM.btnInk, border: 'none',
       borderRadius: 6, padding: '8px 20px',
       font: '700 12px monospace', cursor: 'pointer',
       opacity: saving ? 0.6 : 1,
@@ -2874,14 +2884,14 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
           <button style={S.closeBtn} onClick={onClose} title="Close">✕</button>
         </div>
 
-        {/* Investment Thesis */}
+        {/* Investment Thesis — this is what the AI reacts to */}
         <div style={S.section}>
-          <span style={S.sectionLabel}>INVESTMENT THESIS (optional)</span>
+          <span style={S.sectionLabel}>YOUR GOAL / THESIS — ◈ THE AI WEIGHS IN ON THIS</span>
           <textarea
             style={S.textarea}
             value={thesis}
             onChange={e => setThesis(e.target.value)}
-            placeholder="Why do you hold these assets? What's the overall thesis?"
+            placeholder="e.g. I want to 4x these over the next year by buying the dip. (The AI grades whether your holdings actually support this.)"
           />
         </div>
 
@@ -2928,10 +2938,10 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
                   <td style={S.td}>
                     <input
                       style={S.input}
-                      type="text"
-                      value={h.entry_date}
+                      type="date"
+                      value={/^\d{4}-\d{2}-\d{2}$/.test(h.entry_date || '') ? h.entry_date : ''}
+                      max="2100-12-31"
                       onChange={e => updateHolding(h.sym, 'entry_date', e.target.value)}
-                      placeholder="YYYY-MM-DD"
                     />
                   </td>
                   <td style={S.td}>

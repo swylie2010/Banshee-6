@@ -1,5 +1,5 @@
 """
-app.py — Banshee Pro 4 Command Center
+app.py — Banshee 5 Command Center
 ======================================
 Pure display layer — all engine logic lives in banshee_core.py (port 8765).
 This file is an HTTP client: it asks Core for pre-computed data and draws it.
@@ -45,6 +45,14 @@ def _core_post_text(path: str, body: dict, timeout: int = 90) -> str | None:
     except Exception:
         return None
 
+def _core_delete(path: str, timeout: int = 10) -> bool:
+    try:
+        r = requests.delete(f"{CORE_URL}{path}", timeout=timeout)
+        r.raise_for_status()
+        return True
+    except Exception:
+        return False
+
 def _core_online() -> bool:
     try:
         requests.get(f"{CORE_URL}/health", timeout=3)
@@ -66,7 +74,7 @@ _MODE_FAST_TF = {"long_term": "4h", "swing": "1h", "sniper": "15m"}
 # ─────────────────────────────────────────────────────────────────
 _FAVICON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Favicon.png")
 st.set_page_config(
-    page_title="Banshee Pro 3.0",
+    page_title="Banshee 5",
     page_icon=_FAVICON_PATH if os.path.exists(_FAVICON_PATH) else "🦅",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -308,6 +316,40 @@ with st.sidebar:
                     st.rerun()
     else:
         st.caption("No symbols loaded. Enter a ticker above.")
+
+    st.markdown("---")
+
+    # ── Asset Presets ─────────────────────────────────────────────
+    st.markdown("### PRESETS")
+    presets_data = _core_get("/presets") or {}
+    if presets_data:
+        for preset_name, preset_syms in presets_data.items():
+            pcols = st.columns([5, 1])
+            with pcols[0]:
+                if st.button(preset_name, key=f"preset_load_{preset_name}", use_container_width=True,
+                             help=", ".join(preset_syms)):
+                    with st.spinner(f"Loading {preset_name}…"):
+                        for s in preset_syms:
+                            _load_symbol(s, st.session_state.active_mode)
+                    st.rerun()
+            with pcols[1]:
+                if st.button("✕", key=f"preset_del_{preset_name}"):
+                    _core_delete(f"/presets/{preset_name}")
+                    st.rerun()
+    else:
+        st.caption("No presets saved.")
+
+    with st.expander("＋ Save current as preset"):
+        with st.form("preset_save_form", clear_on_submit=True):
+            preset_label = st.text_input("Preset name", placeholder="My Crypto")
+            save_preset = st.form_submit_button("Save", use_container_width=True)
+        if save_preset and preset_label.strip():
+            current_syms = list(st.session_state.symbol_cache.keys())
+            if current_syms:
+                _core_post(f"/presets/{preset_label.strip()}", {"symbols": current_syms})
+                st.rerun()
+            else:
+                st.warning("Load some symbols first.")
 
     st.markdown("---")
 
@@ -1096,7 +1138,7 @@ def render_market_intel():
     today_label = datetime.now().strftime("%A, %B %d, %Y").upper()
     st.markdown(f"""
     <div class="predator-masthead"><h1>THE DAILY PREDATOR</h1></div>
-    <div class="predator-dateline">{today_label} &nbsp;·&nbsp; Powered by Banshee Pro 3</div>
+    <div class="predator-dateline">{today_label} &nbsp;·&nbsp; Powered by Banshee 5</div>
     """, unsafe_allow_html=True)
 
     # ── Load existing briefing or show run controls ───────────────────────────
@@ -1434,7 +1476,7 @@ def render_settings():
     st.markdown("## 📈 Alpaca (Stock Data & Trading)")
     st.markdown(
         "Free API keys for stock intraday data (SPY, NVDA, etc.) — bypasses the yfinance 60-day cap. "
-        "Same keys will power the OpenClaw trading agent. Get yours at "
+        "Same keys will power the Autonomous Agent. Get yours at "
         "[alpaca.markets](https://alpaca.markets/).",
         unsafe_allow_html=True
     )
@@ -2033,10 +2075,10 @@ def render_trade_journal():
 
     # ── Feedback Analysis ─────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### 🧠 OpenClaw Feedback Analysis")
+    st.markdown("### 🧠 Autonomous Agent Feedback Analysis")
     st.caption("AI synthesis of judged closed trades vs Predator briefings — identifies regime blind spots and rule improvements.")
     if st.button("Run Feedback Analysis", type="primary"):
-        with st.spinner("OpenClaw analyzing trade history..."):
+        with st.spinner("Autonomous Agent analyzing trade history..."):
             resp = _core_get("/journal/feedback-synthesis", timeout=90)
         if resp:
             m1, m2, m3 = st.columns(3)
@@ -2048,6 +2090,223 @@ def render_trade_journal():
             st.error("Core unavailable — start Banshee Core and try again.")
 
 
+def _render_visual_guide():
+    """Three-panel visual explainer for the Geo Harmonic + XABCD tab."""
+    import plotly.graph_objects as go
+    import numpy as np
+
+    dark_bg = "#0e1117"
+    grid_c  = "#1a1f2e"
+    text_c  = "#e0e0e0"
+
+    # ── Panel 1: Fibonacci Circles → Hot Zones ────────────────────────────────
+    st.markdown("#### ① Fibonacci Circles — Where Arcs Cross = Hot Zone")
+
+    fig1 = go.Figure()
+    atl_cx, atl_cy = 10, 15
+    ath_cx, ath_cy = 115, 92
+
+    for fib, w, dash, show in [(0.618, 0.8, "dot", False), (1.0, 1.8, "solid", True),
+                                (1.272, 0.8, "dot", False), (1.618, 0.8, "dot", False)]:
+        theta = np.linspace(0.08, 1.42, 100)
+        R = fib * 88
+        x = atl_cx + R * np.cos(theta)
+        y = atl_cy + R * np.sin(theta)
+        m = (x >= 0) & (x <= 128) & (y >= 0) & (y <= 105)
+        fig1.add_trace(go.Scatter(x=x[m], y=y[m], mode="lines",
+            line=dict(color="#1e88e5", width=w, dash=dash),
+            opacity=0.75 if dash == "solid" else 0.38,
+            showlegend=show, name="ATL arcs (blue)"))
+
+    for fib, w, dash, show in [(0.618, 0.8, "dot", False), (1.0, 1.8, "solid", True),
+                                (1.272, 0.8, "dot", False), (1.618, 0.8, "dot", False)]:
+        theta = np.linspace(np.pi + 0.08, np.pi * 1.5 - 0.05, 100)
+        R = fib * 68
+        x = ath_cx + R * np.cos(theta)
+        y = ath_cy + R * np.sin(theta)
+        m = (x >= 0) & (x <= 128) & (y >= 0) & (y <= 105)
+        fig1.add_trace(go.Scatter(x=x[m], y=y[m], mode="lines",
+            line=dict(color="#e53935", width=w, dash=dash),
+            opacity=0.75 if dash == "solid" else 0.38,
+            showlegend=show, name="ATH arcs (red)"))
+
+    for p, hx in [(47, 72), (63, 83), (79, 94)]:
+        fig1.add_hrect(y0=p-2.5, y1=p+2.5, fillcolor="#ff9800", opacity=0.18, line_width=0)
+    fig1.add_trace(go.Scatter(x=[72, 83, 94], y=[47, 63, 79],
+        mode="markers+text",
+        marker=dict(color="#ff9800", size=13, symbol="circle",
+                    line=dict(color="#fff3e0", width=1.2)),
+        text=["Hot Zone", "Hot Zone", "Hot Zone"],
+        textposition="middle right", textfont=dict(color="#ff9800", size=8),
+        showlegend=True, name="Hot Zones"))
+
+    fig1.add_vline(x=120, line_color="#66bb6a", line_width=1.8, line_dash="dash")
+    fig1.add_annotation(x=120, y=102, text="TODAY", font=dict(color="#66bb6a", size=8),
+                        showarrow=False, yanchor="bottom", xanchor="center")
+
+    fig1.add_trace(go.Scatter(x=[atl_cx], y=[atl_cy], mode="markers+text",
+        marker=dict(color="#1e88e5", size=11, symbol="circle"),
+        text=["All-Time Low"], textposition="top right",
+        textfont=dict(color="#90caf9", size=9), showlegend=False))
+    fig1.add_trace(go.Scatter(x=[ath_cx], y=[ath_cy], mode="markers+text",
+        marker=dict(color="#e53935", size=11, symbol="circle"),
+        text=["All-Time High"], textposition="bottom left",
+        textfont=dict(color="#ef9a9a", size=9), showlegend=False))
+
+    fig1.update_layout(height=255, paper_bgcolor=dark_bg, plot_bgcolor=dark_bg,
+        font=dict(color=text_c, size=10),
+        xaxis=dict(visible=False, range=[-5, 132]),
+        yaxis=dict(title="Price", gridcolor=grid_c, showgrid=True, range=[0, 108],
+                   tickfont=dict(size=8)),
+        legend=dict(orientation="h", y=-0.18, x=0, font=dict(size=9)),
+        margin=dict(l=40, r=15, t=8, b=48))
+    st.plotly_chart(fig1, use_container_width=True)
+    st.caption(
+        "**Blue arcs** expand outward from the all-time low. **Red arcs** expand from the all-time high. "
+        "Banshee draws multiple arcs from each anchor — one per Fibonacci ratio (0.618, 1.0, 1.272, 1.618…). "
+        "Where a blue arc and a red arc cross at the same price = a **Hot Zone** (orange dot). "
+        "The more arcs that stack on a single price level, the stronger that zone's gravitational pull on price."
+    )
+
+    # ── Panel 2: XABCD pattern shapes ────────────────────────────────────────
+    st.markdown("#### ② XABCD Patterns — The Five-Point Zigzag")
+
+    col_bull, col_bear = st.columns(2)
+
+    def _leg_label(fig, x0, y0, x1, y1, txt, color):
+        fig.add_annotation(x=(x0+x1)/2, y=(y0+y1)/2, text=txt, showarrow=False,
+            font=dict(color=color, size=7), bgcolor=dark_bg, opacity=0.9)
+
+    with col_bull:
+        fb = go.Figure()
+        bx = [0, 2, 4, 6, 8]
+        by = [100, 200, 138.2, 169.1, 121.4]
+        fb.add_trace(go.Scatter(x=bx, y=by, mode="lines+markers+text",
+            line=dict(color="#4caf50", width=2.5),
+            marker=dict(color="#4caf50", size=9),
+            text=["X", "A", "B", "C", "D"],
+            textposition=["bottom right","top right","bottom center","top center","bottom center"],
+            textfont=dict(color="#fff", size=13, family="Arial Black"),
+            showlegend=False))
+        fb.add_hrect(y0=113, y1=130, fillcolor="#4caf50", opacity=0.15, line_width=0)
+        fb.add_annotation(x=9.1, y=121, text="PRZ\n(watch here)",
+            font=dict(color="#4caf50", size=8), showarrow=False, xanchor="left")
+        _leg_label(fb, 0,100, 2,200, "XA — base leg", "#90caf9")
+        _leg_label(fb, 2,200, 4,138.2, "AB = 61.8% of XA", "#90caf9")
+        _leg_label(fb, 4,138.2, 6,169.1, "BC = 50% of AB", "#90caf9")
+        _leg_label(fb, 6,169.1, 8,121.4, "CD = 127% of BC", "#90caf9")
+        fb.add_annotation(x=4, y=107, text="XD/XA = 78.6%  (the PRZ key)",
+            showarrow=False, font=dict(color="#ffd54f", size=8))
+        fb.update_layout(
+            title=dict(text="Bullish — price reverses UP at D", font=dict(color="#4caf50", size=11)),
+            height=300, paper_bgcolor=dark_bg, plot_bgcolor=dark_bg,
+            font=dict(color=text_c),
+            xaxis=dict(visible=False, range=[-0.5, 10.5]),
+            yaxis=dict(visible=False, range=[88, 215]),
+            margin=dict(l=5, r=85, t=32, b=5))
+        st.plotly_chart(fb, use_container_width=True)
+
+    with col_bear:
+        fbe = go.Figure()
+        bex = [0, 2, 4, 6, 8]
+        bey = [200, 100, 161.8, 130.9, 178.6]
+        fbe.add_trace(go.Scatter(x=bex, y=bey, mode="lines+markers+text",
+            line=dict(color="#ef5350", width=2.5),
+            marker=dict(color="#ef5350", size=9),
+            text=["X", "A", "B", "C", "D"],
+            textposition=["top right","bottom right","top center","bottom center","top center"],
+            textfont=dict(color="#fff", size=13, family="Arial Black"),
+            showlegend=False))
+        fbe.add_hrect(y0=172, y1=186, fillcolor="#ef5350", opacity=0.15, line_width=0)
+        fbe.add_annotation(x=9.1, y=179, text="PRZ\n(watch here)",
+            font=dict(color="#ef5350", size=8), showarrow=False, xanchor="left")
+        _leg_label(fbe, 0,200, 2,100, "XA — base leg", "#ef9a9a")
+        _leg_label(fbe, 2,100, 4,161.8, "AB = 61.8% of XA", "#ef9a9a")
+        _leg_label(fbe, 4,161.8, 6,130.9, "BC = 50% of AB", "#ef9a9a")
+        _leg_label(fbe, 6,130.9, 8,178.6, "CD = 127% of BC", "#ef9a9a")
+        fbe.add_annotation(x=4, y=193, text="XD/XA = 78.6%  (the PRZ key)",
+            showarrow=False, font=dict(color="#ffd54f", size=8))
+        fbe.update_layout(
+            title=dict(text="Bearish — price reverses DOWN at D", font=dict(color="#ef5350", size=11)),
+            height=300, paper_bgcolor=dark_bg, plot_bgcolor=dark_bg,
+            font=dict(color=text_c),
+            xaxis=dict(visible=False, range=[-0.5, 10.5]),
+            yaxis=dict(visible=False, range=[88, 215]),
+            margin=dict(l=5, r=85, t=32, b=5))
+        st.plotly_chart(fbe, use_container_width=True)
+
+    st.caption(
+        "Price makes a specific 5-point zigzag labeled X → A → B → C → D. "
+        "Each leg must be a precise Fibonacci fraction of the one before it (ratios labeled above). "
+        "When all ratios check out, point **D** is the **Potential Reversal Zone (PRZ)** — "
+        "the price where the whole geometric structure says 'this is where the next move starts.' "
+        "The scanner on this page does this math automatically across all recent swings."
+    )
+
+    # ── Panel 3: The connection ───────────────────────────────────────────────
+    st.markdown("#### ③ When Both Systems Agree — The High-Conviction Setup")
+
+    fig3 = go.Figure()
+    t = np.arange(0, 20)
+    bg_price = np.array([
+        155,158,162,170,175,168,160,165,158,152,
+        155,150,145,148,140,135,138,150,160,168
+    ], dtype=float)
+    fig3.add_trace(go.Scatter(x=t, y=bg_price, mode="lines",
+        line=dict(color="#546e7a", width=1.2), showlegend=False, opacity=0.5))
+
+    fig3.add_hrect(y0=133, y1=142, fillcolor="#ff9800", opacity=0.22, line_width=0)
+    fig3.add_annotation(x=19.4, y=137.5, text="Hot Zone (circles engine)",
+        font=dict(color="#ff9800", size=8), showarrow=False, xanchor="right")
+
+    xa_x = [3, 6, 9, 12, 15]
+    xa_y = [175.0, 152.0, 165.0, 148.0, 137.0]
+    fig3.add_trace(go.Scatter(x=xa_x, y=xa_y, mode="lines+markers+text",
+        line=dict(color="#4caf50", width=2.5),
+        marker=dict(color="#4caf50", size=9),
+        text=["X","A","B","C","D"],
+        textposition=["top right","bottom center","top center","bottom center","bottom center"],
+        textfont=dict(color="#fff", size=11, family="Arial Black"),
+        showlegend=True, name="XABCD Pattern"))
+
+    fig3.add_trace(go.Scatter(x=[15,16,17,18,19], y=[137,148,157,163,168],
+        mode="lines", line=dict(color="#4caf50", width=2, dash="dash"),
+        showlegend=True, name="Expected reversal"))
+
+    fig3.add_trace(go.Scatter(x=[15], y=[137], mode="markers",
+        marker=dict(color="#ffd54f", size=18, symbol="star",
+                    line=dict(color="#ff9800", width=2)),
+        showlegend=True, name="D inside Hot Zone"))
+
+    fig3.add_annotation(x=15, y=126,
+        text="D lands inside the Hot Zone\n→ Two systems agree\n→ Highest conviction",
+        showarrow=True, arrowhead=2, arrowcolor="#ffd54f", arrowwidth=1.5,
+        ax=0, ay=30,
+        font=dict(color="#ffd54f", size=9), bgcolor="#1a1f2e",
+        bordercolor="#ffd54f", borderwidth=1, borderpad=4)
+
+    fig3.update_layout(height=285, paper_bgcolor=dark_bg, plot_bgcolor=dark_bg,
+        font=dict(color=text_c, size=10),
+        xaxis=dict(visible=False, range=[-0.5, 21]),
+        yaxis=dict(visible=False, range=[118, 183]),
+        legend=dict(orientation="h", y=-0.22, x=0, font=dict(size=9)),
+        margin=dict(l=10, r=10, t=8, b=55))
+    st.plotly_chart(fig3, use_container_width=True)
+    st.caption(
+        "The Fibonacci Circle engine and the XABCD scanner know nothing about each other — "
+        "they run completely independently. "
+        "When point D of a harmonic pattern falls inside a hot zone, "
+        "two separate geometric systems are pointing at the exact same price. "
+        "That agreement is rare. When it happens, it's the highest-conviction reversal signal this page can produce."
+    )
+
+    st.markdown(
+        "> **How to use this page:** Analyze a symbol → check the **Hot Zones table** for magnetic price levels → "
+        "check the **XABCD section** for forming patterns → if a forming pattern's PRZ overlaps a hot zone, "
+        "that's your setup. Bring in SMC context (order blocks, FVGs) to confirm entry."
+    )
+
+
 def render_geo_harmonic():
     """Geometric Harmonic Arc Analysis tab — Fibonacci circle hot zones."""
     import plotly.graph_objects as go
@@ -2057,6 +2316,9 @@ def render_geo_harmonic():
         "Multi-scalar Fibonacci arcs anchored at macro ATL/ATH + local ZigZag pivots. "
         "DBSCAN-clustered intersection points reveal TradingView circle anchor coordinates."
     )
+
+    with st.expander("📚 Visual Guide — How This Works (start here)", expanded=False):
+        _render_visual_guide()
 
     # ── Controls (form — Enter key submits) ───────────────────────────────────
     _active_sym_default = st.session_state.get("active_symbol") or ""
@@ -2471,6 +2733,113 @@ def render_geo_harmonic():
             f"Date: `{_re.get('ts','')}`  \n"
             f"Price: `{_re.get('price', 0):,.4f}`"
         )
+
+    # ── XABCD Harmonic Pattern Scanner ────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### XABCD Harmonic Patterns")
+    st.caption(
+        "Gartley · Bat · Butterfly · Crab · Shark · 5-0 — scanned via percentage-reversal "
+        "ZigZag + Fibonacci ratio validation (±5% tolerance)."
+    )
+
+    with st.form("xabcd_form"):
+        xc1, xc2 = st.columns([3, 1])
+        with xc1:
+            xabcd_pct = st.slider(
+                "ZigZag reversal %", min_value=1, max_value=10, value=3,
+                help="Minimum % reversal to lock in a new swing pivot (3% = default for daily crypto)",
+            )
+        with xc2:
+            xabcd_run = st.form_submit_button("Scan Patterns", use_container_width=True)
+
+    # Auto-trigger when symbol changes (reuse the sym_used from geo-harmonic)
+    _xabcd_sym_used = st.session_state.get("xabcd_symbol_used", "")
+    _xabcd_auto     = bool(sym_used and sym_used != _xabcd_sym_used)
+
+    if xabcd_run or _xabcd_auto:
+        _scan_pct = xabcd_pct / 100.0
+        with st.spinner(f"Scanning XABCD patterns for {sym_used}…"):
+            xabcd_resp = _core_get("/xabcd", symbol=sym_used, pct=_scan_pct)
+        if xabcd_resp is None:
+            st.error("Core unavailable — start Banshee Core first.")
+        elif "error" in xabcd_resp:
+            st.error(f"XABCD scan error: {xabcd_resp['error']}")
+        else:
+            st.session_state["xabcd_result"]      = xabcd_resp
+            st.session_state["xabcd_symbol_used"] = sym_used
+            st.session_state["xabcd_pct_used"]    = _scan_pct
+
+    xabcd_result = st.session_state.get("xabcd_result")
+
+    if xabcd_result and not xabcd_result.get("error"):
+        xabcd_confirmed = xabcd_result.get("confirmed", [])
+        xabcd_forming   = xabcd_result.get("forming",   [])
+        xabcd_npiv      = xabcd_result.get("n_pivots",  0)
+        xabcd_pct_used  = st.session_state.get("xabcd_pct_used", 0.03)
+
+        st.markdown(
+            f"<small>ZigZag pivots found: **{xabcd_npiv}** &nbsp;|&nbsp; "
+            f"Confirmed: **{len(xabcd_confirmed)}** &nbsp;|&nbsp; "
+            f"Forming: **{len(xabcd_forming)}** &nbsp;|&nbsp; "
+            f"Threshold: **{xabcd_pct_used*100:.1f}%**</small>",
+            unsafe_allow_html=True,
+        )
+
+        # Forming patterns — highlighted callouts
+        if xabcd_forming:
+            st.markdown("**Forming Patterns (watch for D)**")
+            for fp in xabcd_forming:
+                dirn_icon = "▲" if fp["direction"] == "bullish" else "▼"
+                lo, hi    = fp.get("prz_lo"), fp.get("prz_hi")
+                prz_str   = (f"{lo:,.4f} – {hi:,.4f}" if lo and hi else "PRZ unknown")
+                dist      = fp.get("prz_dist_pct")
+                dist_str  = f" ({'+' if (dist or 0) >= 0 else ''}{dist:.1f}% from current)" if dist is not None else ""
+                st.info(
+                    f"{dirn_icon} **{fp['pattern']}** ({fp['direction']}) — "
+                    f"PRZ: **{prz_str}**{dist_str}  |  "
+                    f"conf={fp['confidence']:.2f}  |  C was {fp['c_bars_ago']} bars ago  \n"
+                    f"X={fp['points']['X']['price']:,.4f}  "
+                    f"A={fp['points']['A']['price']:,.4f}  "
+                    f"B={fp['points']['B']['price']:,.4f}  "
+                    f"C={fp['points']['C']['price']:,.4f}",
+                    icon="🎯",
+                )
+
+        # Confirmed patterns — table
+        if xabcd_confirmed:
+            st.markdown("**Confirmed Patterns**")
+            import pandas as _pd_xabcd
+            xabcd_rows = []
+            for cp in xabcd_confirmed:
+                d_pt  = cp["points"]["D"]
+                r     = cp["ratios"]
+                tent  = " ⏳" if cp.get("d_tentative") else ""
+                dist  = cp["dist_pct"]
+                xabcd_rows.append({
+                    "Pattern":    cp["pattern"] + tent,
+                    "Direction":  ("▲ bullish" if cp["direction"] == "bullish" else "▼ bearish"),
+                    "PRZ (D)":    f"{cp['prz']:,.4f}",
+                    "Dist %":     f"{'+' if dist >= 0 else ''}{dist:.1f}%",
+                    "Bars Ago":   cp["bars_ago"],
+                    "Confidence": cp["confidence"],
+                    "AB/XA":      r.get("ab_xa", "—"),
+                    "BC/AB":      r.get("bc_ab", "—"),
+                    "XD/XA":      r.get("xd_xa", "—"),
+                    "CD/BC":      r.get("cd_bc", "—"),
+                    "D Date":     d_pt["ts"],
+                })
+            xabcd_df = _pd_xabcd.DataFrame(xabcd_rows)
+            st.dataframe(xabcd_df, use_container_width=True, hide_index=True)
+        elif not xabcd_forming:
+            st.info(
+                "No harmonic patterns detected in the recent swing structure. "
+                "Try lowering the ZigZag % to find more pivots, or the asset "
+                "may not be in a harmonic configuration currently.",
+                icon="ℹ",
+            )
+
+    elif not xabcd_result:
+        st.caption("Click **Scan Patterns** above — or it auto-runs when you analyze a new symbol.")
 
     # ── Legend ─────────────────────────────────────────────────────────────────
     with st.expander("How to read this table", expanded=False):

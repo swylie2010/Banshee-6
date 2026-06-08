@@ -1760,7 +1760,7 @@ def route_journal_signal_log():
 @app.get("/journal/feedback-synthesis")
 def route_journal_feedback_synthesis():
     """
-    OpenClaw Step 3: AI synthesis cross-referencing judged closed trades with the
+    Autonomous Agent Step 3: AI synthesis cross-referencing judged closed trades with the
     Daily Predator briefing active on each trade's exit day.
 
     Returns a narrative identifying regime patterns, briefing-vs-outcome correlations,
@@ -1827,7 +1827,7 @@ def route_journal_feedback_synthesis():
 
         trade_blocks.append(block)
 
-    prompt = f"""OPENCLAW FEEDBACK SYNTHESIS — Trade Outcome vs Predator Intelligence
+    prompt = f"""AUTONOMOUS AGENT FEEDBACK SYNTHESIS — Trade Outcome vs Predator Intelligence
 
 Analyzing {len(judged_closed)} judged closed trades. {matched} had a Predator briefing on the exit day.
 
@@ -1854,7 +1854,7 @@ Keep your response to 400 words. Be direct. Use trade IDs and regime names to ba
         })
 
     system = (
-        "You are OpenClaw, Banshee Pro's self-correction engine. "
+        "You are Banshee Pro's Autonomous Agent, its self-correction engine. "
         "Your job is to identify systematic errors in trade signals by cross-referencing "
         "trade outcomes with macro intelligence briefings. "
         "Be specific: name regimes, cite trade IDs, and propose actionable rule changes. "
@@ -2283,54 +2283,111 @@ def get_portfolio_analysis(portfolio_id: str):
 
     syms = [h["sym"] for h in holdings]
 
+    # yfinance uses "BTC-USD" for crypto pairs, not "BTC/USD" (the app's display form)
+    def _yf_symbol(s):
+        s = str(s)
+        return s.replace("/", "-") if "/" in s else s
+
+    def _cls_for(h):
+        c = h.get("cls")
+        if c and c != "EQUITY":
+            return c
+        s = str(h["sym"])
+        return "CRYPTO" if ("/" in s or s.upper().endswith("-USD")) else (c or "EQUITY")
+
+    yf_map = {h["sym"]: _yf_symbol(h["sym"]) for h in holdings}
+
     # Fetch current prices from yfinance — include sector ETFs + SPY for blended benchmark
     sector_etfs = ["XLK", "XLF", "IBIT", "XLC", "XLE", "XLV", "XLY", "XLU", "SPY"]
-    all_syms = list(dict.fromkeys(syms + sector_etfs))  # deduplicate, preserve order
+    all_syms = list(dict.fromkeys(list(yf_map.values()) + sector_etfs))  # dedupe, preserve order
     try:
         tickers = yf.download(all_syms, period="1y", progress=False, auto_adjust=True)
         closes = tickers["Close"] if isinstance(tickers.columns, pd.MultiIndex) else tickers
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Price fetch failed: {e}"})
 
-    # Build holdings DataFrame
+    # Banshee's own radar prices assets that Yahoo can't (TAO/USD, SUI/USD are
+    # absent from yfinance — "possibly delisted"). Fetch once; use it as a price
+    # fallback here and for momentum scoring below.
+    radar_data = fetch_all_radar_for_syms(syms)
+
+    # Build holdings rows: price from yfinance close, falling back to radar price.
     holdings_rows = []
     for h in holdings:
         sym = h["sym"]
-        current_price = float(closes[sym].iloc[-1]) if sym in closes.columns else 0.0
+        yfs = yf_map[sym]
+        last = closes[yfs].iloc[-1] if yfs in closes.columns else None
+        current_price = float(last) if last is not None and not pd.isna(last) else 0.0
+        if current_price <= 0:
+            rp = radar_data.get(sym, {}).get("price")
+            if isinstance(rp, (int, float)) and rp > 0:
+                current_price = float(rp)
         holdings_rows.append({
             "sym": sym,
-            "shares": h.get("shares", 0),
+            "shares": h.get("shares", 0) or 0,
             "entry_price": h.get("entry_price"),
             "entry_date": h.get("entry_date"),
             "current_price": current_price,
-            "cls": h.get("cls", "EQUITY"),
+            "cls": _cls_for(h),
         })
-    holdings_df = pd.DataFrame(holdings_rows)
 
-    # Compute sector weights for blended benchmark
-    total_value = sum(r["shares"] * r["current_price"] for r in holdings_rows)
-    if total_value == 0:
-        return JSONResponse(status_code=400, content={"error": "Total portfolio value is zero"})
-
-    # Group by cls, use cls as sector proxy
-    sector_weights = {}
-    for r in holdings_rows:
-        w = (r["shares"] * r["current_price"]) / total_value
-        sector = r["cls"]
-        sector_weights[sector] = sector_weights.get(sector, 0) + w
+    total_value  = sum(r["shares"] * r["current_price"] for r in holdings_rows)
+    equal_weight = total_value <= 0   # no share counts entered → analyse as an equal-weight basket
 
     import portfolio_engine as pe
 
-    # Build blended benchmark
-    benchmark_returns = pe.build_blended_benchmark(sector_weights, closes)
+    # Build the REAL weighted daily-return series from the holdings' price history,
+    # so Sharpe / drawdown / alpha / beta reflect this portfolio (not a synthetic
+    # scaling of the benchmark). weight_of() returns each holding's weight.
+    def _weighted_returns(weight_of):
+        series = None
+        for r in holdings_rows:
+            w = weight_of(r)
+            if w <= 0:
+                continue
+            col = yf_map.get(r["sym"])
+            if col and col in closes.columns:
+                ret = closes[col].pct_change().fillna(0) * w
+                series = ret if series is None else series.add(ret, fill_value=0)
+        return series.dropna() if series is not None else None
 
-    # Run portfolio engine
-    engine_result = pe.run(holdings_df, benchmark_returns)
-    if "error" in engine_result:
-        return JSONResponse(status_code=400, content=engine_result)
+    if equal_weight:
+        # Equal-weight basket: 1/N each. No dollar value, but real return-based
+        # risk metrics + momentum (radar edge) + sector alignment still grade it.
+        n = len(holdings_rows) or 1
+        weights = [{
+            "sym": r["sym"], "shares": 0, "weight": round(1.0 / n, 4),
+            "value": 0, "cls": r["cls"],
+        } for r in holdings_rows]
+        sector_weights = {}
+        for r in holdings_rows:
+            sector_weights[r["cls"]] = sector_weights.get(r["cls"], 0) + (1.0 / n)
+        benchmark_returns = pe.build_blended_benchmark(sector_weights, closes)
+        port_returns = _weighted_returns(lambda r: 1.0 / n)
+        rm = pe.risk_metrics(port_returns, benchmark_returns)
+        engine_result = {
+            "sharpe": rm["sharpe"], "alpha": rm["alpha"], "beta": rm["beta"],
+            "max_drawdown": rm["max_drawdown"], "twrr": None, "total_value": 0,
+            "weights": weights, "equal_weight": True,
+        }
+    else:
+        holdings_df = pd.DataFrame(holdings_rows)
+        # Group by cls, use cls as sector proxy
+        sector_weights = {}
+        for r in holdings_rows:
+            w = (r["shares"] * r["current_price"]) / total_value
+            sector_weights[r["cls"]] = sector_weights.get(r["cls"], 0) + w
+        benchmark_returns = pe.build_blended_benchmark(sector_weights, closes)
+        port_returns = _weighted_returns(lambda r: (r["shares"] * r["current_price"]) / total_value)
+        engine_result = pe.run(holdings_df, benchmark_returns, portfolio_returns=port_returns)
+        if "error" in engine_result:
+            return JSONResponse(status_code=400, content=engine_result)
 
-    # Get radar data for momentum scoring
-    radar_data = fetch_all_radar_for_syms(syms)
+    # Normalise the engine's raw `edge` (unbounded bull−bear, can be negative) to
+    # the 0-100 scale score_portfolio expects — same mapping the UI uses.
+    for _sym, _r in radar_data.items():
+        if isinstance(_r, dict) and isinstance(_r.get("edge"), (int, float)):
+            _r["edge"] = max(0.0, min(100.0, round(50 + _r["edge"] * 2.5, 1)))
 
     # alignment_score: placeholder — no rotation-to-holding alignment computed yet
     alignment_score = 50.0
@@ -2338,10 +2395,79 @@ def get_portfolio_analysis(portfolio_id: str):
     # Score the portfolio
     scored = pe.score_portfolio(engine_result, radar_data, alignment_score)
 
+    # Cumulative return series (real weighted history) for the Returns chart
+    returns_series = []
+    if port_returns is not None and len(port_returns) > 0:
+        cum = (1 + port_returns).cumprod() - 1
+        for ts, v in cum.items():
+            try:
+                returns_series.append({
+                    "time":  pd.Timestamp(ts).strftime("%Y-%m-%d"),
+                    "value": round(float(v) * 100, 2),
+                })
+            except Exception:
+                pass
+
+    # Performance vs S&P 500 — two honest lenses:
+    #   recent  : the current basket vs SPY over the last ~21 trading days
+    #   overall : your actual return since entry vs SPY over each holding's own
+    #             holding period (needs entry_price + entry_date) — this is what
+    #             makes entry dates meaningful.
+    performance = {}
+    spy = closes["SPY"] if "SPY" in closes.columns else None
+    try:
+        if spy is not None and port_returns is not None and len(port_returns) > 5:
+            spy_ret = spy.pct_change().reindex(port_returns.index).fillna(0)
+            n = min(21, len(port_returns))
+            p = float((1 + port_returns.tail(n)).prod() - 1) * 100
+            b = float((1 + spy_ret.tail(n)).prod() - 1) * 100
+            performance["recent"] = {"days": int(n), "portfolio": round(p, 1),
+                                     "benchmark": round(b, 1), "vs_benchmark": round(p - b, 1)}
+    except Exception:
+        pass
+    try:
+        # Holdings with a usable entry price + date (tolerate bad dates per-row).
+        dated = []
+        for r in holdings_rows:
+            ep, ed = r.get("entry_price"), r.get("entry_date")
+            if not (ep and ep > 0 and ed and r["current_price"] > 0):
+                continue
+            try:
+                dated.append((r, pd.Timestamp(ed)))
+            except Exception:
+                continue
+        if dated and total_value > 0:
+            # Entries can predate the 1y window (e.g. a 2022 dip buy) — fetch SPY
+            # history back to the earliest entry so the benchmark spans the real period.
+            start = (min(ts for _, ts in dated) - pd.Timedelta(days=5)).strftime("%Y-%m-%d")
+            spy_hist = yf.download("SPY", start=start, progress=False, auto_adjust=True)
+            spy_long = spy_hist["Close"] if "Close" in spy_hist else None
+            if isinstance(spy_long, pd.DataFrame):
+                spy_long = spy_long.iloc[:, 0]
+            if spy_long is not None and len(spy_long):
+                spy_now = float(spy_long.iloc[-1])
+                ov_you = ov_spy = ov_w = 0.0
+                for r, ts in dated:
+                    after = spy_long[spy_long.index >= ts]
+                    if not len(after):
+                        continue
+                    w = (r["shares"] * r["current_price"]) / total_value
+                    ov_you += (r["current_price"] / r["entry_price"] - 1) * w
+                    ov_spy += (spy_now / float(after.iloc[0]) - 1) * w
+                    ov_w += w
+                if ov_w > 0:
+                    py, bm = ov_you / ov_w * 100, ov_spy / ov_w * 100
+                    performance["overall"] = {"portfolio": round(py, 1), "benchmark": round(bm, 1),
+                                              "vs_benchmark": round(py - bm, 1), "coverage": round(ov_w, 3)}
+    except Exception:
+        pass
+
     # Build full result
     result = {
         **engine_result,
         **scored,
+        "returns_series": returns_series,
+        "performance": performance or None,
         "portfolio_id": portfolio_id,
         "name": portfolio.get("name", ""),
     }
