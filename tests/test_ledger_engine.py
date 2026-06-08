@@ -150,3 +150,51 @@ def test_as_of_cutoff():
             _buy("NVDA", 5, 140.0, "2024-03-02")]
     state = le.replay(txns, as_of="2024-02-01")
     assert state["positions"][0]["shares"] == pytest.approx(10.0)
+
+
+# ── migration: static holdings -> opening transactions ──────────
+def test_migration_basic():
+    holdings = [
+        {"sym": "NVDA", "shares": 10, "entry_price": 120.0, "entry_date": "2024-01-15", "cls": "TECH"},
+        {"sym": "AAPL", "shares": 5,  "entry_price": 150.0, "entry_date": "2024-02-01", "cls": "TECH"},
+    ]
+    txns = le.holdings_to_transactions(holdings, today="2026-06-08")
+    assert len(txns) == 2
+    assert all(t["type"] == "BUY" and t["opening"] is True for t in txns)
+    assert txns[0]["sym"] == "NVDA" and txns[0]["price"] == 120.0 and txns[0]["date"] == "2024-01-15"
+    # replaying the migrated ledger reproduces the positions, debits no cash
+    state = le.replay(txns)
+    assert state["cash"] == pytest.approx(0.0)
+    assert {p["sym"] for p in state["positions"]} == {"NVDA", "AAPL"}
+
+
+def test_migration_missing_price_becomes_null():
+    holdings = [{"sym": "TAO/USD", "shares": 3, "entry_date": "2024-05-01"}]
+    txns = le.holdings_to_transactions(holdings, today="2026-06-08")
+    assert txns[0]["price"] is None
+    state = le.replay(txns)
+    assert state["positions"][0]["cost_basis"] == pytest.approx(0.0)
+
+
+def test_migration_missing_date_uses_earliest_then_today():
+    # one holding has a date, one doesn't -> the dateless one inherits the earliest
+    holdings = [
+        {"sym": "A", "shares": 1, "entry_price": 10.0, "entry_date": "2024-03-01"},
+        {"sym": "B", "shares": 1, "entry_price": 20.0},
+    ]
+    txns = le.holdings_to_transactions(holdings, today="2026-06-08")
+    by_sym = {t["sym"]: t for t in txns}
+    assert by_sym["B"]["date"] == "2024-03-01"   # earliest among holdings
+
+def test_migration_all_dateless_uses_today():
+    holdings = [{"sym": "A", "shares": 1, "entry_price": 10.0}]
+    txns = le.holdings_to_transactions(holdings, today="2026-06-08")
+    assert txns[0]["date"] == "2026-06-08"
+
+
+def test_migration_idempotent_via_caller_guard():
+    # holdings_to_transactions is pure; the "never re-migrate" guard lives in the
+    # caller. Running it twice on the same holdings yields identical output.
+    holdings = [{"sym": "A", "shares": 1, "entry_price": 10.0, "entry_date": "2024-01-01"}]
+    assert le.holdings_to_transactions(holdings, "2026-06-08") == \
+           le.holdings_to_transactions(holdings, "2026-06-08")

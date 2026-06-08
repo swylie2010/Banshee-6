@@ -104,3 +104,29 @@ def replay(transactions, as_of=None):
         "total_deposited": round(total_deposited, 2),
         "warnings": warnings,
     }
+
+
+def holdings_to_transactions(holdings, today):
+    """Migrate legacy static holdings to opening BUY transactions (spec §Migration).
+
+    Pure: `today` (ISO 'YYYY-MM-DD' str) is supplied by the caller so this stays
+    deterministic and testable. Each holding -> an opening BUY (sets shares +
+    basis, debits no cash). Missing entry_price -> price=None (basis unknown).
+    Missing entry_date -> earliest known entry_date, else `today`.
+    The 'never re-migrate' guard lives in the caller (presence of transactions)."""
+    holdings = holdings or []
+    dates = [h.get("entry_date") for h in holdings if h.get("entry_date")]
+    earliest = min(dates) if dates else today
+    out = []
+    for i, h in enumerate(holdings):
+        ep = h.get("entry_price")
+        out.append({
+            "id": f"tx_open_{i}",
+            "type": "BUY",
+            "sym": h.get("sym"),
+            "shares": h.get("shares", 0) or 0,
+            "price": ep if (ep is not None and ep != "") else None,
+            "date": h.get("entry_date") or earliest,
+            "opening": True,
+        })
+    return out
