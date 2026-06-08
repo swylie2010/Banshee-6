@@ -91,26 +91,31 @@ function GradeBreakdown({ analysis }) {
   const m = analysis?.momentum_score;
   const r = analysis?.risk_score;
   const hasRisk = r != null;
-  const twrr = analysis?.twrr;
 
   const rows = [
     { label: 'MOMENTUM', weight: hasRisk ? 60 : 100, score: m,
       note: 'Current technical strength/bias of your holdings (from the radar). Higher = more assets trending up now.' },
   ];
-  if (hasRisk) rows.push({ label: 'RISK-ADJUSTED RETURN', weight: 40, score: r,
-    note: "From the basket's 1-year Sharpe ratio (return vs. volatility). Negative trailing-year performance drives this toward 0 — regardless of your entry prices." });
+  if (hasRisk) rows.push({ label: 'TRAILING-YEAR RISK', weight: 40, score: r,
+    note: "How risk-efficient the basket has been over the last 12 months (return vs. volatility, from the 1-year Sharpe). A snapshot of recent behavior — not your track record." });
 
   const barColor = (s) => s == null ? pm.ink4 : s >= 70 ? pm.mint : s >= 40 ? pm.peach : pm.rose;
 
-  // Plain-English headline: name the single biggest drag (ignoring the inert placeholder).
+  // Plain-English headline: name the single biggest drag, framed as CURRENT health.
   const real = [{ label: 'momentum', s: m }].concat(hasRisk ? [{ label: 'risk', s: r }] : []).filter(x => x.s != null);
   const weak = real.length ? real.reduce((acc, x) => x.s < acc.s ? x : acc) : null;
   let headline = `This is a ${analysis?.grade ?? '—'}.`;
   if (weak) {
     headline = weak.label === 'risk'
-      ? `Why the ${analysis?.grade ?? ''}: risk-adjusted return is low (${Math.round(weak.s)}/100) — the basket's gain-vs-volatility over the past year is negative.`
+      ? `Why the ${analysis?.grade ?? ''}: the basket's recent (trailing-year) risk is weak (${Math.round(weak.s)}/100) — this grades how it's behaving now, not how your investment has done.`
       : `Why the ${analysis?.grade ?? ''}: momentum is the main drag (${Math.round(weak.s)}/100) — fewer holdings trending up right now.`;
   }
+
+  // Reconciliation: a weak grade alongside a strong real track record shouldn't read
+  // as "your investment failed" — bridge to the Performance panel.
+  const ov = analysis?.performance?.overall;
+  const showReconcile = weak && (analysis?.score == null || analysis.score < 60)
+    && ov && typeof ov.portfolio === 'number' && ov.portfolio >= 10;
 
   return (
     <div style={{ background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
@@ -133,10 +138,17 @@ function GradeBreakdown({ analysis }) {
           </div>
         ))}
       </div>
+      {showReconcile && (
+        <div style={{ marginTop: 12, fontSize: 12, color: pm.ink2, lineHeight: 1.55, fontWeight: 700 }}>
+          Graded on the last year&rsquo;s behavior — your since-entry track record is{' '}
+          <span style={{ color: ov.portfolio >= ov.benchmark ? pm.mint : pm.rose }}>
+            {ov.portfolio >= 0 ? '+' : ''}{ov.portfolio}%
+          </span>{' '}vs S&amp;P {ov.benchmark >= 0 ? '+' : ''}{ov.benchmark}%, shown in Performance below.
+        </div>
+      )}
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${pm.line}`, fontSize: 11, color: pm.ink3, lineHeight: 1.55 }}>
         <span style={{ color: pm.peach, fontWeight: 700 }}>⚠ Note: </span>
-        This grade measures the basket&rsquo;s <b style={{ color: pm.ink2 }}>trailing-year market behavior and current momentum</b> — it does <b style={{ color: pm.ink2 }}>not</b> credit your entry timing.
-        {twrr != null && ` Your +${(twrr*100).toFixed(0)}% return on entries isn't reflected here.`} Adding entry dates won&rsquo;t change it.
+        This grade is a read on the basket&rsquo;s <b style={{ color: pm.ink2 }}>current health</b> — trailing-year risk + current momentum. It is <b style={{ color: pm.ink2 }}>not</b> a verdict on your investment; your track record lives in the Performance panel.
       </div>
     </div>
   );
@@ -586,8 +598,8 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
             {twrr != null && <KPIBlock label="UNREALIZED" value={`${(twrr * 100).toFixed(1)}%`} sub="vs avg cost" />}
             {realizedPnl != null && realizedPnl !== 0 && <KPIBlock label="REALIZED" value={`${realizedPnl >= 0 ? '+' : ''}${fmtMoney(realizedPnl)}`} sub="closed P&L" />}
             {cash != null && cash !== 0 && <KPIBlock label="CASH" value={fmtMoney(cash)} />}
-            {sharpe != null && <KPIBlock label="SHARPE" value={sharpe.toFixed(2)} />}
-            {maxDd != null && <KPIBlock label="MAX DD" value={`${(maxDd * 100).toFixed(1)}%`} />}
+            {sharpe != null && <KPIBlock label="SHARPE" value={sharpe.toFixed(2)} sub="trailing 1y" />}
+            {maxDd != null && <KPIBlock label="MAX DD" value={`${(maxDd * 100).toFixed(1)}%`} sub="trailing 1y" />}
           </div>
         </div>
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
@@ -706,6 +718,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div style={cardStyle}>
           <div style={cardLabel}>CUMULATIVE RETURNS</div>
+          <div style={{ fontSize: 11, color: pm.ink3 }}>Trailing-year cumulative return</div>
           {window.LightweightCharts && analysis?.returns_series?.length
             ? <div id="portfolio-chart" style={{ height: 180 }} />
             : <div style={{ height: 180, background: pm.bg2, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

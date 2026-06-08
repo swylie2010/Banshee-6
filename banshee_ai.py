@@ -665,6 +665,10 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
     lines = [
         f"PORTFOLIO: {name}",
         f"GRADE: {grade} ({score:.0f}/100)",
+        ("NOTE: the letter grade is a read on the basket's CURRENT health "
+         "(trailing-year risk + current momentum), NOT a verdict on the user's "
+         "track record — their since-entry performance is reported separately. "
+         "Do not call a low grade a failure if the since-entry return is strong."),
         f"TOTAL VALUE: ${total_value:,.0f}",
     ]
     if total_return is not None:
