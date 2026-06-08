@@ -226,3 +226,29 @@ def test_composition_at_skips_missing_price():
                              cls_of=lambda s: "CRYPTO")
     assert comp["total_value"] == pytest.approx(0.0)
     assert comp["weights"] == {}
+
+
+# ── total_return: realized + unrealized over money-in ───────────
+def _row(entry_price, current_price, shares):
+    return {"entry_price": entry_price, "current_price": current_price, "shares": shares}
+
+def test_total_return_uses_deposited_when_present():
+    # realized 100, unrealized = (60-50)*10 = 100, deposited 1000 -> 200/1000 = 0.2
+    rows = [_row(50.0, 60.0, 10)]
+    assert le.total_return(realized_pnl=100.0, total_deposited=1000.0,
+                           holdings_rows=rows) == pytest.approx(0.2, abs=1e-4)
+
+def test_total_return_falls_back_to_cost_basis_when_no_deposits():
+    # deposited 0 -> denominator = cost basis = 50*10 = 500; (0 + 100)/500 = 0.2
+    rows = [_row(50.0, 60.0, 10)]
+    assert le.total_return(realized_pnl=0.0, total_deposited=0.0,
+                           holdings_rows=rows) == pytest.approx(0.2, abs=1e-4)
+
+def test_total_return_none_when_no_basis_and_no_deposits():
+    rows = [_row(None, 60.0, 10)]   # null-price opening lot, no basis
+    assert le.total_return(realized_pnl=0.0, total_deposited=0.0, holdings_rows=rows) is None
+
+def test_total_return_ignores_rows_without_price():
+    # only the priced row contributes; deposited 0 -> denom = 50*10 = 500
+    rows = [_row(50.0, 60.0, 10), _row(None, 0.0, 5)]
+    assert le.total_return(0.0, 0.0, rows) == pytest.approx(0.2, abs=1e-4)

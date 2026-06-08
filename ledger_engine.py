@@ -154,3 +154,23 @@ def composition_at(transactions, date, price_lookup, cls_of):
         total += cash
     weights = {k: round(v / total, 4) for k, v in buckets.items()} if total > _EPS else {}
     return {"as_of": date, "total_value": round(total, 2), "weights": weights}
+
+
+def total_return(realized_pnl, total_deposited, holdings_rows):
+    """Net return = (realized + unrealized P&L) / money actually put in (spec §3).
+
+    Denominator is `total_deposited` when deposits were logged; when it's 0
+    (migrated opening positions, no deposits) it falls back to total cost basis.
+    Rows need entry_price>0 and current_price>0 to contribute unrealized/basis;
+    rows without a usable basis are ignored. Returns None when nothing qualifies."""
+    unrealized = 0.0
+    cost_basis = 0.0
+    for r in holdings_rows:
+        ep, cp, sh = r.get("entry_price"), r.get("current_price"), r.get("shares") or 0
+        if ep and ep > 0 and cp and cp > 0:
+            unrealized += (cp - ep) * sh
+            cost_basis += ep * sh
+    denom = total_deposited if total_deposited and total_deposited > 0 else cost_basis
+    if denom <= 0:
+        return None
+    return round((realized_pnl + unrealized) / denom, 4)
