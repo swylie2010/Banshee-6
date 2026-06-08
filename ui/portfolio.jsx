@@ -553,6 +553,13 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
 
   const isEqualWeight = !!analysis?.equal_weight;
 
+  // Ledger-derived money fields (Phase 1 portfolio history)
+  const cash           = analysis?.cash;
+  const realizedPnl    = analysis?.realized_pnl;
+  const totalReturn    = analysis?.total_return;          // net return on money in
+  const ledgerWarnings = analysis?.ledger_warnings ?? [];
+  const fmtMoney = (v) => `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
   const cardStyle = { background: pm.bg1, border: `1px solid ${pm.line}`, borderRadius: 10, padding: 16 };
   const cardLabel = { fontSize: 11, color: pm.ink3, letterSpacing: 1, marginBottom: 10 };
 
@@ -574,8 +581,11 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: pm.ink, marginBottom: 6 }}>{name}</div>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            {!isEqualWeight && <KPIBlock label="TOTAL VALUE" value={`$${totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`} />}
-            {twrr != null && <KPIBlock label="TOTAL RETURN" value={`${(twrr * 100).toFixed(1)}%`} sub="since entry" />}
+            {!isEqualWeight && <KPIBlock label="TOTAL VALUE" value={fmtMoney(totalValue)} />}
+            {totalReturn != null && <KPIBlock label="NET RETURN" value={`${(totalReturn * 100).toFixed(1)}%`} sub="on money in" />}
+            {twrr != null && <KPIBlock label="UNREALIZED" value={`${(twrr * 100).toFixed(1)}%`} sub="vs avg cost" />}
+            {realizedPnl != null && realizedPnl !== 0 && <KPIBlock label="REALIZED" value={`${realizedPnl >= 0 ? '+' : ''}${fmtMoney(realizedPnl)}`} sub="closed P&L" />}
+            {cash != null && cash !== 0 && <KPIBlock label="CASH" value={fmtMoney(cash)} />}
             {sharpe != null && <KPIBlock label="SHARPE" value={sharpe.toFixed(2)} />}
             {maxDd != null && <KPIBlock label="MAX DD" value={`${(maxDd * 100).toFixed(1)}%`} />}
           </div>
@@ -587,6 +597,13 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
           </button>
         )}
       </div>
+
+      {/* ── Ledger warnings (quiet hint, e.g. negative cash) ── */}
+      {ledgerWarnings.length > 0 && (
+        <div style={{ fontSize: 11, color: pm.ink3, fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>
+          {ledgerWarnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+        </div>
+      )}
 
       {/* ── Grade breakdown (why this grade?) ── */}
       {gradeOpen && <GradeBreakdown analysis={analysis} />}
