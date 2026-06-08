@@ -2250,6 +2250,131 @@ def update_portfolio(portfolio_id: str, body: dict = Body(...)):
     return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
 
 
+def fetch_all_radar_for_syms(syms: list) -> dict:
+    """Fetch radar data for a list of symbols. Returns {sym: radar_result}."""
+    cached_macro = _load_macro_cache()
+    radar_sensors = cached_macro["mac_data"] if cached_macro and "mac_data" in cached_macro else None
+    result = {}
+    for sym in syms:
+        try:
+            tfs = _get_ohlcv_cached(sym, "swing")
+            if not tfs or "error" in tfs:
+                continue
+            r = micro_engine.run_analysis(sym, "swing", tfs, sensors=radar_sensors)
+            if "error" not in r:
+                result[sym] = r
+        except Exception:
+            pass
+    return result
+
+
+@app.get("/portfolios/{portfolio_id}/analysis")
+def get_portfolio_analysis(portfolio_id: str):
+    import yfinance as yf
+
+    data = _load_portfolios()
+    portfolio = next((p for p in data["portfolios"] if p["id"] == portfolio_id), None)
+    if not portfolio:
+        return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
+
+    holdings = portfolio.get("holdings", [])
+    if not holdings:
+        return JSONResponse(status_code=400, content={"error": "Portfolio has no holdings"})
+
+    syms = [h["sym"] for h in holdings]
+
+    # Fetch current prices from yfinance — include sector ETFs + SPY for blended benchmark
+    sector_etfs = ["XLK", "XLF", "IBIT", "XLC", "XLE", "XLV", "XLY", "XLU", "SPY"]
+    all_syms = list(dict.fromkeys(syms + sector_etfs))  # deduplicate, preserve order
+    try:
+        tickers = yf.download(all_syms, period="1y", progress=False, auto_adjust=True)
+        closes = tickers["Close"] if isinstance(tickers.columns, pd.MultiIndex) else tickers
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Price fetch failed: {e}"})
+
+    # Build holdings DataFrame
+    holdings_rows = []
+    for h in holdings:
+        sym = h["sym"]
+        current_price = float(closes[sym].iloc[-1]) if sym in closes.columns else 0.0
+        holdings_rows.append({
+            "sym": sym,
+            "shares": h.get("shares", 0),
+            "entry_price": h.get("entry_price"),
+            "entry_date": h.get("entry_date"),
+            "current_price": current_price,
+            "cls": h.get("cls", "EQUITY"),
+        })
+    holdings_df = pd.DataFrame(holdings_rows)
+
+    # Compute sector weights for blended benchmark
+    total_value = sum(r["shares"] * r["current_price"] for r in holdings_rows)
+    if total_value == 0:
+        return JSONResponse(status_code=400, content={"error": "Total portfolio value is zero"})
+
+    # Group by cls, use cls as sector proxy
+    sector_weights = {}
+    for r in holdings_rows:
+        w = (r["shares"] * r["current_price"]) / total_value
+        sector = r["cls"]
+        sector_weights[sector] = sector_weights.get(sector, 0) + w
+
+    import portfolio_engine as pe
+
+    # Build blended benchmark
+    benchmark_returns = pe.build_blended_benchmark(sector_weights, closes)
+
+    # Run portfolio engine
+    engine_result = pe.run(holdings_df, benchmark_returns)
+    if "error" in engine_result:
+        return JSONResponse(status_code=400, content=engine_result)
+
+    # Get radar data for momentum scoring
+    radar_data = fetch_all_radar_for_syms(syms)
+
+    # alignment_score: placeholder — no rotation-to-holding alignment computed yet
+    alignment_score = 50.0
+
+    # Score the portfolio
+    scored = pe.score_portfolio(engine_result, radar_data, alignment_score)
+
+    # Build full result
+    result = {
+        **engine_result,
+        **scored,
+        "portfolio_id": portfolio_id,
+        "name": portfolio.get("name", ""),
+    }
+
+    # Grade history snapshot (monthly)
+    from datetime import date
+    today = date.today()
+    month_key = today.strftime("%Y-%m")
+    grade_history = portfolio.get("grade_history", [])
+    existing = next((g for g in grade_history if g["date"].startswith(month_key)), None)
+    if existing is None:
+        grade_history.append({"date": today.strftime("%Y-%m-01"), "grade": scored["grade"], "score": scored["score"]})
+    elif scored["score"] > existing["score"]:
+        existing["grade"] = scored["grade"]
+        existing["score"] = scored["score"]
+    portfolio["grade_history"] = grade_history
+    _save_portfolios(data)
+
+    # AI commentary
+    try:
+        providers = load_providers()
+        ai_cfg = providers.get("AI_API", {})
+        if ai_cfg and ai_cfg.get("key"):
+            review = banshee_ai.portfolio_review(ai_cfg, portfolio, result)
+            result["ai_review"] = review.dict()
+        else:
+            result["ai_review"] = None
+    except Exception:
+        result["ai_review"] = None
+
+    return _sanitize(result)
+
+
 @app.post("/shutdown")
 def route_shutdown():
     """Terminate Core (and the whole Banshee stack) cleanly. Response fires before exit."""
