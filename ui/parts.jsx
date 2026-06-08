@@ -2727,8 +2727,9 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
   }
 
   function applySuggestion(rowId, suggestion) {
-    updateTxn(rowId, 'sym', String(suggestion).toUpperCase());
-    validateSym(rowId, suggestion);
+    const up = String(suggestion).toUpperCase();
+    updateTxn(rowId, 'sym', up);
+    validateSym(rowId, up);
   }
 
   // Close on Escape — but not while the add-transaction draft is open
@@ -2761,6 +2762,7 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
 
   function deleteTxn(id) {
     setTxns(prev => prev.filter(t => t.id !== id));
+    setSymState(s => { const n = { ...s }; delete n[id]; return n; });
   }
 
   function startAdd() {
