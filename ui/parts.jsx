@@ -1,6 +1,25 @@
 /* Banshee — HUD parts */
 const { useState, useEffect, useRef, useMemo } = React;
 
+/* inject shimmer + flat-dashed styles once */
+(function() {
+  if (document.getElementById('banshee-card-states')) return;
+  const s = document.createElement('style');
+  s.id = 'banshee-card-states';
+  s.textContent = `
+    @keyframes banshee-shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .b5-shimmer {
+      background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-4,var(--bg-2)) 50%, var(--bg-3) 75%);
+      background-size: 200% 100%;
+      animation: banshee-shimmer 1.6s ease-in-out infinite;
+    }
+  `;
+  document.head.appendChild(s);
+})();
+
 /* ── tiny atoms ───────────────────────────────────────────── */
 
 function Tag({ children, color = "var(--ink-3)", bg = "transparent", border, style }) {
@@ -110,6 +129,15 @@ function Spark({ candles, color = "var(--ink-2)", w = 160, h = 36, fill = true }
   );
 }
 
+function FlatDashedLine({ h = 36 }) {
+  return (
+    <svg width="100%" height={h} style={{ display: "block" }}>
+      <line x1="4" y1={h / 2} x2="96%" y2={h / 2}
+        stroke="var(--line-2)" strokeWidth="1" strokeDasharray="4 4" />
+    </svg>
+  );
+}
+
 /* ── Segmented battery / power bar (macro warning) ────────── */
 function PowerBar({ value = 0, segments = 30, height = 24, label = "MACRO WARN" }) {
   const filled = Math.round((value / 100) * segments);
@@ -177,22 +205,47 @@ function MiniBar({ value, max = 100, color = "var(--cyan)", w = 70 }) {
 
 /* ── Asset card ────────────────────────────────────────────── */
 function AssetCard({ asset, onClick, selected }) {
-  const c = verdictColors(asset.verdict);
-  const candles = useMemo(() => window.buildCandles(asset.sym, "1H", 60), [asset.sym]);
-  const up = asset.chg >= 0;
-  const loading = asset._loading;
+  const dataState = asset._dataState || "LIVE";
+  const isInit    = dataState === "INIT";
+  const isCached  = dataState === "CACHED";
+  const isLive    = dataState === "LIVE";
+
+  const c = isInit
+    ? { fg: "var(--line-2)", bg: "transparent", glow: "transparent" }
+    : verdictColors(asset.verdict);
+
+  const knownCandles = useMemo(
+    () => window.ASSETS.find(a => a.sym === asset.sym)
+      ? window.buildCandles(asset.sym, "1H", 60) : null,
+    [asset.sym]
+  );
+  const [customCandles, setCustomCandles] = useState(null);
+  useEffect(() => {
+    if (knownCandles === null && customCandles === null && !isInit) {
+      window._requestOHLCV(asset.sym, (candles) => setCustomCandles(candles));
+    }
+  }, [asset.sym, isInit]);
+
+  const candles = knownCandles ?? customCandles ?? [];
+  const up = (asset.chg ?? 0) >= 0;
+
+  /* badge label + color */
+  const badgeLabel = isInit ? "◇ INIT" : isCached ? "◈ CACHED" : "◆ LIVE";
+  const badgeColor = isInit
+    ? "var(--ink-4)"
+    : isCached
+      ? "var(--wait)"
+      : "var(--buy)";
 
   return (
     <button
       onClick={onClick}
       style={{
-        position: "relative",
-        textAlign: "left",
+        position: "relative", textAlign: "left",
         background: "linear-gradient(180deg, var(--bg-2), var(--bg-1))",
         border: `1px solid ${selected ? c.fg : "var(--line)"}`,
-        padding: 0,
-        cursor: "pointer",
-        transition: "border-color 200ms, transform 120ms",
+        padding: 0, cursor: "pointer",
+        transition: "border-color 200ms",
         boxShadow: selected ? `0 0 0 1px ${c.fg} inset, 0 0 24px ${c.glow}` : "none",
         overflow: "hidden",
       }}
@@ -202,23 +255,10 @@ function AssetCard({ asset, onClick, selected }) {
       {/* top stripe */}
       <div style={{
         height: 3, width: "100%",
-        background: loading
-          ? "linear-gradient(90deg, var(--line-2), var(--line) 60%, transparent)"
+        background: isInit
+          ? "var(--line)"
           : `linear-gradient(90deg, ${c.fg}, ${c.fg}30 60%, transparent)`,
       }} />
-
-      {loading && (
-        <div style={{
-          position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none",
-          background: "rgba(6,8,12,0.35)",
-          display: "flex", alignItems: "flex-end", justifyContent: "flex-end",
-          padding: "6px 8px",
-        }}>
-          <span className="mono blink" style={{
-            fontSize: 11, letterSpacing: "0.18em", color: "var(--ink-3)",
-          }}>◇ LOADING…</span>
-        </div>
-      )}
 
       <div style={{ padding: "10px 12px 12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
         {/* header row */}
@@ -231,71 +271,96 @@ function AssetCard({ asset, onClick, selected }) {
               <Tag border="var(--line)" style={{ fontSize: 11 }}>{asset.cls}</Tag>
             </div>
             <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {asset.name} · {asset.pair}
+              {asset.name} · {asset.pair || asset.sym}
             </div>
           </div>
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2,
-          }}>
-            <div className="num" style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", lineHeight: 1 }}>
-              {asset.price < 10 ? asset.price.toFixed(3) :
-               asset.price < 100 ? asset.price.toFixed(2) :
-               asset.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+            <div className="num" style={{ fontSize: 16, fontWeight: 600, color: isInit ? "var(--ink-4)" : "var(--ink)", lineHeight: 1 }}>
+              {isInit ? "—"
+                : asset.price < 10   ? asset.price.toFixed(3)
+                : asset.price < 100  ? asset.price.toFixed(2)
+                : asset.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </div>
-            <div className="num" style={{ fontSize: 13, color: up ? "var(--buy)" : "var(--sell)", lineHeight: 1 }}>
-              {up ? "+" : ""}{asset.chg.toFixed(2)}%
-            </div>
-            <div className="mono" style={{ fontSize: 11, letterSpacing: "0.14em", color: asset._live ? "var(--buy)" : "var(--ink-4)", lineHeight: 1 }}>
-              {asset._live ? "◆ LIVE" : `◢ ${String(Math.abs(asset.sym.charCodeAt(0) * 7 % 999)).padStart(3,"0")}`}
+            {!isInit && (
+              <div className="num" style={{ fontSize: 13, color: up ? "var(--buy)" : "var(--sell)", lineHeight: 1 }}>
+                {up ? "+" : ""}{(asset.chg ?? 0).toFixed(2)}%
+              </div>
+            )}
+            <div className="mono" style={{ fontSize: 11, letterSpacing: "0.14em", color: badgeColor, lineHeight: 1 }}>
+              {badgeLabel}
             </div>
           </div>
         </div>
 
-        {/* spark */}
+        {/* spark area */}
         <div style={{ position: "relative", height: 36 }}>
-          <Spark candles={candles} color={up ? "var(--buy)" : "var(--sell)"} w={400} h={36} />
+          {isInit
+            ? <div className="b5-shimmer" style={{ height: 36 }} />
+            : (candles.length > 0 && isLive)
+              ? <Spark candles={candles} color={up ? "var(--buy)" : "var(--sell)"} w={400} h={36} />
+              : <FlatDashedLine />
+          }
         </div>
 
         {/* verdict + edge row */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "5px 10px",
-            background: c.bg,
-            border: `1px solid ${c.fg}40`,
-            clipPath: "polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%)",
-          }}>
-            <Dot color={c.fg} blink={asset.verdict !== "WAIT"} size={5} />
-            <span className="mono" style={{
-              fontSize: 13, color: c.fg, fontWeight: 600,
-              letterSpacing: "0.16em",
-            }}>{asset.verdict}</span>
-          </div>
-          <EdgeRing value={asset.edge} size={48} color={c.fg} />
+          {isInit ? (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "5px 10px",
+              background: "transparent",
+              border: "1px dashed var(--line-2)",
+              clipPath: "polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%)",
+            }}>
+              <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.14em" }}>
+                — PENDING —
+              </span>
+            </div>
+          ) : (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "5px 10px",
+              background: c.bg,
+              border: `1px solid ${c.fg}40`,
+              clipPath: "polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%)",
+            }}>
+              <Dot color={c.fg} blink={asset.verdict !== "WAIT"} size={5} />
+              <span className="mono" style={{ fontSize: 13, color: c.fg, fontWeight: 600, letterSpacing: "0.16em" }}>
+                {asset.verdict}
+              </span>
+            </div>
+          )}
+          <EdgeRing
+            value={isInit ? 0 : asset.edge}
+            size={48}
+            color={isInit ? "var(--line-2)" : c.fg}
+            label={isInit ? "?" : "EDGE"}
+          />
         </div>
 
         {/* footer metrics */}
         <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr",
-          gap: "6px 10px",
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px",
           paddingTop: 8, borderTop: "1px dashed var(--line)",
+          opacity: isInit ? 0.4 : 1,
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <Label>BIAS</Label>
             <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", letterSpacing: "0.08em" }}>
-              {asset.bias}
+              {isInit ? "—" : asset.bias}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
             <Label>RSI</Label>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <MiniBar value={asset.rsi} color={asset.rsi > 70 ? "var(--sell)" : asset.rsi < 30 ? "var(--buy)" : "var(--cyan)"} w={42} />
-              <span className="num" style={{ fontSize: 13, color: "var(--ink-2)" }}>{asset.rsi}</span>
+              {!isInit && <MiniBar value={asset.rsi} color={asset.rsi > 70 ? "var(--sell)" : asset.rsi < 30 ? "var(--buy)" : "var(--cyan)"} w={42} />}
+              <span className="num" style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                {isInit ? "—" : asset.rsi}
+              </span>
             </div>
           </div>
         </div>
       </div>
-
     </button>
   );
 }
