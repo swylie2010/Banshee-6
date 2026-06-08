@@ -71,3 +71,70 @@ def test_update_portfolio_unknown_id_404(tmp_portfolios):
     res = bc.update_portfolio("nope", {"transactions": []})
     # JSONResponse with 404
     assert getattr(res, "status_code", None) == 404
+
+
+# ── migration persistence (Phase 2) ─────────────────────────────
+def test_ensure_transactions_migrates_holdings_once():
+    pf = {
+        "id": "pf_legacy",
+        "holdings": [{"sym": "NVDA", "shares": 10, "entry_price": 120.0,
+                      "entry_date": "2024-01-15", "cls": "TECH"}],
+    }
+    changed = bc._ensure_transactions(pf, "2026-06-08")
+    assert changed is True
+    assert len(pf["transactions"]) == 1
+    t = pf["transactions"][0]
+    assert t["type"] == "BUY" and t["sym"] == "NVDA" and t["opening"] is True
+    assert t["price"] == 120.0 and t["date"] == "2024-01-15"
+
+
+def test_ensure_transactions_idempotent():
+    pf = {
+        "id": "pf_legacy",
+        "holdings": [{"sym": "NVDA", "shares": 10, "entry_price": 120.0,
+                      "entry_date": "2024-01-15", "cls": "TECH"}],
+    }
+    bc._ensure_transactions(pf, "2026-06-08")          # first: migrates
+    snapshot = list(pf["transactions"])
+    changed = bc._ensure_transactions(pf, "2026-06-08")  # second: no-op
+    assert changed is False
+    assert pf["transactions"] == snapshot
+
+
+def test_ensure_transactions_no_holdings_no_change():
+    pf = {"id": "pf_empty"}
+    assert bc._ensure_transactions(pf, "2026-06-08") is False
+    assert "transactions" not in pf or pf["transactions"] == []
+
+
+def test_ensure_transactions_existing_txns_untouched():
+    pf = {
+        "id": "pf_new",
+        "transactions": [{"id": "tx_1", "type": "DEPOSIT", "amount": 1000.0, "date": "2024-01-01"}],
+        "holdings": [{"sym": "X", "cls": "TECH", "shares": 1}],
+    }
+    assert bc._ensure_transactions(pf, "2026-06-08") is False
+    assert len(pf["transactions"]) == 1 and pf["transactions"][0]["type"] == "DEPOSIT"
+
+
+def test_migration_write_back_round_trips(tmp_portfolios):
+    """The migrate-once helper + save persists transactions to disk."""
+    data = bc._load_portfolios()
+    data["portfolios"].append({
+        "id": "pf_legacy",
+        "name": "Legacy",
+        "holdings": [{"sym": "NVDA", "shares": 10, "entry_price": 120.0,
+                      "entry_date": "2024-01-15", "cls": "TECH"}],
+    })
+    bc._save_portfolios(data)
+
+    # simulate what the analysis endpoint does on first read
+    data = bc._load_portfolios()
+    pf = next(p for p in data["portfolios"] if p["id"] == "pf_legacy")
+    if bc._ensure_transactions(pf, "2026-06-08"):
+        bc._save_portfolios(data)
+
+    on_disk = json.loads(tmp_portfolios.read_text(encoding="utf-8"))
+    persisted = on_disk["portfolios"][0]
+    assert len(persisted["transactions"]) == 1
+    assert persisted["transactions"][0]["opening"] is True

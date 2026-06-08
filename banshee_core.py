@@ -2216,6 +2216,22 @@ def _load_portfolios() -> dict:
 def _save_portfolios(data: dict) -> None:
     _PORTFOLIO_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
+def _ensure_transactions(portfolio: dict, today: str) -> bool:
+    """Phase 2: make the persisted ledger authoritative.
+
+    If the portfolio has a non-empty `transactions` array, leave it untouched
+    (the ledger is already the source of truth). Otherwise, if it has legacy
+    `holdings`, migrate them to opening BUY transactions once. Returns True when
+    the portfolio was changed so the caller knows to persist it. Idempotent:
+    a second call is a no-op because `transactions` is now present."""
+    if portfolio.get("transactions"):
+        return False
+    holdings = portfolio.get("holdings") or []
+    if not holdings:
+        return False
+    portfolio["transactions"] = ledger_engine.holdings_to_transactions(holdings, today)
+    return True
+
 @app.get("/portfolios")
 def get_portfolios():
     return _load_portfolios()
@@ -2328,13 +2344,14 @@ def get_portfolio_analysis(portfolio_id: str):
 
     holdings = portfolio.get("holdings", [])
 
-    # Ledger is the source of truth. Phase 1 migrates ephemerally: rebuild the
-    # transaction ledger from `holdings` each request (holdings stays editable via
-    # the legacy modal). Phase 2 persists transactions when the txn editor lands.
-    txns = portfolio.get("transactions")
-    if not txns:
-        txns = ledger_engine.holdings_to_transactions(holdings, _date.today().isoformat()) \
-               if holdings else []
+    # Phase 2: the persisted transaction ledger is the source of truth. A legacy
+    # portfolio (holdings, no transactions) is migrated once and written back;
+    # thereafter `transactions` is authoritative and the holdings array is just a
+    # denormalized {sym,cls,shares} cache (its cls feeds the sector-class map below).
+    if _ensure_transactions(portfolio, _date.today().isoformat()):
+        _save_portfolios(data)
+
+    txns = portfolio.get("transactions") or []
 
     state = ledger_engine.replay(txns)
     positions = state["positions"]
