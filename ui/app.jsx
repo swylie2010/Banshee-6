@@ -488,7 +488,7 @@ function mergeRadar(base, live) {
 }
 
 /* ── Asset grid ───────────────────────────────────────────── */
-function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radarLoading, snapshot = {} }) {
+function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radarLoading, snapshot = {}, isCustomPreset = false, onPortfolioClick }) {
   const wl = watchlists.find(w => w.id === watchlist);
   const syms = wl.syms;
   const assets = syms
@@ -538,6 +538,24 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
           ))}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          {isCustomPreset && (
+            <button
+              onClick={onPortfolioClick}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(244,168,96,0.5)',
+                color: '#f4a860',
+                borderRadius: 5,
+                padding: '3px 10px',
+                fontSize: 10,
+                letterSpacing: 1,
+                cursor: 'pointer',
+                fontFamily: 'monospace',
+              }}
+            >
+              PORTFOLIO &#9658;
+            </button>
+          )}
           <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.16em" }}>SORT · EDGE↓</span>
           <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.16em" }}>VIEW · GRID</span>
         </div>
@@ -4237,11 +4255,16 @@ function App() {
     localStorage.getItem('banshee_pin_enabled') === 'true' &&
     !!localStorage.getItem('banshee_pin')
   );
+  const [portfolioSetupOpen, setPortfolioSetupOpen] = React.useState(false);
+  const [activePortfolio, setActivePortfolio] = React.useState(null);
+  const [currentPortfolioId, setCurrentPortfolioId] = React.useState(null);
 
   const watchlists = React.useMemo(
     () => [...customPresets, ...window.WATCHLISTS],
     [customPresets]
   );
+
+  const isCustomPreset = customPresets.some(p => p.id === watchlist);
 
   /* load presets from Core on mount; migrate from localStorage if Core returns empty */
   React.useEffect(() => {
@@ -4281,7 +4304,7 @@ function App() {
         if (page === "analysis") { setPage("hub"); return; }
         if (page === "hub")      { setOpenSym(null); setCustomAsset(null); setPage("grid"); return; }
         if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); return; }
-        if (["macro", "settings", "lab", "journal", "manual", "news"].includes(page)) { setPage("grid"); return; }
+        if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio"].includes(page)) { setPage("grid"); return; }
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
@@ -4363,6 +4386,18 @@ function App() {
     });
   }, []);
 
+  const handlePortfolioClick = async () => {
+    const data = await window.API.fetchPortfolios();
+    const existing = (data.portfolios || []).find(p => p.preset_id === watchlist);
+    if (existing) {
+      setActivePortfolio(existing);
+      setCurrentPortfolioId(existing.id);
+      setPage('portfolio');
+    } else {
+      setPortfolioSetupOpen(true);
+    }
+  };
+
   function openAsset(sym) {
     setFocusedSym(sym); setOpenSym(sym); setPage("hub");
   }
@@ -4373,7 +4408,7 @@ function App() {
     if (page === "analysis") setPage("hub");
     else if (page === "hub") { setOpenSym(null); setCustomAsset(null); setPage("grid"); }
     else if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); }
-    else if (["macro", "settings", "lab", "journal", "manual", "news"].includes(page)) setPage("grid");
+    else if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio"].includes(page)) setPage("grid");
   }
 
   const liveAsset = openSym
@@ -4431,6 +4466,8 @@ function App() {
           radarData={radarData}
           radarLoading={radarLoading}
           snapshot={snapshot}
+          isCustomPreset={isCustomPreset}
+          onPortfolioClick={handlePortfolioClick}
         />
         {page === "hub" && liveAsset && (
           <AssetHub
@@ -4471,6 +4508,13 @@ function App() {
         {page === "news" && (
           <NewsPage onBack={goBack} manualStories={manualStories} setManualStories={setManualStories} />
         )}
+        {page === "portfolio" && (
+          <window.PortfolioPage
+            portfolioId={currentPortfolioId}
+            portfolio={activePortfolio}
+            onBack={() => setPage('grid')}
+          />
+        )}
         {presetsOpen && (
           <window.PresetsModal
             customPresets={customPresets}
@@ -4478,6 +4522,19 @@ function App() {
             watchlist={watchlist}
             setWatchlist={setWatchlist}
             onClose={() => setPresetsOpen(false)}
+          />
+        )}
+        {portfolioSetupOpen && (
+          <window.PortfolioSetupModal
+            preset={customPresets.find(p => p.id === watchlist)}
+            existingPortfolio={null}
+            onSave={(portfolio) => {
+              setActivePortfolio(portfolio);
+              setCurrentPortfolioId(portfolio.id);
+              setPortfolioSetupOpen(false);
+              setPage('portfolio');
+            }}
+            onClose={() => setPortfolioSetupOpen(false)}
           />
         )}
       </div>
