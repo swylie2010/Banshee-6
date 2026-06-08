@@ -115,7 +115,7 @@ function GradeBreakdown({ analysis }) {
   // as "your investment failed" — bridge to the Performance panel.
   const ov = analysis?.performance?.overall;
   const showReconcile = weak && (analysis?.score == null || analysis.score < 60)
-    && ov && typeof ov.portfolio === 'number' && ov.portfolio >= 10;
+    && ov && typeof ov.portfolio === 'number' && typeof ov.benchmark === 'number' && ov.portfolio >= 10;
 
   return (
     <div style={{ background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
