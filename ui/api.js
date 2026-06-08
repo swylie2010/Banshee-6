@@ -478,7 +478,7 @@ async function fetchPortfolioAnalysis(id) {
     return await res.json();
   } catch (err) {
     console.warn("[api] fetchPortfolioAnalysis:", err.message);
-    return null;
+    return { error: err.message };
   }
 }
 

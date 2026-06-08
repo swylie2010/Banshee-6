@@ -2353,12 +2353,15 @@ def get_portfolio_analysis(portfolio_id: str):
     grade_history = portfolio.get("grade_history", [])
     existing = next((g for g in grade_history if g["date"].startswith(month_key)), None)
     if existing is None:
-        grade_history.append({"date": today.strftime("%Y-%m-01"), "grade": scored["grade"], "score": scored["score"]})
+        grade_history.append({"date": today.strftime("%Y-%m-01"), "month": today.strftime("%b '%y"), "grade": scored["grade"], "score": scored["score"]})
     elif scored["score"] > existing["score"]:
         existing["grade"] = scored["grade"]
         existing["score"] = scored["score"]
+        if "month" not in existing:
+            existing["month"] = today.strftime("%b '%y")
     portfolio["grade_history"] = grade_history
     _save_portfolios(data)
+    result["grade_history"] = grade_history
 
     # AI commentary
     try:

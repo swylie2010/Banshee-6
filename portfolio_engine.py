@@ -84,7 +84,7 @@ def run(holdings: pd.DataFrame, benchmark_returns: pd.Series) -> dict:
         "max_drawdown": max_dd,
         "twrr":         twrr,
         "total_value":  round(total_value, 2),
-        "weights":      df[["sym", "weight", "value", "cls"]].to_dict("records"),
+        "weights":      df[["sym", "shares", "weight", "value", "cls"]].to_dict("records"),
     }
 
 
