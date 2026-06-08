@@ -652,6 +652,9 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
     weights = analysis.get("weights", [])
     momentum_score = analysis.get("momentum_score", 0)
     rotation = analysis.get("rotation") or {}
+    cash = analysis.get("cash")
+    realized_pnl = analysis.get("realized_pnl")
+    total_return = analysis.get("total_return")
 
     holding_lines = []
     for w in weights:
@@ -664,8 +667,14 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
         f"GRADE: {grade} ({score:.0f}/100)",
         f"TOTAL VALUE: ${total_value:,.0f}",
     ]
+    if total_return is not None:
+        lines.append(f"NET RETURN ON MONEY IN: {total_return*100:.2f}% (realized + unrealized P&L vs capital deployed)")
     if twrr is not None:
-        lines.append(f"TOTAL RETURN SINCE ENTRY: {twrr*100:.2f}% (cumulative gain on entry prices)")
+        lines.append(f"UNREALIZED RETURN: {twrr*100:.2f}% (paper gain on current holdings vs average cost)")
+    if realized_pnl is not None and realized_pnl != 0:
+        lines.append(f"REALIZED P&L (closed positions): ${realized_pnl:,.2f}")
+    if cash is not None and cash != 0:
+        lines.append(f"CASH BALANCE: ${cash:,.2f}")
     if sharpe is not None:
         lines.append(f"SHARPE (real history): {sharpe:.2f}")
     if max_dd is not None:
