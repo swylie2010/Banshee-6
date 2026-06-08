@@ -156,7 +156,7 @@ def test_same_day_sell_before_buy_processed_in_array_order():
 def test_empty_ledger():
     state = le.replay([])
     assert state == {"positions": [], "cash": 0.0, "realized_pnl": 0.0,
-                     "total_deposited": 0.0, "warnings": []}
+                     "total_deposited": 0.0, "opening_cost_basis": 0.0, "warnings": []}
 
 def test_all_cash_ledger():
     txns = [{"type": "DEPOSIT", "amount": 1000.0, "date": "2024-01-01"}]
@@ -164,6 +164,21 @@ def test_all_cash_ledger():
     assert state["positions"] == []
     assert state["cash"] == pytest.approx(1000.0)
     assert state["total_deposited"] == pytest.approx(1000.0)
+
+
+# ── replay: opening_cost_basis (capital deployed in pre-existing holdings) ─
+def test_replay_opening_cost_basis_counts_only_opening_buys():
+    txns = [_buy("NVDA", 10, 120.0, "2024-01-15", opening=True),   # 10*120 = 1200
+            {"type": "DEPOSIT", "amount": 500.0, "date": "2024-02-01"},
+            _buy("AAPL", 5, 100.0, "2024-03-01")]                   # non-opening, excluded
+    state = le.replay(txns)
+    assert state["opening_cost_basis"] == pytest.approx(1200.0)
+    assert state["total_deposited"] == pytest.approx(500.0)
+
+def test_replay_opening_cost_basis_null_price_excluded():
+    txns = [_buy("TAO/USD", 3, None, "2024-01-15", opening=True)]
+    state = le.replay(txns)
+    assert state["opening_cost_basis"] == pytest.approx(0.0)
 
 
 # ── replay: as_of cuts off later transactions ───────────────────
@@ -274,3 +289,36 @@ def test_total_return_ignores_rows_without_price():
     # only the priced row contributes; deposited 0 -> denom = 50*10 = 500
     rows = [_row(50.0, 60.0, 10), _row(None, 0.0, 5)]
     assert le.total_return(0.0, 0.0, rows) == pytest.approx(0.2, abs=1e-4)
+
+
+# ── total_return: money-in = deposits + opening cost basis ──────
+def test_total_return_money_in_adds_opening_basis():
+    # opening positions worth 48300 at cost + a token 10 deposit; realized 1250.
+    # rows are the CURRENT positions (avg cost -> current price).
+    rows = [_row(25.0,  28.0,   1),     # +3
+            _row(40.0,  208.64, 100),   # +16864
+            _row(25.0,  35.89,  1721),  # +18741.69
+            _row(100.0, 114.19, 10)]    # +141.9
+    # unrealized ~= 35750.59; numerator = 1250 + 35750.59 = 37000.59
+    # money_in = 10 + 48300 = 48310  ->  ~0.766  (NOT 3700 from the 10-only denom)
+    r = le.total_return(realized_pnl=1250.0, total_deposited=10.0,
+                        holdings_rows=rows, opening_cost_basis=48300.0)
+    assert r == pytest.approx(0.766, abs=2e-3)
+
+def test_total_return_small_deposit_does_not_dominate_denominator():
+    # the bug: a tiny deposit used to become the entire denominator.
+    # opening basis 1000, deposit 10, unrealized (150-100)*10 = 500.
+    rows = [_row(100.0, 150.0, 10)]
+    r = le.total_return(0.0, 10.0, rows, opening_cost_basis=1000.0)
+    assert r == pytest.approx(500.0 / 1010.0, abs=1e-4)   # ~0.495, not 50.0
+
+def test_total_return_opening_basis_only_no_deposit():
+    # pure migrated book: no deposit, opening basis is the money-in baseline.
+    rows = [_row(100.0, 150.0, 10)]   # unrealized 500
+    r = le.total_return(0.0, 0.0, rows, opening_cost_basis=1000.0)
+    assert r == pytest.approx(0.5, abs=1e-4)              # 500/1000
+
+def test_total_return_default_opening_basis_preserves_old_behavior():
+    # omitting opening_cost_basis (Phase-1 callers) -> deposits/cost-basis fallback unchanged
+    rows = [_row(50.0, 60.0, 10)]
+    assert le.total_return(100.0, 1000.0, rows) == pytest.approx(0.2, abs=1e-4)

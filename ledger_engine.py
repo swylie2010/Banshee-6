@@ -24,6 +24,7 @@ def replay(transactions, as_of=None):
     cash = 0.0
     realized = 0.0
     total_deposited = 0.0
+    opening_cost_basis = 0.0   # capital deployed in pre-existing (opening) holdings
     warnings = []
     cash_negative = False
 
@@ -47,7 +48,12 @@ def replay(transactions, as_of=None):
             pos["shares"] += qty
             if price is not None:
                 pos["cost_basis"] += qty * float(price)
-            if not opening and price is not None:
+            if opening and price is not None:
+                # opening lots are money the user already had deployed before
+                # tracking began — counted toward "money in", but they don't
+                # flow through cash (no deposit was logged for them).
+                opening_cost_basis += qty * float(price)
+            elif price is not None:
                 cash -= qty * float(price)
 
         elif ttype == "SELL":
@@ -105,6 +111,7 @@ def replay(transactions, as_of=None):
         "cash": round(cash, 2),
         "realized_pnl": round(realized, 2),
         "total_deposited": round(total_deposited, 2),
+        "opening_cost_basis": round(opening_cost_basis, 2),
         "warnings": warnings,
     }
 
@@ -159,11 +166,16 @@ def composition_at(transactions, date, price_lookup, cls_of):
     return {"as_of": date, "total_value": round(total, 2), "weights": weights}
 
 
-def total_return(realized_pnl, total_deposited, holdings_rows):
+def total_return(realized_pnl, total_deposited, holdings_rows, opening_cost_basis=0.0):
     """Net return = (realized + unrealized P&L) / money actually put in (spec §3).
 
-    Denominator is `total_deposited` when deposits were logged; when it's 0
-    (migrated opening positions, no deposits) it falls back to total cost basis.
+    "Money in" is cash you deposited PLUS the cost basis of pre-existing
+    (opening) holdings — capital deployed before tracking began that never
+    flowed through the cash ledger as a deposit. Counting only deposits is wrong
+    when a large opening book sits behind a token deposit (a $10 deposit must not
+    become the whole denominator). When neither deposits nor opening basis exist
+    (e.g. all non-opening buys), it falls back to the current cost basis.
+
     Rows need entry_price>0 and current_price>0 to contribute unrealized/basis;
     rows without a usable basis are ignored. Returns None when nothing qualifies."""
     unrealized = 0.0
@@ -173,7 +185,8 @@ def total_return(realized_pnl, total_deposited, holdings_rows):
         if ep and ep > 0 and cp and cp > 0:
             unrealized += (cp - ep) * sh
             cost_basis += ep * sh
-    denom = total_deposited if total_deposited and total_deposited > 0 else cost_basis
+    money_in = (total_deposited or 0.0) + (opening_cost_basis or 0.0)
+    denom = money_in if money_in > 0 else cost_basis
     if denom <= 0:
         return None
     return round((realized_pnl + unrealized) / denom, 4)

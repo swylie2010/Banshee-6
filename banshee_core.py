@@ -2564,7 +2564,8 @@ def get_portfolio_analysis(portfolio_id: str):
         "realized_pnl":    state["realized_pnl"],
         "total_deposited": state["total_deposited"],
         "total_return":    ledger_engine.total_return(
-            state["realized_pnl"], state["total_deposited"], holdings_rows),
+            state["realized_pnl"], state["total_deposited"], holdings_rows,
+            opening_cost_basis=state.get("opening_cost_basis", 0.0)),
         "ledger_warnings": state["warnings"],
         "portfolio_id": portfolio_id,
         "name": portfolio.get("name", ""),
