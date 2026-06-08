@@ -426,4 +426,60 @@ async function fetchRotation() {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation };
+/* fetch all portfolios */
+async function fetchPortfolios() {
+  try {
+    const res = await fetch(`${API_BASE}/portfolios`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] fetchPortfolios:", err.message);
+    return null;
+  }
+}
+
+/* create a new portfolio */
+async function createPortfolio(portfolio) {
+  try {
+    const res = await fetch(`${API_BASE}/portfolios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(portfolio),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] createPortfolio:", err.message);
+    return { error: err.message };
+  }
+}
+
+/* update a portfolio by id */
+async function updatePortfolio(id, updates) {
+  try {
+    const res = await fetch(`${API_BASE}/portfolios/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] updatePortfolio:", err.message);
+    return { error: err.message };
+  }
+}
+
+/* fetch analysis for a portfolio by id */
+async function fetchPortfolioAnalysis(id) {
+  try {
+    const res = await fetch(`${API_BASE}/portfolios/${id}/analysis`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] fetchPortfolioAnalysis:", err.message);
+    return null;
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis };
