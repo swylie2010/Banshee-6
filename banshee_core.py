@@ -15,6 +15,7 @@ import os
 import sys
 import json
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -50,7 +51,7 @@ app.add_middleware(
         "http://localhost:8765",
         "http://127.0.0.1:8765",
     ],
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type"],
 )
 
@@ -2195,6 +2196,58 @@ def route_presets_save(body: dict = Body(...)):
         raise HTTPException(status_code=422, detail="presets must be a list")
     _save_presets(presets)
     return {"saved": len(presets)}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ROUTE 14 — Portfolio CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PORTFOLIO_PATH = Path(__file__).parent / "banshee_portfolio.json"
+
+def _load_portfolios() -> dict:
+    if _PORTFOLIO_PATH.exists():
+        try:
+            return json.loads(_PORTFOLIO_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"portfolios": []}
+
+def _save_portfolios(data: dict) -> None:
+    _PORTFOLIO_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+@app.get("/portfolios")
+def get_portfolios():
+    return _load_portfolios()
+
+@app.post("/portfolios")
+def create_portfolio(body: dict = Body(...)):
+    data = _load_portfolios()
+    portfolio = {
+        "id": str(uuid.uuid4()),
+        "preset_id": body.get("preset_id", ""),
+        "name": body.get("name", "My Portfolio"),
+        "thesis": body.get("thesis", ""),
+        "holdings": body.get("holdings", []),
+        "grade_history": [],
+    }
+    data["portfolios"].append(portfolio)
+    _save_portfolios(data)
+    return portfolio
+
+@app.put("/portfolios/{portfolio_id}")
+def update_portfolio(portfolio_id: str, body: dict = Body(...)):
+    data = _load_portfolios()
+    for p in data["portfolios"]:
+        if p["id"] == portfolio_id:
+            if "holdings" in body:
+                p["holdings"] = body["holdings"]
+            if "thesis" in body:
+                p["thesis"] = body["thesis"]
+            if "name" in body:
+                p["name"] = body["name"]
+            _save_portfolios(data)
+            return p
+    return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
 
 
 @app.post("/shutdown")
