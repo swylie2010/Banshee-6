@@ -2706,6 +2706,31 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
   const idRef = React.useRef(0);
   const newId = () => `tx_new_${idRef.current++}`;
 
+  // Per-row symbol validation: rowId -> { status:'checking'|'ok'|'warn', price, suggestion, reason }
+  const [symState, setSymState] = React.useState({});
+
+  async function validateSym(rowId, rawSym) {
+    const sym = (rawSym || '').trim();
+    if (!sym) {
+      setSymState(s => { const n = { ...s }; delete n[rowId]; return n; });
+      return;
+    }
+    setSymState(s => ({ ...s, [rowId]: { status: 'checking' } }));
+    const res = await window.API.resolveSymbol(sym);
+    setSymState(s => ({
+      ...s,
+      [rowId]: {
+        status: (res.resolved && !res.suggestion) ? 'ok' : 'warn',
+        price: res.price, suggestion: res.suggestion, reason: res.reason,
+      },
+    }));
+  }
+
+  function applySuggestion(rowId, suggestion) {
+    updateTxn(rowId, 'sym', String(suggestion).toUpperCase());
+    validateSym(rowId, suggestion);
+  }
+
   // Close on Escape — but not while the add-transaction draft is open
   React.useEffect(() => {
     const fn = e => {
@@ -2754,6 +2779,7 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
                   shares: d.shares, price: d.price, amount: d.amount,
                   date: d.date || todayISO(), opening: false };
     setTxns(prev => [...prev, row]);
+    if (row.type === 'BUY' || row.type === 'SELL') validateSym(row.id, row.sym);
     setDraft(null);
     // Watchlist sync: prompt only when a BUY introduces a symbol the preset
     // isn't already watching.
@@ -2957,11 +2983,31 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
                     {t.opening && <span style={S.openTag} title="opening balance">OPEN</span>}
                   </td>
                   <td style={S.td}>
-                    {isTrade(t)
-                      ? <input style={S.input} type="text" value={t.sym}
+                    {isTrade(t) ? (
+                      <div>
+                        <input style={S.input} type="text" value={t.sym}
                           onChange={e => updateTxn(t.id, 'sym', e.target.value.toUpperCase())}
+                          onBlur={e => validateSym(t.id, e.target.value)}
                           placeholder="SYM" />
-                      : <span style={S.muted}>—</span>}
+                        {symState[t.id] && symState[t.id].status !== 'checking' && (
+                          symState[t.id].status === 'ok'
+                            ? <div style={{ font: '10px/1.4 monospace', color: PM.mint, marginTop: 2 }}>✓ resolves</div>
+                            : <div style={{ font: '10px/1.4 monospace', color: PM.peach, marginTop: 2 }}>
+                                ⚠ {symState[t.id].reason === 'crypto_ambiguity'
+                                      ? `${t.sym} is a stock`
+                                      : `couldn't price ${t.sym}`}
+                                {symState[t.id].suggestion && (
+                                  <> — <span style={{ color: PM.btn, cursor: 'pointer', textDecoration: 'underline' }}
+                                         onClick={() => applySuggestion(t.id, symState[t.id].suggestion)}>
+                                       use {symState[t.id].suggestion}</span></>
+                                )}
+                              </div>
+                        )}
+                        {symState[t.id] && symState[t.id].status === 'checking' && (
+                          <div style={{ font: '10px/1.4 monospace', color: PM.ink3, marginTop: 2 }}>…</div>
+                        )}
+                      </div>
+                    ) : <span style={S.muted}>—</span>}
                   </td>
                   <td style={S.td}>
                     {isTrade(t)
