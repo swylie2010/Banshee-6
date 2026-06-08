@@ -1,0 +1,106 @@
+"""
+ledger_engine.py — Banshee 5 Portfolio Transaction Ledger
+
+Pure functions. No I/O, no network (adapter pattern — the caller fetches data
+and current prices; this engine only computes). Average-cost basis. The single
+source of truth for derived positions, cash, and realized P&L.
+
+See docs/superpowers/specs/2026-06-08-portfolio-history-design.md.
+"""
+
+_EPS = 1e-9
+
+
+def _sorted_txns(transactions):
+    """Stable sort by ISO date; same-day ties keep original array order."""
+    return sorted(enumerate(transactions or []),
+                  key=lambda it: (str(it[1].get("date", "")), it[0]))
+
+
+def replay(transactions, as_of=None):
+    """Replay the ledger in date order; return derived state as of `as_of`
+    (default: all transactions). See spec for the exact shape."""
+    positions = {}          # sym -> {"shares", "cost_basis", "first_date"}
+    cash = 0.0
+    realized = 0.0
+    total_deposited = 0.0
+    warnings = []
+    cash_negative = False
+
+    for _i, tx in _sorted_txns(transactions):
+        date = str(tx.get("date", ""))
+        if as_of is not None and date > str(as_of):
+            continue
+        ttype = str(tx.get("type", "")).upper()
+
+        if ttype == "BUY":
+            sym = tx.get("sym")
+            qty = float(tx.get("shares") or 0)
+            price = tx.get("price")
+            opening = bool(tx.get("opening"))
+            if qty <= 0 or not sym:
+                continue
+            pos = positions.get(sym)
+            if pos is None or pos["shares"] <= _EPS:
+                pos = {"shares": 0.0, "cost_basis": 0.0, "first_date": date}
+                positions[sym] = pos
+            pos["shares"] += qty
+            if price is not None:
+                pos["cost_basis"] += qty * float(price)
+            if not opening and price is not None:
+                cash -= qty * float(price)
+
+        elif ttype == "SELL":
+            sym = tx.get("sym")
+            qty = float(tx.get("shares") or 0)
+            price = float(tx.get("price") or 0)
+            pos = positions.get(sym)
+            if pos is None or pos["shares"] <= _EPS:
+                warnings.append(f"sold {sym} on {date} but no shares held — ignored")
+                continue
+            if qty > pos["shares"] + _EPS:
+                warnings.append(
+                    f"sold {qty:g} {sym} on {date} but only {pos['shares']:g} held — clamped")
+                qty = pos["shares"]
+            avg_cost = pos["cost_basis"] / pos["shares"] if pos["shares"] > _EPS else 0.0
+            realized += qty * (price - avg_cost)
+            pos["shares"] -= qty
+            pos["cost_basis"] -= qty * avg_cost
+            cash += qty * price
+            if pos["shares"] <= _EPS:
+                del positions[sym]
+
+        elif ttype == "DEPOSIT":
+            amt = float(tx.get("amount") or 0)
+            cash += amt
+            total_deposited += amt
+
+        elif ttype == "WITHDRAW":
+            cash -= float(tx.get("amount") or 0)
+
+        if cash < -_EPS and not cash_negative:
+            warnings.append(f"cash went negative on {date} — missing a deposit?")
+            cash_negative = True
+        elif cash >= -_EPS:
+            cash_negative = False
+
+    pos_out = []
+    for sym, pos in positions.items():
+        if pos["shares"] <= _EPS:
+            continue
+        avg_cost = pos["cost_basis"] / pos["shares"] if pos["shares"] > _EPS else 0.0
+        pos_out.append({
+            "sym": sym,
+            "shares": round(pos["shares"], 8),
+            "avg_cost": round(avg_cost, 4),
+            "cost_basis": round(pos["cost_basis"], 4),
+            "first_date": pos["first_date"],
+        })
+
+    return {
+        "positions": pos_out,
+        "cash": round(cash, 2),
+        "realized_pnl": round(realized, 2),
+        "total_deposited": round(total_deposited, 2),
+        "warnings": warnings,
+    }
