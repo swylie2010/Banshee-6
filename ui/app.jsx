@@ -533,7 +533,7 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
       </div>
 
       <div style={{
-        flex: 1, overflowY: "auto",
+        flex: 1, minHeight: 0, overflowY: "auto",
         padding: 14,
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
