@@ -53,6 +53,9 @@ def replay(transactions, as_of=None):
         elif ttype == "SELL":
             sym = tx.get("sym")
             qty = float(tx.get("shares") or 0)
+            if tx.get("price") is None:
+                warnings.append(f"sold {sym} on {date} with no price — ignored")
+                continue
             price = float(tx.get("price") or 0)
             pos = positions.get(sym)
             if pos is None or pos["shares"] <= _EPS:
@@ -149,7 +152,7 @@ def composition_at(transactions, date, price_lookup, cls_of):
         buckets[cls] = buckets.get(cls, 0.0) + val
         total += val
     cash = state["cash"]
-    if cash > _EPS:
+    if cash > _EPS:  # negative cash (margin / missing-deposit state) is intentionally omitted — no negative weight
         buckets["CASH"] = buckets.get("CASH", 0.0) + cash
         total += cash
     weights = {k: round(v / total, 4) for k, v in buckets.items()} if total > _EPS else {}

@@ -130,6 +130,28 @@ def test_sell_no_position_ignored():
     assert any("no shares held" in w for w in state["warnings"])
 
 
+# ── replay: SELL with null price is ignored, not a phantom loss ──
+def test_sell_null_price_ignored_not_phantom_loss():
+    txns = [_buy("X", 10, 100.0, "2024-01-01"),
+            {"type": "SELL", "sym": "X", "shares": 5, "price": None, "date": "2024-02-01"}]
+    state = le.replay(txns)
+    # the sell is ignored: position intact, no realized loss, no cash credit
+    assert state["positions"][0]["shares"] == pytest.approx(10.0)
+    assert state["realized_pnl"] == pytest.approx(0.0)
+    assert any("no price" in w for w in state["warnings"])
+
+
+# ── replay: same-day SELL before BUY keeps array order ──────────
+def test_same_day_sell_before_buy_processed_in_array_order():
+    # SELL listed before the BUY on the same day -> sell sees no shares, is ignored
+    txns = [{"type": "SELL", "sym": "X", "shares": 5, "price": 120.0, "date": "2024-01-01"},
+            _buy("X", 10, 100.0, "2024-01-01")]
+    state = le.replay(txns)
+    assert state["positions"][0]["shares"] == pytest.approx(10.0)
+    assert state["realized_pnl"] == pytest.approx(0.0)
+    assert any("no shares held" in w for w in state["warnings"])
+
+
 # ── replay: empty / single / all-cash ───────────────────────────
 def test_empty_ledger():
     state = le.replay([])
