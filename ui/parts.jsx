@@ -20,6 +20,48 @@ const { useState, useEffect, useRef, useMemo } = React;
   document.head.appendChild(s);
 })();
 
+/* ── OHLCV debounce for custom-symbol sparklines ────────────── */
+const _ohlcvCache     = {};  // { [sym]: [{c}...] | 'error' | 'loading' }
+const _ohlcvCallbacks = {};  // { [sym]: [fn, ...] }
+const _ohlcvQueue     = new Set();
+let   _ohlcvTimer     = null;
+
+window._requestOHLCV = function(sym, onResult) {
+  if (_ohlcvCache[sym] === 'loading') {
+    (_ohlcvCallbacks[sym] = _ohlcvCallbacks[sym] || []).push(onResult);
+    return;
+  }
+  if (_ohlcvCache[sym]) {
+    onResult(_ohlcvCache[sym] === 'error' ? [] : _ohlcvCache[sym]);
+    return;
+  }
+  (_ohlcvCallbacks[sym] = _ohlcvCallbacks[sym] || []).push(onResult);
+  _ohlcvQueue.add(sym);
+  clearTimeout(_ohlcvTimer);
+  _ohlcvTimer = setTimeout(async () => {
+    const syms = [..._ohlcvQueue];
+    _ohlcvQueue.clear();
+    for (let i = 0; i < syms.length; i += 4) {
+      await Promise.all(syms.slice(i, i + 4).map(async s => {
+        _ohlcvCache[s] = 'loading';
+        try {
+          const pair = window.API.coreSymbol(s);
+          const res  = await fetch(`http://localhost:8765/ohlcv?symbol=${encodeURIComponent(pair)}&mode=swing`);
+          const data = await res.json();
+          const recs = data.tfs?.['1h'];
+          _ohlcvCache[s] = recs?.length
+            ? recs.slice(-60).map(r => ({ o: r.open, h: r.high, l: r.low, c: r.close }))
+            : 'error';
+        } catch { _ohlcvCache[s] = 'error'; }
+        const cbs = _ohlcvCallbacks[s] || [];
+        delete _ohlcvCallbacks[s];
+        const result = _ohlcvCache[s] === 'error' ? [] : _ohlcvCache[s];
+        cbs.forEach(cb => cb(result));
+      }));
+    }
+  }, 300);
+};
+
 /* ── tiny atoms ───────────────────────────────────────────── */
 
 function Tag({ children, color = "var(--ink-3)", bg = "transparent", border, style }) {
