@@ -2667,12 +2667,16 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
   const [addSym,       setAddSym]       = React.useState('');
   const [addingRow,    setAddingRow]    = React.useState(false);
 
-  // Close on Escape
+  // Close on Escape — but not when the add-row input is open
   React.useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose(); };
+    const fn = e => {
+      if (e.key !== 'Escape') return;
+      if (addingRow) return; // add-row input handles its own Escape
+      onClose();
+    };
     window.addEventListener('keydown', fn);
     return () => window.removeEventListener('keydown', fn);
-  }, []);
+  }, [addingRow]);
 
   function getPrice(sym) {
     return window.RADAR_CACHE?.[sym]?.price ?? '—';
@@ -2708,16 +2712,19 @@ function PortfolioSetupModal({ preset, existingPortfolio, onSave, onClose }) {
         updatedSymbols = [...updatedSymbols, { sym, cls: 'EQUITY' }];
       }
     }
-    // Fire-and-forget: update just this preset on the backend.
-    // savePresets needs the full array (which app.jsx owns), so we call the
-    // endpoint directly here. app.jsx will reconcile on next fetchPresets load.
+    // Fetch the full presets list first, then patch the matching preset and
+    // save the entire list back. The backend's POST /presets endpoint replaces
+    // the whole file, so sending only one preset would delete all others.
     try {
-      const base = window.API_BASE ?? 'http://localhost:8765';
-      await fetch(`${base}/presets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ ...preset, symbols: updatedSymbols }]),
-      });
+      const allPresets = (await window.API.fetchPresets()) ?? [];
+      const updated = allPresets.map(p =>
+        p.id === preset.id ? { ...p, symbols: updatedSymbols } : p
+      );
+      // If this preset isn't in the list yet, append it.
+      if (!allPresets.some(p => p.id === preset.id)) {
+        updated.push({ ...preset, symbols: updatedSymbols });
+      }
+      await window.API.savePresets(updated);
     } catch (e) {
       console.warn('[PortfolioSetupModal] sync preset:', e.message);
     }
