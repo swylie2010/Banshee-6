@@ -130,3 +130,27 @@ def holdings_to_transactions(holdings, today):
             "opening": True,
         })
     return out
+
+
+def composition_at(transactions, date, price_lookup, cls_of):
+    """Asset-class weights as of `date` (spec §composition_at). Caller supplies:
+      price_lookup(sym, date) -> float|None (historical close; None => skip the position)
+      cls_of(sym)             -> str        (static asset class per symbol)
+    Cash is its own bucket so a move to cash reads as defensive."""
+    state = replay(transactions, as_of=date)
+    buckets = {}
+    total = 0.0
+    for p in state["positions"]:
+        price = price_lookup(p["sym"], date)
+        if price is None:
+            continue
+        val = p["shares"] * float(price)
+        cls = cls_of(p["sym"]) or "EQUITY"
+        buckets[cls] = buckets.get(cls, 0.0) + val
+        total += val
+    cash = state["cash"]
+    if cash > _EPS:
+        buckets["CASH"] = buckets.get("CASH", 0.0) + cash
+        total += cash
+    weights = {k: round(v / total, 4) for k, v in buckets.items()} if total > _EPS else {}
+    return {"as_of": date, "total_value": round(total, 2), "weights": weights}

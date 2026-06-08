@@ -198,3 +198,31 @@ def test_migration_idempotent_via_caller_guard():
     holdings = [{"sym": "A", "shares": 1, "entry_price": 10.0, "entry_date": "2024-01-01"}]
     assert le.holdings_to_transactions(holdings, "2026-06-08") == \
            le.holdings_to_transactions(holdings, "2026-06-08")
+
+
+# ── composition_at: class weights incl. CASH bucket ─────────────
+def test_composition_at_with_cash_bucket():
+    txns = [
+        {"type": "DEPOSIT", "amount": 1000.0, "date": "2024-01-01"},
+        _buy("NVDA", 10, 50.0, "2024-01-15"),   # -500 cash -> 500 cash
+        _buy("BTC/USD", 1, 0.0, "2024-01-20", opening=False),  # 0-price buy, no cash move
+    ]
+    prices = {"NVDA": 60.0, "BTC/USD": 500.0}
+    cls = {"NVDA": "EQUITY", "BTC/USD": "CRYPTO"}
+    comp = le.composition_at(txns, "2024-06-30",
+                             price_lookup=lambda s, d: prices.get(s),
+                             cls_of=lambda s: cls.get(s))
+    # values: NVDA 10*60=600, BTC 1*500=500, CASH 500 -> total 1600
+    assert comp["total_value"] == pytest.approx(1600.0, abs=1e-2)
+    assert comp["weights"]["EQUITY"] == pytest.approx(0.375, abs=1e-3)
+    assert comp["weights"]["CRYPTO"] == pytest.approx(0.3125, abs=1e-3)
+    assert comp["weights"]["CASH"] == pytest.approx(0.3125, abs=1e-3)
+
+
+def test_composition_at_skips_missing_price():
+    txns = [_buy("TAO/USD", 5, 100.0, "2024-01-01", opening=True)]
+    comp = le.composition_at(txns, "2024-06-30",
+                             price_lookup=lambda s, d: None,   # no price available
+                             cls_of=lambda s: "CRYPTO")
+    assert comp["total_value"] == pytest.approx(0.0)
+    assert comp["weights"] == {}
