@@ -8,6 +8,23 @@ within the context of global risk.
 
 import math
 from datetime import datetime, timezone
+from pydantic import BaseModel
+from typing import Literal, List
+
+
+class AssetNote(BaseModel):
+    sym: str
+    note: str
+    sentiment: Literal["positive", "neutral", "negative"]
+
+
+class PortfolioReview(BaseModel):
+    thought_process: str
+    overall_health_score: int        # 0-100
+    primary_observation: str
+    goals_alignment: str
+    thesis_alignment_note: str       # empty string if no thesis provided
+    asset_breakdown: List[AssetNote]
 
 
 
@@ -604,3 +621,96 @@ def smc_analysis(symbol: str,
                               ltf_tf, ltf_df, ltf_smc,
                               flat_levels=flat_levels)
     return call_ai(cfg, prompt, system_prompt_override=_SMC_SYSTEM_PROMPT)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PORTFOLIO ANALYSIS  —  AI commentary on portfolio health
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
+    thesis = portfolio.get("thesis", "")
+    holdings = portfolio.get("holdings", [])
+    name = portfolio.get("name", "Portfolio")
+    grade = analysis.get("grade", "N/A")
+    score = analysis.get("score", 0)
+    total_value = analysis.get("total_value", 0)
+    twrr = analysis.get("twrr")
+    sharpe = analysis.get("sharpe")
+    max_dd = analysis.get("max_drawdown")
+    weights = analysis.get("weights", [])
+    momentum_score = analysis.get("momentum_score", 0)
+    alignment_score = analysis.get("alignment_score", 0)
+
+    holding_lines = []
+    for w in weights:
+        holding_lines.append(
+            f"  {w['sym']}: {w['weight']*100:.1f}% weight, ${w['value']:,.0f} value"
+        )
+
+    lines = [
+        f"PORTFOLIO: {name}",
+        f"GRADE: {grade} ({score:.0f}/100)",
+        f"TOTAL VALUE: ${total_value:,.0f}",
+    ]
+    if twrr is not None:
+        lines.append(f"TWRR: {twrr*100:.2f}%")
+    if sharpe is not None:
+        lines.append(f"SHARPE: {sharpe:.2f}")
+    if max_dd is not None:
+        lines.append(f"MAX DRAWDOWN: {max_dd*100:.2f}%")
+    lines.append(f"MOMENTUM SCORE: {momentum_score:.0f}/100")
+    lines.append(f"SECTOR ALIGNMENT: {alignment_score:.0f}/100")
+    lines.append("")
+    lines.append("HOLDINGS:")
+    lines.extend(holding_lines)
+    if thesis:
+        lines.append("")
+        lines.append(f"INVESTMENT THESIS: {thesis}")
+
+    return "\n".join(lines)
+
+
+def portfolio_review(cfg: dict, portfolio: dict, analysis: dict) -> PortfolioReview:
+    prompt = build_portfolio_prompt(portfolio, analysis)
+    thesis = portfolio.get("thesis", "")
+
+    thesis_instruction = (
+        f"The investor's stated thesis is: \"{thesis}\". "
+        "Explicitly evaluate whether the current portfolio composition supports or contradicts this thesis."
+        if thesis else
+        "No investment thesis was provided. Compare performance against the blended benchmark only."
+    )
+
+    system = (
+        "You are a portfolio analyst reviewing a trading portfolio. "
+        "Be direct, specific, and honest. Avoid generic financial advice. "
+        f"{thesis_instruction} "
+        "Return your analysis as a JSON object matching the PortfolioReview schema exactly: "
+        "thought_process (your reasoning), overall_health_score (0-100 integer), "
+        "primary_observation (one sentence), goals_alignment (one sentence), "
+        "thesis_alignment_note (one sentence evaluating thesis, empty string if no thesis), "
+        "asset_breakdown (array of {sym, note, sentiment} for each holding)."
+    )
+
+    raw = call_ai(cfg, prompt, system_prompt_override=system)
+
+    # Parse JSON from response
+    import json, re
+    # Extract JSON block if wrapped in markdown
+    json_match = re.search(r'\{[\s\S]*\}', raw)
+    if json_match:
+        try:
+            data = json.loads(json_match.group())
+            return PortfolioReview(**data)
+        except Exception:
+            pass
+
+    # Fallback: return a minimal valid response
+    return PortfolioReview(
+        thought_process="Analysis unavailable.",
+        overall_health_score=analysis.get("score", 50),
+        primary_observation="Could not parse AI response.",
+        goals_alignment="Unable to assess.",
+        thesis_alignment_note="",
+        asset_breakdown=[]
+    )
