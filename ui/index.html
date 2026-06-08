@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BANSHEE — Macro Trading Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-0: #06080c;
+    --bg-1: #0a0d13;
+    --bg-2: #0d1118;
+    --bg-3: #11161e;
+    --bg-4: #161c26;
+    --line: #1c2433;
+    --line-2: #2a3346;
+    --line-hot: #38bdf8;
+    --ink: #d8e0ee;
+    --ink-2: #98a3b6;
+    --ink-3: #6c7889;
+    --ink-4: #4a5364;
+    --buy: #5eead4;
+    --buy-glow: rgba(94, 234, 212, 0.18);
+    --sell: #ef4444;
+    --sell-glow: rgba(239, 68, 68, 0.18);
+    --wait: #f59e0b;
+    --wait-glow: rgba(245, 158, 11, 0.16);
+    --cyan: #38bdf8;
+    --cyan-glow: rgba(56, 189, 248, 0.18);
+    --amber: #f59e0b;
+    --magenta: #c084fc;
+  }
+  * { box-sizing: border-box; }
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg-0);
+    color: var(--ink);
+    font-family: "Geist", "Helvetica Neue", Helvetica, sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    /* subtle scanlines */
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.012) 0,
+        rgba(255,255,255,0.012) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+      radial-gradient(1200px 600px at 70% -10%, rgba(56,189,248,0.05), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(245,158,11,0.04), transparent 60%);
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-feature-settings: "tnum"; }
+  .num { font-variant-numeric: tabular-nums; font-family: "JetBrains Mono", ui-monospace, monospace; }
+  ::selection { background: var(--cyan-glow); color: white; }
+
+  /* hairline scrollbar */
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 0; }
+  *::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+
+  /* HUD corner-cut panel — clip-path with notched corners */
+  .hud-cut {
+    clip-path: polygon(
+      10px 0, calc(100% - 10px) 0, 100% 10px,
+      100% calc(100% - 10px), calc(100% - 10px) 100%,
+      10px 100%, 0 calc(100% - 10px), 0 10px
+    );
+  }
+  .hud-cut-tr {
+    clip-path: polygon(
+      0 0, calc(100% - 14px) 0, 100% 14px,
+      100% 100%, 0 100%
+    );
+  }
+  .hud-cut-bl {
+    clip-path: polygon(
+      0 0, 100% 0, 100% 100%,
+      14px 100%, 0 calc(100% - 14px)
+    );
+  }
+
+  /* blinky dot */
+  @keyframes blink { 0%, 60% { opacity: 1; } 70%, 100% { opacity: 0.25; } }
+  .blink { animation: blink 1.4s steps(2, jump-none) infinite; }
+
+  /* marquee tape */
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .marquee-track { animation: marquee 80s linear infinite; }
+
+  /* sweep highlight on focused panel */
+  @keyframes sweep {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  button { font-family: inherit; color: inherit; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+  <script type="text/babel" src="data.js"></script>
+  <script type="text/babel" src="api.js"></script>
+  <script type="text/babel" src="parts.jsx"></script>
+  <script type="text/babel" src="portfolio.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
