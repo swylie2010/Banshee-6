@@ -2200,6 +2200,69 @@ def route_presets_save(body: dict = Body(...)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Symbol resolution — entry-time validation for the portfolio ledger editor.
+# Pure logic (price_of is injected) so it is unit-testable without the network.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _norm_symbol(raw):
+    """Trim/upcase and convert a display pair to yfinance form (BTC/USD -> BTC-USD)."""
+    s = str(raw or "").strip().upper()
+    return s.replace("/", "-") if "/" in s else s
+
+def _suggest_symbol(raw):
+    """Dot->dash class-share fix (BRK.b -> BRK-B). None if not applicable."""
+    s = str(raw or "").strip().upper()
+    return s.replace(".", "-") if "." in s else None
+
+def _crypto_pair_candidate(raw):
+    """A bare alpha ticker may be a crypto pair the user meant (BTC -> BTC/USD)."""
+    s = str(raw or "").strip().upper()
+    return f"{s}/USD" if (s.isalpha() and 2 <= len(s) <= 5) else None
+
+def _prices(sym, price_of):
+    p = price_of(_norm_symbol(sym))
+    return bool(p and p > 0)
+
+def _resolve_one(raw, price_of):
+    """Resolve a user-entered symbol. `price_of(normalized_sym) -> float|None`.
+
+    Returns a dict the UI consumes:
+      resolved   : did the normalized input price?
+      normalized : the form actually looked up (or None for empty input)
+      price      : last price if resolved, else None
+      suggestion : a DIFFERENT symbol (display form) the user likely meant, or None
+      reason     : 'unresolved' (input didn't price; suggestion is a fix that does)
+                   | 'crypto_ambiguity' (input priced as a stock but X/USD also prices)
+                   | None
+    """
+    norm = _norm_symbol(raw)
+    price = price_of(norm) if norm else None
+    resolved = bool(price and price > 0)
+    suggestion = reason = None
+
+    if not resolved:
+        # offer the first fix-up that actually prices: dot->dash, then X/USD
+        for cand in (_suggest_symbol(raw), _crypto_pair_candidate(raw)):
+            if cand and _prices(cand, price_of):
+                suggestion, reason = cand, "unresolved"
+                break
+    else:
+        # resolved, but a bare ticker that also exists as a coin is ambiguous
+        pair = _crypto_pair_candidate(raw)
+        if pair and _prices(pair, price_of):
+            suggestion, reason = pair, "crypto_ambiguity"
+
+    return {
+        "input": str(raw),
+        "resolved": resolved,
+        "normalized": norm or None,
+        "price": round(float(price), 4) if resolved else None,
+        "suggestion": suggestion,
+        "reason": reason,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ROUTE 14 — Portfolio CRUD
 # ─────────────────────────────────────────────────────────────────────────────
 
