@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import macro_engine
 import micro_engine
+import ledger_engine
 import banshee_ai
 import risk_engine
 import smc_engine
@@ -2320,25 +2321,42 @@ def get_portfolio_analysis(portfolio_id: str):
     if not portfolio:
         return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
 
+    from datetime import date as _date
+
     holdings = portfolio.get("holdings", [])
-    if not holdings:
+
+    # Ledger is the source of truth. Phase 1 migrates ephemerally: rebuild the
+    # transaction ledger from `holdings` each request (holdings stays editable via
+    # the legacy modal). Phase 2 persists transactions when the txn editor lands.
+    txns = portfolio.get("transactions")
+    if not txns:
+        txns = ledger_engine.holdings_to_transactions(holdings, _date.today().isoformat()) \
+               if holdings else []
+
+    state = ledger_engine.replay(txns)
+    positions = state["positions"]
+    if not positions:
         return JSONResponse(status_code=400, content={"error": "Portfolio has no holdings"})
 
-    syms = [h["sym"] for h in holdings]
+    # Static asset-class map from the legacy holdings (preserves sector tags like
+    # TECH/FINANCE for the blended benchmark); fall back to a crypto/equity guess.
+    cls_map = {h.get("sym"): h.get("cls") for h in holdings}
+
+    def _cls_for_sym(sym):
+        c = cls_map.get(sym)
+        if c and c != "EQUITY":
+            return c
+        s = str(sym)
+        return "CRYPTO" if ("/" in s or s.upper().endswith("-USD")) else (c or "EQUITY")
+
+    syms = [p["sym"] for p in positions]
 
     # yfinance uses "BTC-USD" for crypto pairs, not "BTC/USD" (the app's display form)
     def _yf_symbol(s):
         s = str(s)
         return s.replace("/", "-") if "/" in s else s
 
-    def _cls_for(h):
-        c = h.get("cls")
-        if c and c != "EQUITY":
-            return c
-        s = str(h["sym"])
-        return "CRYPTO" if ("/" in s or s.upper().endswith("-USD")) else (c or "EQUITY")
-
-    yf_map = {h["sym"]: _yf_symbol(h["sym"]) for h in holdings}
+    yf_map = {p["sym"]: _yf_symbol(p["sym"]) for p in positions}
 
     # Fetch current prices from yfinance — include sector ETFs + SPY for blended benchmark
     sector_etfs = ["XLK", "XLF", "IBIT", "XLC", "XLE", "XLV", "XLY", "XLU", "SPY"]
@@ -2354,10 +2372,12 @@ def get_portfolio_analysis(portfolio_id: str):
     # fallback here and for momentum scoring below.
     radar_data = fetch_all_radar_for_syms(syms)
 
-    # Build holdings rows: price from yfinance close, falling back to radar price.
+    # Build holdings rows from the replayed ledger positions: avg_cost is the
+    # entry price, first_date is the entry date. Price from yfinance close,
+    # falling back to radar price. Same shape the rest of the endpoint consumes.
     holdings_rows = []
-    for h in holdings:
-        sym = h["sym"]
+    for p in positions:
+        sym = p["sym"]
         yfs = yf_map[sym]
         last = closes[yfs].iloc[-1] if yfs in closes.columns else None
         current_price = float(last) if last is not None and not pd.isna(last) else 0.0
@@ -2365,13 +2385,14 @@ def get_portfolio_analysis(portfolio_id: str):
             rp = radar_data.get(sym, {}).get("price")
             if isinstance(rp, (int, float)) and rp > 0:
                 current_price = float(rp)
+        avg_cost = p["avg_cost"]
         holdings_rows.append({
             "sym": sym,
-            "shares": h.get("shares", 0) or 0,
-            "entry_price": h.get("entry_price"),
-            "entry_date": h.get("entry_date"),
+            "shares": p["shares"],
+            "entry_price": avg_cost if avg_cost and avg_cost > 0 else None,
+            "entry_date": p.get("first_date"),
             "current_price": current_price,
-            "cls": _cls_for(h),
+            "cls": _cls_for_sym(sym),
         })
 
     total_value  = sum(r["shares"] * r["current_price"] for r in holdings_rows)
@@ -2519,6 +2540,12 @@ def get_portfolio_analysis(portfolio_id: str):
         "returns_series": returns_series,
         "performance": performance or None,
         "rotation": rotation_note,
+        "cash":            state["cash"],
+        "realized_pnl":    state["realized_pnl"],
+        "total_deposited": state["total_deposited"],
+        "total_return":    ledger_engine.total_return(
+            state["realized_pnl"], state["total_deposited"], holdings_rows),
+        "ledger_warnings": state["warnings"],
         "portfolio_id": portfolio_id,
         "name": portfolio.get("name", ""),
     }
