@@ -2228,7 +2228,8 @@ def create_portfolio(body: dict = Body(...)):
         "preset_id": body.get("preset_id", ""),
         "name": body.get("name", "My Portfolio"),
         "thesis": body.get("thesis", ""),
-        "holdings": body.get("holdings", []),
+        "transactions": body.get("transactions", []),  # authoritative ledger
+        "holdings": body.get("holdings", []),           # derived {sym,cls,shares} snapshot
         "grade_history": [],
     }
     data["portfolios"].append(portfolio)
@@ -2240,6 +2241,8 @@ def update_portfolio(portfolio_id: str, body: dict = Body(...)):
     data = _load_portfolios()
     for p in data["portfolios"]:
         if p["id"] == portfolio_id:
+            if "transactions" in body:
+                p["transactions"] = body["transactions"]
             if "holdings" in body:
                 p["holdings"] = body["holdings"]
             if "thesis" in body:
