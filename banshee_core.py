@@ -2651,6 +2651,38 @@ def get_portfolio_analysis(portfolio_id: str):
     except Exception:
         pass
 
+    # ── Phase 3: quarterly evolution one-liner ──────────────────────────
+    # Reuse the already-fetched 1y `closes` (no new download). For a quarter-end
+    # date, take the last close on/before it; fall back to the flat radar price
+    # for coins yfinance can't price (TAO/SUI) so they stay in the basket.
+    def _price_at(sym, d):
+        col = yf_map.get(sym)
+        if col and col in closes.columns:
+            try:
+                ser = closes[col].loc[:d].dropna()
+                if len(ser):
+                    return float(ser.iloc[-1])
+            except Exception:
+                pass
+        rp = radar_data.get(sym, {}).get("price")
+        return float(rp) if isinstance(rp, (int, float)) and rp > 0 else None
+
+    today_iso = _date.today().isoformat()
+    earliest_txn = min((str(t.get("date", "")) for t in txns if t.get("date")),
+                       default=None)
+    try:
+        evolution = ledger_engine.evolution_line(
+            txns,
+            ledger_engine.prev_quarter_end(today_iso),
+            today_iso,
+            _price_at,
+            _cls_for_sym,
+            ledger_engine.has_two_quarters(earliest_txn, today_iso),
+        )
+    except Exception:
+        evolution = {"status": "unavailable", "reason": "internal",
+                     "line": ledger_engine._INTERNAL_LINE}
+
     # Build full result
     result = {
         **engine_result,
@@ -2658,6 +2690,7 @@ def get_portfolio_analysis(portfolio_id: str):
         "returns_series": returns_series,
         "performance": performance or None,
         "rotation": rotation_note,
+        "evolution":       evolution,
         "cash":            state["cash"],
         "realized_pnl":    state["realized_pnl"],
         "total_deposited": state["total_deposited"],
