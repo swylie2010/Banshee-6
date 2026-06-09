@@ -62,3 +62,80 @@ def test_realized_vol_constant_series():
 def pytest_approx(x, tol=1e-3):
     import pytest
     return pytest.approx(x, abs=tol)
+
+
+# ── Task 2: best_candidate ───────────────────────────────────────────────────
+
+def _put(strike, dte, iv, mid, oi):
+    return {"type": "put", "strike": strike, "dte": dte, "iv": iv,
+            "mid": mid, "open_interest": oi, "expiry": "2026-07-17"}
+
+def _univ(sym, spot, contracts, closes=None, failed=False, name=None):
+    return {"sym": sym, "name": name or sym, "spot": spot,
+            "contracts": contracts, "closes": closes or [100 + (i % 7) for i in range(80)],
+            "failed": failed}
+
+
+def test_best_candidate_picks_passing_put():
+    u = _univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 4000)])
+    out = oe.best_candidate([u])
+    c = out["candidate"]
+    assert c is not None
+    assert c["underlying"] == "SPY"
+    assert c["collateral"] == 9500.0
+    assert c["breakeven"] == 93.8
+    assert 0.20 <= abs(c["delta"]) <= 0.30
+    assert round(c["prob_keep"], 2) == round(1 - abs(c["delta"]), 2)
+
+
+def test_best_candidate_excludes_failing_guardrails():
+    u = _univ("SPY", 100, [
+        _put(95, 20, 0.25, 1.20, 4000),    # DTE too short
+        _put(80, 40, 0.25, 0.40, 4000),    # delta too small (far OTM)
+        _put(95, 40, 0.25, 1.20, 500),     # OI too low
+    ])
+    out = oe.best_candidate([u])
+    assert out["candidate"] is None
+    assert out["universe_scanned"] == ["SPY"]
+
+
+def test_best_candidate_ranks_by_annualized_yield():
+    lo = _put(95, 40, 0.25, 1.00, 4000)
+    hi = _put(96, 40, 0.27, 1.60, 4000)
+    out = oe.best_candidate([_univ("SPY", 100, [lo, hi])])
+    assert out["candidate"]["mid"] == 1.60
+
+
+def test_best_candidate_low_iv_warning():
+    # iv=0.25 but realized vol ~1.25 (closes swing 100/108 each bar)
+    # -> IVR estimate = 0.0 (iv below all realized readings) -> warning fires
+    u = _univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 4000)],
+              closes=[100 + 8 * (i % 2) for i in range(80)])  # high realized vol
+    out = oe.best_candidate([u])
+    assert out["candidate"] is not None
+    assert out["low_iv_warning"] is True
+
+
+def test_best_candidate_partial_failure_noted():
+    good = _univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 4000)])
+    bad = _univ("QQQ", 0, [], failed=True)
+    out = oe.best_candidate([good, bad])
+    assert out["candidate"]["underlying"] == "SPY"
+    assert out["partial_failures"] == ["QQQ"]
+    assert set(out["universe_scanned"]) == {"SPY", "QQQ"}
+
+
+def test_best_candidate_sizing_against_account():
+    u = _univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 4000)])
+    out = oe.best_candidate([u], account_size=200000)   # 9500 / 200000 = 4.75%
+    s = out["candidate"]["sizing"]
+    assert s["within_5pct"] is True
+    assert round(s["pct"], 2) == 4.75
+
+
+def test_best_candidate_translation_fields():
+    out = oe.best_candidate([_univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 4000)])])
+    t = out["translation"]
+    assert "SPY" in t["headline"]
+    assert "insurance" in t["plain_english"]
+    assert t["prob_keep"] == out["candidate"]["prob_keep"]
