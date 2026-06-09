@@ -139,3 +139,20 @@ def test_best_candidate_translation_fields():
     assert "SPY" in t["headline"]
     assert "insurance" in t["plain_english"]
     assert t["prob_keep"] == out["candidate"]["prob_keep"]
+
+
+def test_best_candidate_ivr_none_plain_text():
+    # short close history -> realized_vol_series == [] -> ivr_estimate None
+    out = oe.best_candidate([_univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 4000)], closes=[100, 101])])
+    assert out["candidate"]["ivr_estimate"] is None
+    assert out["low_iv_warning"] is False
+    ivr_row = next(g for g in out["guardrails"] if g["key"] == "ivr")
+    assert ivr_row["passed"] is True
+    assert ivr_row["value"] == "n/a"
+    assert "thin" not in ivr_row["plain"].lower()
+
+
+def test_best_candidate_oi_boundary_excludes_1000():
+    # OI must EXCEED 1000 (strict) — exactly 1000 is rejected
+    out = oe.best_candidate([_univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 1000)])])
+    assert out["candidate"] is None

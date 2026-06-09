@@ -122,7 +122,9 @@ def _guardrails(b):
          "passed": (ivr is None or ivr >= IVR_MIN),
          "plain": ("Premium is rich enough relative to recent calm to be worth the risk."
                    if (ivr is not None and ivr >= IVR_MIN)
-                   else "Premium looks thin right now (estimated) — normally the Wheel waits.")},
+                   else ("Not enough price history to estimate IV Rank — treat this as unknown."
+                         if ivr is None
+                         else "Premium looks thin right now (estimated) — normally the Wheel waits."))},
     ]
 
 
