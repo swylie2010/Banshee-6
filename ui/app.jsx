@@ -4362,6 +4362,11 @@ function App() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [page, openSym, watchlist, watchlists]);
 
+  // Entering any non-grid space (a full page OR an asset view) withdraws the
+  // sidebar so the new view gets the full screen; returning to the grid restores
+  // it. Only fires on a page CHANGE, so manual toggling within a space is respected.
+  useEffect(() => { setSidebarOpen(page === "grid"); }, [page]);
+
   /* symbol search via sidebar */
   async function handleSymbolSearch(sym) {
     /* resolve names/pairs to a known ticker first: "BITCOIN"/"BTC/USD"/"APPLE"

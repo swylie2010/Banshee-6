@@ -94,8 +94,9 @@ function OptionsPage({ onBack }) {
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 30, overflowY: 'auto',
       background: P.wall, color: P.ink, fontFamily: 'monospace', padding: '22px 28px' }}>
+      <div style={{ maxWidth: 760, margin: '0 auto' }}>
       <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-        fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: P.ink3, marginBottom: 16 }}>← BACK</button>
+        fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
       <div style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ THE WHEEL · A CALM WAY TO EARN INCOME</div>
       <div style={{ fontSize: 23, fontWeight: 700, margin: '7px 0 4px' }}>Here's one good move to consider</div>
       <div style={{ fontSize: 14, color: P.ink3, lineHeight: 1.65, maxWidth: 580, marginBottom: 18 }}>
@@ -141,6 +142,7 @@ function OptionsPage({ onBack }) {
           {data.error_note || "No Wheel-grade setups right now — premiums are too thin to justify the risk. That's the system protecting you, not a bug."}
         </div>
       )}
+      </div>
     </div>
   );
 }
