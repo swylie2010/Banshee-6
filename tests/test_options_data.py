@@ -37,3 +37,33 @@ def test_normalize_puts_skips_rows_missing_required_fields():
     ])
     out = od.normalize_puts(df, spot=100.0, expiry="2026-07-17", today="2026-06-09")
     assert len(out) == 1
+
+
+def test_normalize_puts_nan_volume_no_crash():
+    df = pd.DataFrame([
+        {"strike": 95.0, "bid": 1.10, "ask": 1.30, "impliedVolatility": 0.25,
+         "openInterest": 4000, "volume": float("nan")},
+    ])
+    out = od.normalize_puts(df, spot=100.0, expiry="2026-07-17", today="2026-06-09")
+    assert len(out) == 1
+    assert out[0]["volume"] == 0           # NaN coerced, no crash
+
+
+def test_normalize_puts_nan_iv_skipped():
+    df = pd.DataFrame([
+        {"strike": 95.0, "bid": 1.10, "ask": 1.30, "impliedVolatility": float("nan"), "openInterest": 4000},
+    ])
+    out = od.normalize_puts(df, spot=100.0, expiry="2026-07-17", today="2026-06-09")
+    assert out == []                        # NaN IV row dropped
+
+
+def test_normalize_puts_missing_iv_skipped():
+    df = pd.DataFrame([{"strike": 95.0, "bid": 1.10, "ask": 1.30, "openInterest": 4000}])
+    out = od.normalize_puts(df, spot=100.0, expiry="2026-07-17", today="2026-06-09")
+    assert out == []                        # no IV column -> dropped
+
+
+def test_dte_tolerates_time_suffix():
+    df = pd.DataFrame([{"strike": 95.0, "bid": 1.1, "ask": 1.3, "impliedVolatility": 0.25, "openInterest": 4000}])
+    out = od.normalize_puts(df, spot=100.0, expiry="2026-07-17T00:00:00", today="2026-06-09")
+    assert out[0]["dte"] == 38

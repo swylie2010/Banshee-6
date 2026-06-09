@@ -6,6 +6,7 @@ provider output into the engine's normalized contract BY MEANING (column
 aliases), so a future user-supplied API or Alpaca feed gets its own adapter
 filling the same shape. See feedback_data_source_agnostic.
 """
+import math
 from datetime import date as _date
 
 # field -> accepted source column names (by meaning, not position)
@@ -26,16 +27,37 @@ def _pick(row, names):
     return None
 
 
+def _safe_float(v, default=0.0):
+    """None / NaN / non-numeric -> default."""
+    if v is None:
+        return default
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    return default if math.isnan(f) else f
+
+
+def _safe_int(v, default=0):
+    """None / NaN / non-numeric -> default."""
+    if v is None:
+        return default
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    return default if math.isnan(f) else int(f)
+
+
 def _dte(expiry_iso, today_iso):
-    y, m, d = (int(x) for x in str(expiry_iso).split("-")[:3])
-    ty, tm, td = (int(x) for x in str(today_iso).split("-")[:3])
+    y, m, d = (int(x) for x in str(expiry_iso).split("T")[0].split("-")[:3])
+    ty, tm, td = (int(x) for x in str(today_iso).split("T")[0].split("-")[:3])
     return (_date(y, m, d) - _date(ty, tm, td)).days
 
 
 def normalize_puts(df, spot, expiry, today):
     """Map a provider puts DataFrame -> [contract...]. Rows missing a strike or
     IV are skipped (can't be evaluated). Pure: `today` supplied by the caller."""
-    import math
     dte = _dte(expiry, today)
     out = []
     for _, r in df.iterrows():
@@ -49,16 +71,16 @@ def normalize_puts(df, spot, expiry, today):
                 continue
         except TypeError:
             pass
-        bid = _pick(row, _ALIASES["bid"]) or 0
-        ask = _pick(row, _ALIASES["ask"]) or 0
-        mid = round((float(bid) + float(ask)) / 2.0, 4) if (bid or ask) else 0.0
-        oi = _pick(row, _ALIASES["open_interest"]) or 0
-        vol = _pick(row, _ALIASES["volume"]) or 0
+        bid = _safe_float(_pick(row, _ALIASES["bid"]))
+        ask = _safe_float(_pick(row, _ALIASES["ask"]))
+        mid = round((bid + ask) / 2.0, 4) if (bid > 0 or ask > 0) else 0.0
+        oi = _safe_int(_pick(row, _ALIASES["open_interest"]))
+        vol = _safe_int(_pick(row, _ALIASES["volume"]))
         out.append({
             "type": "put", "underlying": None, "spot": spot,
             "strike": float(strike), "expiry": str(expiry), "dte": dte,
-            "bid": float(bid), "ask": float(ask), "mid": mid,
-            "iv": float(iv), "open_interest": int(oi), "volume": int(vol),
+            "bid": bid, "ask": ask, "mid": mid,
+            "iv": float(iv), "open_interest": oi, "volume": vol,
         })
     return out
 
@@ -80,8 +102,11 @@ def fetch_chain(symbol, today=None, max_dte=55):
     for expiry in (tk.options or []):
         if _dte(expiry, today) > max_dte:
             continue
-        oc = tk.option_chain(expiry)
-        contracts.extend(normalize_puts(oc.puts, spot, expiry, today))
+        try:
+            oc = tk.option_chain(expiry)
+            contracts.extend(normalize_puts(oc.puts, spot, expiry, today))
+        except Exception:
+            continue
     return contracts, {"sym": symbol, "spot": spot, "as_of": today}
 
 
