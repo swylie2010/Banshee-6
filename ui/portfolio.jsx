@@ -463,6 +463,33 @@ function MarketRotation({ rotation }) {
   );
 }
 
+/* ── EvolutionLine — quarter-over-quarter composition shift, in one line.
+   Renders for EVERY status (including failures) — a failure is a visible,
+   explained state, never a blank. Only an entirely absent `evolution` field
+   (old cached payloads) renders nothing. See feedback_actionable_errors. ── */
+function EvolutionLine({ evolution }) {
+  const pm = usePalette();
+  if (!evolution || !evolution.line) return null;
+  const status = evolution.status;
+  const tone = status === 'shift' ? pm.ink
+             : status === 'unavailable' ? pm.peach
+             : pm.ink3;
+  const icon = status === 'shift' ? '↻'
+             : status === 'unavailable' ? '◌'
+             : '·';
+  const italic = status === 'steady' || status === 'insufficient';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8,
+      background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8,
+      padding: '8px 14px', marginBottom: 12 }}>
+      <span style={{ color: tone, flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontSize: 12, color: tone, lineHeight: 1.5,
+        fontStyle: italic ? 'italic' : 'normal',
+        fontWeight: status === 'shift' ? 600 : 400 }}>{evolution.line}</span>
+    </div>
+  );
+}
+
 function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEditHoldings }) {
   const [analysis, setAnalysis] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -609,6 +636,9 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
           </button>
         )}
       </div>
+
+      {/* ── Quarterly evolution one-liner (top of analysis) ── */}
+      <EvolutionLine evolution={analysis?.evolution} />
 
       {/* ── Ledger warnings (quiet hint, e.g. negative cash) ── */}
       {ledgerWarnings.length > 0 && (
