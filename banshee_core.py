@@ -2659,7 +2659,7 @@ def get_portfolio_analysis(portfolio_id: str):
         col = yf_map.get(sym)
         if col and col in closes.columns:
             try:
-                ser = closes[col].loc[:d].dropna()
+                ser = closes[col].loc[:pd.Timestamp(d)].dropna()
                 if len(ser):
                     return float(ser.iloc[-1])
             except Exception:
