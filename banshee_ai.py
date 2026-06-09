@@ -688,6 +688,9 @@ def build_portfolio_prompt(portfolio: dict, analysis: dict) -> str:
         lines.append(f"MARKET ROTATION (context only, not part of the grade): {rotation['summary']}")
         if rotation.get("interpretation"):
             lines.append(f"  macro read: {rotation['interpretation']}")
+    evolution = analysis.get("evolution") or {}
+    if evolution.get("status") in ("shift", "steady") and evolution.get("line"):
+        lines.append(f"PORTFOLIO EVOLUTION (quarter-over-quarter): {evolution['line']}")
     lines.append("")
     lines.append("HOLDINGS:")
     lines.extend(holding_lines)
