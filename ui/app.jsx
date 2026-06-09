@@ -245,7 +245,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
-function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, currentPage, onPresetsOpen }) {
+function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, onOptions, currentPage, onPresetsOpen }) {
   const [searchVal, setSearchVal] = useState("");
   const wl = watchlists.find(w => w.id === watchlist);
   const symAssets = wl.syms
@@ -415,12 +415,13 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
             { id: "news",     label: "PREDATOR NEWS",  icon: "◉" },
             { id: "risk",     label: "RISK DESK",      icon: "⚖" },
             { id: "journal",  label: "TRADE JOURNAL",  icon: "◎" },
+            { id: "options",  label: "OPTIONS",        icon: "◆" },
             { id: "lab",      label: "SIGNAL LAB",     icon: "◬" },
             { id: "settings", label: "SETTINGS",       icon: "⚙" },
             { id: "manual",   label: "MANUAL",         icon: "◌" },
           ].map(({ id, label, icon }) => {
             const active = currentPage === id;
-            const HANDLERS = { macro: onMacro, news: onNews, lab: onLab, risk: onRisk, journal: onJournal, settings: onSettings, manual: onManual };
+            const HANDLERS = { macro: onMacro, news: onNews, lab: onLab, risk: onRisk, journal: onJournal, settings: onSettings, manual: onManual, options: onOptions };
             const handler = HANDLERS[id];
             return (
               <button key={id} onClick={handler}
@@ -4341,7 +4342,7 @@ function App() {
         if (page === "analysis") { setPage("hub"); return; }
         if (page === "hub")      { setOpenSym(null); setCustomAsset(null); setPage("grid"); return; }
         if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); return; }
-        if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio"].includes(page)) { setPage("grid"); return; }
+        if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio", "options"].includes(page)) { setPage("grid"); return; }
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
@@ -4488,7 +4489,7 @@ function App() {
     if (page === "analysis") setPage("hub");
     else if (page === "hub") { setOpenSym(null); setCustomAsset(null); setPage("grid"); }
     else if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); }
-    else if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio"].includes(page)) setPage("grid");
+    else if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio", "options"].includes(page)) setPage("grid");
   }
 
   const liveAsset = openSym
@@ -4535,6 +4536,7 @@ function App() {
           onRisk={() => handleGoRisk(false)}
           onJournal={() => setPage("journal")}
           onManual={() => setPage("manual")}
+          onOptions={() => setPage("options")}
           currentPage={page}
           onPresetsOpen={() => setPresetsOpen(true)}
         />
@@ -4596,6 +4598,9 @@ function App() {
             onBack={() => setPage('grid')}
             onEditHoldings={() => setPortfolioSetupOpen(true)}
           />
+        )}
+        {page === "options" && (
+          <window.OptionsPage onBack={() => setPage("grid")} />
         )}
         {presetsOpen && (
           <window.PresetsModal
