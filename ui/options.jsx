@@ -92,7 +92,8 @@ function OptionsPage({ onBack }) {
 
   const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
   return (
-    <div style={{ background: P.wall, color: P.ink, minHeight: '100vh', fontFamily: 'monospace', padding: '22px 28px' }}>
+    <div style={{ position: 'absolute', inset: 0, zIndex: 30, overflowY: 'auto',
+      background: P.wall, color: P.ink, fontFamily: 'monospace', padding: '22px 28px' }}>
       <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
         fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: P.ink3, marginBottom: 16 }}>← BACK</button>
       <div style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ THE WHEEL · A CALM WAY TO EARN INCOME</div>

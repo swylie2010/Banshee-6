@@ -267,7 +267,7 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
       display: "flex", flexDirection: "column",
       position: "relative", zIndex: 35,
     }}>
-      <div style={{ minWidth: 240, display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ minWidth: 240, display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
         {/* symbol search */}
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
           <window.Label style={{ marginBottom: 6 }}>LOOK UP SYMBOL</window.Label>
@@ -408,7 +408,7 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
         </div>
 
         {/* nav buttons */}
-        <div style={{ borderTop: "1px solid var(--line)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ borderTop: "1px solid var(--line)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
           <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.18em", padding: "2px 4px 6px 4px" }}>NAVIGATE</div>
           {[
             { id: "macro",    label: "MACRO WEATHER",  icon: "◈" },
@@ -449,6 +449,7 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
           padding: "10px 14px",
           borderTop: "1px solid var(--line)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
+          flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <window.Dot color="var(--buy)" blink />
