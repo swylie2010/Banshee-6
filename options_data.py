@@ -1,0 +1,92 @@
+"""
+options_data.py — Banshee Options data adapter (Phase 1).
+
+The ONLY options code that touches a specific provider (yfinance). It maps raw
+provider output into the engine's normalized contract BY MEANING (column
+aliases), so a future user-supplied API or Alpaca feed gets its own adapter
+filling the same shape. See feedback_data_source_agnostic.
+"""
+from datetime import date as _date
+
+# field -> accepted source column names (by meaning, not position)
+_ALIASES = {
+    "strike": ["strike"],
+    "bid": ["bid"],
+    "ask": ["ask"],
+    "iv": ["impliedVolatility", "implied_vol", "iv"],
+    "open_interest": ["openInterest", "open_interest", "oi"],
+    "volume": ["volume", "vol"],
+}
+
+
+def _pick(row, names):
+    for n in names:
+        if n in row and row[n] is not None:
+            return row[n]
+    return None
+
+
+def _dte(expiry_iso, today_iso):
+    y, m, d = (int(x) for x in str(expiry_iso).split("-")[:3])
+    ty, tm, td = (int(x) for x in str(today_iso).split("-")[:3])
+    return (_date(y, m, d) - _date(ty, tm, td)).days
+
+
+def normalize_puts(df, spot, expiry, today):
+    """Map a provider puts DataFrame -> [contract...]. Rows missing a strike or
+    IV are skipped (can't be evaluated). Pure: `today` supplied by the caller."""
+    import math
+    dte = _dte(expiry, today)
+    out = []
+    for _, r in df.iterrows():
+        row = r.to_dict()
+        strike = _pick(row, _ALIASES["strike"])
+        iv = _pick(row, _ALIASES["iv"])
+        if strike is None or iv is None:
+            continue
+        try:
+            if isinstance(iv, float) and math.isnan(iv):
+                continue
+        except TypeError:
+            pass
+        bid = _pick(row, _ALIASES["bid"]) or 0
+        ask = _pick(row, _ALIASES["ask"]) or 0
+        mid = round((float(bid) + float(ask)) / 2.0, 4) if (bid or ask) else 0.0
+        oi = _pick(row, _ALIASES["open_interest"]) or 0
+        vol = _pick(row, _ALIASES["volume"]) or 0
+        out.append({
+            "type": "put", "underlying": None, "spot": spot,
+            "strike": float(strike), "expiry": str(expiry), "dte": dte,
+            "bid": float(bid), "ask": float(ask), "mid": mid,
+            "iv": float(iv), "open_interest": int(oi), "volume": int(vol),
+        })
+    return out
+
+
+def fetch_chain(symbol, today=None, max_dte=55):
+    """yfinance I/O: fetch put contracts for `symbol` within max_dte days.
+    Returns (contracts, meta). Network — not exercised in unit tests."""
+    import yfinance as yf
+    today = today or _date.today().isoformat()
+    tk = yf.Ticker(symbol)
+    spot = None
+    try:
+        spot = float(tk.fast_info["lastPrice"])
+    except Exception:
+        hist = tk.history(period="5d")
+        if len(hist):
+            spot = float(hist["Close"].iloc[-1])
+    contracts = []
+    for expiry in (tk.options or []):
+        if _dte(expiry, today) > max_dte:
+            continue
+        oc = tk.option_chain(expiry)
+        contracts.extend(normalize_puts(oc.puts, spot, expiry, today))
+    return contracts, {"sym": symbol, "spot": spot, "as_of": today}
+
+
+def fetch_closes(symbol, period="1y"):
+    """yfinance I/O: trailing daily closes for the IVR realized-vol estimate."""
+    import yfinance as yf
+    hist = yf.Ticker(symbol).history(period=period)
+    return [float(x) for x in hist["Close"].tolist()] if len(hist) else []
