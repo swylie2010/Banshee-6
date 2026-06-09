@@ -450,3 +450,31 @@ def test_evolution_one_unpriceable_coin_others_fine():
     r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
     assert r["status"] != "unavailable"
     assert "CRYPTO" in r["to"]
+
+
+def test_evolution_two_ups():
+    # EQUITY and CRYPTO both rise >=10pp; the offset is spread across 3 small classes.
+    cm = _cls({"AAPL": "EQUITY", "BTC/USD": "CRYPTO",
+               "GLD": "COMMODITY", "TLT": "BONDS", "VNQ": "REIT"})
+    txns = [_open("AAPL"), _open("BTC/USD"), _open("GLD"), _open("TLT"), _open("VNQ")]
+    # prev: all equal (20% each). curr: AAPL & BTC jump, the other three sag a little each.
+    lookup = _drift({"AAPL": 100, "BTC/USD": 100, "GLD": 100, "TLT": 100, "VNQ": 100},
+                    {"AAPL": 220, "BTC/USD": 200, "GLD": 70, "TLT": 70, "VNQ": 70})
+    r = le.evolution_line(txns, QP, QC, lookup, cm, True)
+    assert r["status"] == "shift"
+    assert "shifted more into" in r["line"]
+    assert r["line"].count("+") == 2     # both movers shown as increases
+    assert "-" not in r["line"]
+
+
+def test_evolution_two_downs():
+    # EQUITY and CRYPTO both fall >=10pp; three small classes each rise a little.
+    cm = _cls({"AAPL": "EQUITY", "BTC/USD": "CRYPTO",
+               "GLD": "COMMODITY", "TLT": "BONDS", "VNQ": "REIT"})
+    txns = [_open("AAPL"), _open("BTC/USD"), _open("GLD"), _open("TLT"), _open("VNQ")]
+    lookup = _drift({"AAPL": 220, "BTC/USD": 200, "GLD": 70, "TLT": 70, "VNQ": 70},
+                    {"AAPL": 100, "BTC/USD": 100, "GLD": 100, "TLT": 100, "VNQ": 100})
+    r = le.evolution_line(txns, QP, QC, lookup, cm, True)
+    assert r["status"] == "shift"
+    assert "trimmed" in r["line"]
+    assert r["line"].count("-") == 2     # both movers shown as decreases

@@ -225,6 +225,7 @@ def _build_sentence(qualifying):
 
 
 def _price_gap_line(transactions, date, price_lookup):
+    """Human-readable fallback when a quarter snapshot has no priceable data."""
     state = replay(transactions, as_of=date)
     missing = [p["sym"] for p in state["positions"]
                if price_lookup(p["sym"], date) is None]
