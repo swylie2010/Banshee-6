@@ -41,7 +41,9 @@ def annualized_yield(mid, strike, dte):
 
 
 def breakeven(strike, mid):
-    """CSP breakeven = strike minus premium collected."""
+    """CSP breakeven = strike minus premium collected. None on missing inputs."""
+    if strike is None or mid is None:
+        return None
     return round(strike - mid, 2)
 
 

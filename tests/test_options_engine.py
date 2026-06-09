@@ -45,6 +45,19 @@ def test_realized_vol_series_shape():
     assert all(v >= 0 for v in rv)
 
 
+def test_put_delta_monotonic():
+    # |put delta| grows as strike rises (OTM -> ATM)
+    d80 = oe.put_delta(100, 80, 40, 0.25)
+    d90 = oe.put_delta(100, 90, 40, 0.25)
+    d100 = oe.put_delta(100, 100, 40, 0.25)
+    assert abs(d80) < abs(d90) < abs(d100)
+
+
+def test_realized_vol_constant_series():
+    rv = oe.realized_vol_series([100] * 60, window=21)
+    assert rv and all(v == 0.0 for v in rv)
+
+
 # local approx helper (avoids importing pytest.approx at module top for clarity)
 def pytest_approx(x, tol=1e-3):
     import pytest
