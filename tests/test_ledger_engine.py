@@ -376,6 +376,7 @@ def test_evolution_shift_two_movers():
     assert "into CRYPTO" in r["line"]
     assert "out of EQUITY" in r["line"]
     assert "30pp" in r["line"]
+    assert "(-30pp)" in r["line"]
 
 
 def test_evolution_threshold_inclusive_10pp():
@@ -420,6 +421,15 @@ def test_evolution_single_mover():
     r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
     assert r["status"] == "shift"
     assert "EQUITY weight rose" in r["line"]
+
+
+def test_evolution_single_mover_down():
+    txns = [_open("AAPL"), _open("BTC/USD"), _open("GLD")]
+    lookup = _drift({"AAPL": 160, "BTC/USD": 100, "GLD": 100},
+                    {"AAPL": 100, "BTC/USD": 100, "GLD": 100})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "shift"
+    assert "EQUITY weight fell -" in r["line"]
 
 
 def test_evolution_price_gap_unavailable():

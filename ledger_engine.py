@@ -211,17 +211,17 @@ def _build_sentence(qualifying):
         m = top[0]
         if m["delta_pp"] > 0:
             return f"This quarter your {m['cls']} weight rose +{_pp(m)}."
-        return f"This quarter your {m['cls']} weight fell {_pp(m)}."
+        return f"This quarter your {m['cls']} weight fell -{_pp(m)}."
     if ups and downs:
         u, d = ups[0], downs[0]
         return (f"This quarter you rotated more into {u['cls']} (+{_pp(u)}) "
-                f"and out of {d['cls']} ({_pp(d)}).")
+                f"and out of {d['cls']} (-{_pp(d)}).")
     if len(ups) == 2:
         a, b = ups
         return (f"This quarter you shifted more into {a['cls']} (+{_pp(a)}) "
                 f"and {b['cls']} (+{_pp(b)}).")
     a, b = downs
-    return f"This quarter you trimmed {a['cls']} ({_pp(a)}) and {b['cls']} ({_pp(b)})."
+    return f"This quarter you trimmed {a['cls']} (-{_pp(a)}) and {b['cls']} (-{_pp(b)})."
 
 
 def _price_gap_line(transactions, date, price_lookup):
