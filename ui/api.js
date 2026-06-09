@@ -495,4 +495,23 @@ async function resolveSymbol(sym) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol };
+/* fetch the curated Wheel options universe list */
+async function fetchOptionsUniverse() {
+  try {
+    const r = await fetch(`${API_BASE}/options/universe`);
+    if (!r.ok) return { universe: [] };
+    return await r.json();
+  } catch (e) { return { universe: [] }; }
+}
+
+/* fetch the single best Cash-Secured Put candidate from the Wheel universe */
+async function fetchOptionsCandidate(accountSize) {
+  try {
+    const q = accountSize ? `?account_size=${encodeURIComponent(accountSize)}` : "";
+    const r = await fetch(`${API_BASE}/options/candidate${q}`);
+    if (!r.ok) return { candidate: null, error_note: "Options scan unavailable." };
+    return await r.json();
+  } catch (e) { return { candidate: null, error_note: "Options scan unavailable." }; }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate };
