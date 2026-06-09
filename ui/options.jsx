@@ -84,7 +84,9 @@ function OptionsPage({ onBack }) {
 
   const load = React.useCallback(() => {
     setLoading(true);
-    window.API.fetchOptionsCandidate(acct || null).then(d => { setData(d); setLoading(false); });
+    window.API.fetchOptionsCandidate(acct || null)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => { setData({ candidate: null, error_note: "Options scan unavailable — try again in a moment." }); setLoading(false); });
   }, [acct]);
   React.useEffect(() => { load(); }, []);   // initial scan only; acct re-scan is manual via blur
 
