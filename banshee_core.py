@@ -1323,31 +1323,46 @@ def route_options_universe():
     return {"universe": _OPTIONS_UNIVERSE}
 
 
+_OPTIONS_CACHE = {}          # account_size_key -> (timestamp, sanitized_result)
+_OPTIONS_CACHE_TTL = 300     # 5 minutes
+
+
 @app.get("/options/candidate")
 def route_options_candidate(account_size: float = None):
     """Scan the curated Wheel universe for the single best Cash-Secured Put.
     Read-only; never executes. Failures per-underlying are reported, not fatal."""
+    _key = float(account_size) if account_size else 0.0
+    _hit = _OPTIONS_CACHE.get(_key)
+    if _hit and (time.time() - _hit[0]) < _OPTIONS_CACHE_TTL:
+        return _hit[1]
     universe_data = []
     for item in _OPTIONS_UNIVERSE:
         sym = item["sym"]
         try:
             contracts, meta = options_data.fetch_chain(sym)
-            closes = options_data.fetch_closes(sym)
-            universe_data.append({
-                "sym": sym, "name": item["name"], "spot": meta.get("spot"),
-                "contracts": contracts, "closes": closes, "failed": meta.get("spot") is None,
-            })
         except Exception as e:
-            print(f"[options] fetch failed for {sym}: {e}", file=sys.stderr)
+            print(f"[options] chain fetch failed for {sym}: {e}", file=sys.stderr)
             universe_data.append({"sym": sym, "name": item["name"], "spot": None,
                                   "contracts": [], "closes": [], "failed": True})
+            continue
+        try:
+            closes = options_data.fetch_closes(sym)
+        except Exception as e:
+            print(f"[options] closes fetch failed for {sym}: {e}", file=sys.stderr)
+            closes = []
+        universe_data.append({
+            "sym": sym, "name": item["name"], "spot": meta.get("spot"),
+            "contracts": contracts, "closes": closes, "failed": meta.get("spot") is None,
+        })
     try:
         result = options_engine.best_candidate(universe_data, account_size=account_size)
     except Exception as e:
         print(f"[options] engine failed: {e}", file=sys.stderr)
         return _sanitize({"candidate": None, "error_note":
                           "Couldn't scan options right now — try again in a moment."})
-    return _sanitize(result)
+    sanitized = _sanitize(result)
+    _OPTIONS_CACHE[_key] = (time.time(), sanitized)
+    return sanitized
 
 
 @app.get("/ohlcv")
