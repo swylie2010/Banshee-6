@@ -12,6 +12,12 @@ _EPS = 1e-9
 
 _QUARTER_ENDS = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
 
+_INTERNAL_LINE = ("Evolution couldn't be computed right now — the rest of your "
+                  "analysis is unaffected.")
+_STEADY_LINE = "Your mix held steady this quarter — no major shifts."
+_INSUFFICIENT_LINE = ("Evolution tracking begins once you've held positions "
+                      "across a full quarter.")
+
 
 def prev_quarter_end(today_iso):
     """ISO date (YYYY-MM-DD) of the last day of the calendar quarter BEFORE
@@ -27,7 +33,7 @@ def prev_quarter_end(today_iso):
 def has_two_quarters(earliest_iso, today_iso):
     """True when the earliest transaction falls in a STRICTLY earlier calendar
     quarter than today (the minimum history the evolution line needs)."""
-    if not earliest_iso:
+    if not earliest_iso or not today_iso:
         return False
     ep = str(earliest_iso).split("-")
     tp = str(today_iso).split("-")
@@ -189,6 +195,78 @@ def composition_at(transactions, date, price_lookup, cls_of):
         total += cash
     weights = {k: round(v / total, 4) for k, v in buckets.items()} if total > _EPS else {}
     return {"as_of": date, "total_value": round(total, 2), "weights": weights}
+
+
+def _pp(move):
+    """Absolute percentage-point label, e.g. '30pp'."""
+    return f"{abs(round(move['delta_pp']))}pp"
+
+
+def _build_sentence(qualifying):
+    """Compose the shift sentence from the top-2 movers (by |delta|)."""
+    top = qualifying[:2]
+    ups = [m for m in top if m["delta_pp"] > 0]
+    downs = [m for m in top if m["delta_pp"] < 0]
+    if len(top) == 1:
+        m = top[0]
+        if m["delta_pp"] > 0:
+            return f"This quarter your {m['cls']} weight rose +{_pp(m)}."
+        return f"This quarter your {m['cls']} weight fell {_pp(m)}."
+    if ups and downs:
+        u, d = ups[0], downs[0]
+        return (f"This quarter you rotated more into {u['cls']} (+{_pp(u)}) "
+                f"and out of {d['cls']} ({_pp(d)}).")
+    if len(ups) == 2:
+        a, b = ups
+        return (f"This quarter you shifted more into {a['cls']} (+{_pp(a)}) "
+                f"and {b['cls']} (+{_pp(b)}).")
+    a, b = downs
+    return f"This quarter you trimmed {a['cls']} ({_pp(a)}) and {b['cls']} ({_pp(b)})."
+
+
+def _price_gap_line(transactions, date, price_lookup):
+    state = replay(transactions, as_of=date)
+    missing = [p["sym"] for p in state["positions"]
+               if price_lookup(p["sym"], date) is None]
+    if missing:
+        names = ", ".join(missing[:3])
+        return (f"Couldn't chart your evolution — {names} have no price history "
+                f"that far back.")
+    return ("Couldn't chart your evolution — price history was unavailable for "
+            "this period.")
+
+
+def evolution_line(transactions, q_prev_date, q_curr_date,
+                   price_lookup, cls_of, enough_history, threshold=0.10):
+    """Compare asset-class composition at two quarter boundaries and describe
+    the shift in one sentence. Pure (adapter pattern): the caller supplies
+    price_lookup(sym, date)->float|None, cls_of(sym)->str, and enough_history.
+    The engine owns every sentence string. See the Phase 3 spec for the shape."""
+    if not enough_history:
+        return {"status": "insufficient", "line": _INSUFFICIENT_LINE, "reason": None}
+    try:
+        prev = composition_at(transactions, q_prev_date, price_lookup, cls_of)
+        curr = composition_at(transactions, q_curr_date, price_lookup, cls_of)
+        wf, wt = prev["weights"], curr["weights"]
+        if not wf or not wt:
+            return {"status": "unavailable", "reason": "price_gap",
+                    "line": _price_gap_line(transactions, q_curr_date, price_lookup)}
+        classes = set(wf) | set(wt)
+        moves = []
+        for c in classes:
+            dpp = round((wt.get(c, 0.0) - wf.get(c, 0.0)) * 100, 1)
+            if abs(dpp) >= 1:
+                moves.append({"cls": c, "delta_pp": dpp})
+        moves.sort(key=lambda m: abs(m["delta_pp"]), reverse=True)
+        thr_pp = threshold * 100
+        qualifying = [m for m in moves if abs(m["delta_pp"]) >= thr_pp - _EPS]
+        if not qualifying:
+            return {"status": "steady", "line": _STEADY_LINE, "reason": None,
+                    "from": wf, "to": wt, "moves": moves}
+        return {"status": "shift", "line": _build_sentence(qualifying),
+                "reason": None, "from": wf, "to": wt, "moves": moves}
+    except Exception:
+        return {"status": "unavailable", "reason": "internal", "line": _INTERNAL_LINE}
 
 
 def total_return(realized_pnl, total_deposited, holdings_rows, opening_cost_basis=0.0):

@@ -337,3 +337,106 @@ def test_has_two_quarters():
     assert le.has_two_quarters("2026-04-02", "2026-06-09") is False  # both Q2 2026
     assert le.has_two_quarters("2026-03-31", "2026-06-09") is True   # Q1 < Q2
     assert le.has_two_quarters(None, "2026-06-09") is False
+    assert le.has_two_quarters("2025-01-01", None) is False           # today_iso guard
+
+
+# ── Phase 3: evolution_line ─────────────────────────────────────
+QP, QC = "2026-03-31", "2026-06-09"   # prev-quarter-end, "today"
+
+def _open(sym, shares=1):
+    return {"type": "BUY", "sym": sym, "shares": shares, "price": 1,
+            "date": "2025-01-01", "opening": True}
+
+def _drift(prev_prices, curr_prices):
+    """price_lookup that returns prev_prices on/at the prev-quarter date and
+    curr_prices after it (models price drift between the two snapshots)."""
+    def lookup(sym, date):
+        table = prev_prices if str(date) <= QP else curr_prices
+        return table.get(sym)
+    return lookup
+
+def _cls(mapping):
+    return lambda sym: mapping.get(sym, "EQUITY")
+
+_CM = _cls({"AAPL": "EQUITY", "BTC/USD": "CRYPTO", "GLD": "COMMODITY"})
+
+
+def test_evolution_insufficient_history():
+    r = le.evolution_line([_open("AAPL")], QP, QC,
+                          _drift({"AAPL": 50}, {"AAPL": 50}), _CM, False)
+    assert r["status"] == "insufficient"
+    assert "full quarter" in r["line"]
+
+
+def test_evolution_shift_two_movers():
+    txns = [_open("AAPL"), _open("BTC/USD")]
+    lookup = _drift({"AAPL": 50, "BTC/USD": 50}, {"AAPL": 20, "BTC/USD": 80})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "shift"
+    assert "into CRYPTO" in r["line"]
+    assert "out of EQUITY" in r["line"]
+    assert "30pp" in r["line"]
+
+
+def test_evolution_threshold_inclusive_10pp():
+    txns = [_open("AAPL"), _open("BTC/USD")]
+    lookup = _drift({"AAPL": 80, "BTC/USD": 20}, {"AAPL": 70, "BTC/USD": 30})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "shift"
+    assert "10pp" in r["line"]
+
+
+def test_evolution_steady():
+    txns = [_open("AAPL"), _open("BTC/USD")]
+    lookup = _drift({"AAPL": 50, "BTC/USD": 50}, {"AAPL": 52, "BTC/USD": 48})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "steady"
+    assert "steady" in r["line"]
+
+
+def test_evolution_cash_deploy_or_defensive():
+    txns = [_open("AAPL"), {"type": "DEPOSIT", "amount": 100, "date": "2026-04-10"}]
+    lookup = _drift({"AAPL": 100}, {"AAPL": 100})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "shift"
+    assert "CASH" in r["line"]   # deposit lands in Q2 -> CASH weight appears
+
+
+def test_evolution_reports_top_two_of_three():
+    txns = [_open("AAPL"), _open("BTC/USD"), _open("GLD")]
+    lookup = _drift({"AAPL": 100, "BTC/USD": 100, "GLD": 100},
+                    {"AAPL": 300, "BTC/USD": 60, "GLD": 60})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "shift"
+    assert len(r["moves"]) == 3          # all three qualify
+    assert "EQUITY" in r["line"]         # biggest mover named
+    assert r["line"].count("pp") == 2    # but only two movers in the sentence
+
+
+def test_evolution_single_mover():
+    txns = [_open("AAPL"), _open("BTC/USD"), _open("GLD")]
+    lookup = _drift({"AAPL": 100, "BTC/USD": 100, "GLD": 100},
+                    {"AAPL": 160, "BTC/USD": 100, "GLD": 100})
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] == "shift"
+    assert "EQUITY weight rose" in r["line"]
+
+
+def test_evolution_price_gap_unavailable():
+    txns = [_open("AAPL"), _open("BTC/USD")]
+    r = le.evolution_line(txns, QP, QC, lambda s, d: None, _CM, True)
+    assert r["status"] == "unavailable"
+    assert r["reason"] == "price_gap"
+    assert "no price history" in r["line"]
+
+
+def test_evolution_one_unpriceable_coin_others_fine():
+    # BTC flat-priced (radar fallback) stays in the basket; AAPL drifts.
+    txns = [_open("AAPL"), _open("BTC/USD")]
+    def lookup(sym, date):
+        if sym == "BTC/USD":
+            return 1000.0
+        return 100.0 if str(date) <= QP else 400.0
+    r = le.evolution_line(txns, QP, QC, lookup, _CM, True)
+    assert r["status"] != "unavailable"
+    assert "CRYPTO" in r["to"]
