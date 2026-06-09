@@ -10,6 +10,31 @@ See docs/superpowers/specs/2026-06-08-portfolio-history-design.md.
 
 _EPS = 1e-9
 
+_QUARTER_ENDS = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}
+
+
+def prev_quarter_end(today_iso):
+    """ISO date (YYYY-MM-DD) of the last day of the calendar quarter BEFORE
+    the quarter that `today_iso` falls in."""
+    parts = str(today_iso).split("-")
+    y, m = int(parts[0]), int(parts[1])
+    q = (m - 1) // 3 + 1            # 1..4
+    if q == 1:
+        return f"{y - 1}-12-31"
+    return f"{y}-{_QUARTER_ENDS[q - 1]}"
+
+
+def has_two_quarters(earliest_iso, today_iso):
+    """True when the earliest transaction falls in a STRICTLY earlier calendar
+    quarter than today (the minimum history the evolution line needs)."""
+    if not earliest_iso:
+        return False
+    ep = str(earliest_iso).split("-")
+    tp = str(today_iso).split("-")
+    e = (int(ep[0]), (int(ep[1]) - 1) // 3)   # (year, quarter_index 0..3)
+    t = (int(tp[0]), (int(tp[1]) - 1) // 3)
+    return e < t
+
 
 def _sorted_txns(transactions):
     """Stable sort by ISO date; same-day ties keep original array order."""

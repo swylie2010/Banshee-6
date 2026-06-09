@@ -322,3 +322,18 @@ def test_total_return_default_opening_basis_preserves_old_behavior():
     # omitting opening_cost_basis (Phase-1 callers) -> deposits/cost-basis fallback unchanged
     rows = [_row(50.0, 60.0, 10)]
     assert le.total_return(100.0, 1000.0, rows) == pytest.approx(0.2, abs=1e-4)
+
+
+# ── Phase 3: quarter-date helpers ───────────────────────────────
+def test_prev_quarter_end():
+    assert le.prev_quarter_end("2026-06-09") == "2026-03-31"   # Q2 -> Q1 end
+    assert le.prev_quarter_end("2026-02-10") == "2025-12-31"   # Q1 -> prior Q4
+    assert le.prev_quarter_end("2026-11-01") == "2026-09-30"   # Q4 -> Q3 end
+    assert le.prev_quarter_end("2026-07-15") == "2026-06-30"   # Q3 -> Q2 end
+
+
+def test_has_two_quarters():
+    assert le.has_two_quarters("2025-01-01", "2026-06-09") is True
+    assert le.has_two_quarters("2026-04-02", "2026-06-09") is False  # both Q2 2026
+    assert le.has_two_quarters("2026-03-31", "2026-06-09") is True   # Q1 < Q2
+    assert le.has_two_quarters(None, "2026-06-09") is False
