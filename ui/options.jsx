@@ -288,8 +288,8 @@ function ScenarioCard({ run, label }) {
       <div style={{ fontSize: 12, fontWeight: 700, color: pnlColor, marginBottom: 6 }}>{outcomeLabel}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 22px', fontSize: 13 }}>
         <span><span style={{ color: P.ink4 }}>P&L </span><b style={{ color: pnlColor }}>{run.pnl >= 0 ? '+' : ''}${Math.round(run.pnl).toLocaleString()}</b></span>
-        <span><span style={{ color: P.ink4 }}>Premium </span>${Math.round(run.premium_collected).toLocaleString()}</span>
-        <span><span style={{ color: P.ink4 }}>Cash tied up </span>${Math.round(run.cash_tied_up).toLocaleString()}</span>
+        <span><span style={{ color: P.ink4 }}>Premium </span>${Math.round(run.premium_collected || 0).toLocaleString()}</span>
+        <span><span style={{ color: P.ink4 }}>Cash tied up </span>${Math.round(run.cash_tied_up || 0).toLocaleString()}</span>
         {run.net_cost_basis != null && <span><span style={{ color: P.ink4 }}>Cost basis </span>${run.net_cost_basis.toFixed(2)}/sh</span>}
         {run.margin_required != null && <span><span style={{ color: P.amber }}>Margin posted </span>${Math.round(run.margin_required).toLocaleString()}</span>}
       </div>
@@ -299,12 +299,12 @@ function ScenarioCard({ run, label }) {
 }
 
 /* Amber AI narration block with a load button. */
-function AiNarration({ label, fetchFn, deps }) {
+function AiNarration({ label, fetchFn, cacheKey }) {
   const P = OPT_PALETTE;
   const [text, setText] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
 
-  React.useEffect(() => { setText(null); }, deps || []);
+  React.useEffect(() => { setText(null); }, [cacheKey]);
 
   const load = async () => {
     setBusy(true);
@@ -340,6 +340,10 @@ function WheelRecapPanel({ wheel, st }) {
   const [termPrice, setTermPrice] = React.useState('');
   const [altSpec, setAltSpec] = React.useState({
     strike: snap.strike || '', mid: snap.mid || '', cash_backed: true });
+  React.useEffect(() => {
+    const s = wheel.candidate_snapshot || {};
+    setAltSpec({ strike: s.strike || '', mid: s.mid || '', cash_backed: true });
+  }, [wheel.id]);
   const [runA, setRunA] = React.useState(null);
   const [runB, setRunB] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -396,7 +400,7 @@ function WheelRecapPanel({ wheel, st }) {
       {runA && (
         <>
           <ScenarioCard run={runA} label="Original — what your wheel would have done" />
-          <AiNarration label="AI RECAP" fetchFn={() => window.API.learnRecap(runA)} deps={[runA]} />
+          <AiNarration label="AI RECAP" fetchFn={() => window.API.learnRecap(runA)} cacheKey={runA?.outcome + runA?.pnl} />
 
           <div style={{ marginTop: 18, borderTop: `1px solid ${P.line}`, paddingTop: 14 }}>
             <div style={{ ...lab, color: P.ink4, marginBottom: 8 }}>Try with different numbers</div>
@@ -427,7 +431,7 @@ function WheelRecapPanel({ wheel, st }) {
                 <ScenarioCard run={runB} label="Your variant" />
               </div>
               <AiNarration label="AI COMPARE"
-                fetchFn={() => window.API.learnCompare(runA, runB)} deps={[runA, runB]} />
+                fetchFn={() => window.API.learnCompare(runA, runB)} cacheKey={runA?.pnl + '|' + runB?.pnl} />
             </div>
           )}
         </>
