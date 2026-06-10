@@ -9,6 +9,68 @@ const OPT_PALETTE = {
   ink4: '#7C9789', line: '#BCDFCF', amber: '#9A6A18', amberBg: '#F6EBCF', amberLine: '#E4CE94',
 };
 
+/* Global "teach me" preference — default ON for a first-time user. */
+function useTeachMode() {
+  const [on, setOn] = React.useState(() => {
+    const v = localStorage.getItem('banshee_options_teach');
+    return v === null ? true : v === '1';
+  });
+  const set = React.useCallback((next) => {
+    setOn(next);
+    localStorage.setItem('banshee_options_teach', next ? '1' : '0');
+  }, []);
+  return [on, set];
+}
+
+/* The page-level toggle pill. */
+function TeachToggle({ on, setOn }) {
+  const P = OPT_PALETTE;
+  return (
+    <button onClick={() => setOn(!on)} style={{
+      background: on ? P.mintSoft : 'transparent', color: on ? P.mintDeep : P.ink4,
+      border: `1px solid ${on ? P.mint : P.line}`, borderRadius: 20, cursor: 'pointer',
+      fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+      fontWeight: 700, padding: '5px 13px' }}>
+      {on ? '◆ TEACH ME · ON' : '○ TEACH ME · OFF'}
+    </button>
+  );
+}
+
+/* A collapsible teaching block. Hidden entirely when `teach` is off, unless the
+   user has individually opened it. `alwaysShow` keeps it visible regardless
+   (used for risk — the downside is never optional). */
+function Teach({ teach, title, alwaysShow, children }) {
+  const P = OPT_PALETTE;
+  const [openOverride, setOpenOverride] = React.useState(null); // null = follow global
+  const open = openOverride === null ? (alwaysShow || teach) : openOverride;
+  if (!teach && !alwaysShow && openOverride !== true) {
+    // collapsed-by-global: show a one-line opener so it's discoverable
+    return (
+      <button onClick={() => setOpenOverride(true)} style={{
+        background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0',
+        fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+        fontWeight: 700, color: P.mintDeep, display: 'block' }}>
+        › {title}
+      </button>
+    );
+  }
+  return (
+    <div style={{ borderLeft: `3px solid ${P.mint}`, background: P.mintSoft,
+      borderRadius: '0 8px 8px 0', padding: '12px 15px', margin: '10px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+          fontWeight: 700, color: P.mintDeep }}>◆ {title}</span>
+        {!alwaysShow && (
+          <button onClick={() => setOpenOverride(false)} title="Collapse" style={{
+            background: 'transparent', border: 'none', cursor: 'pointer', color: P.ink4,
+            fontFamily: 'monospace', fontSize: 12 }}>▾</button>
+        )}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.65, color: '#234034' }}>{children}</div>
+    </div>
+  );
+}
+
 function OptWhy({ guardrails }) {
   const P = OPT_PALETTE;
   const [open, setOpen] = React.useState(false);
