@@ -57,6 +57,20 @@ def test_run_scenario_plain_is_string():
     assert isinstance(r['plain'], str) and len(r['plain']) > 10
 
 
+def test_grade_option_exposes_mid():
+    """grade_option() return dict must include mid from the nearest contract."""
+    spec = {'underlying': 'SPY', 'strike': 480.0, 'dte': 40, 'cash_backed': True}
+    market_ctx = {
+        'spot': 490.0,
+        'contracts': [{'type': 'put', 'strike': 480.0, 'iv': 0.20, 'open_interest': 1500,
+                        'expiry': '2026-08-01', 'dte': 40, 'mid': 2.50}],
+        'closes': [],
+    }
+    result = oe.grade_option(spec, market_ctx)
+    assert 'mid' in result
+    assert result['mid'] == 2.50
+
+
 # ── danger_lever_scenarios ────────────────────────────────────────────────────
 
 def test_danger_lever_naked_reckless_not_cash_backed():
