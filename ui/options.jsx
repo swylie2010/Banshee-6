@@ -270,6 +270,172 @@ function optMoney(v) {
   return `${sign}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+/* Displays the outcome of a single deterministic scenario run. */
+function ScenarioCard({ run, label }) {
+  const P = OPT_PALETTE;
+  if (!run || run.error) return (
+    <div style={{ background: P.amberBg, border: `1px solid ${P.amberLine}`, borderRadius: 8,
+      padding: '10px 13px', fontSize: 13, color: P.amber }}>⚠ {run?.error || 'Scenario unavailable.'}</div>
+  );
+  const pnlColor = run.pnl >= 0 ? P.mint : P.amber;
+  const outcomeLabel = { expired_worthless: 'EXPIRED — KEPT PREMIUM', assigned: 'ASSIGNED — OWN SHARES',
+    margin_call: 'MARGIN CALL', error: 'ERROR' }[run.outcome] || run.outcome?.toUpperCase();
+  return (
+    <div style={{ background: P.card, border: `1px solid ${run.pnl >= 0 ? P.mint : P.amberLine}`,
+      borderRadius: 8, padding: '12px 14px', flex: 1 }}>
+      {label && <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
+        fontWeight: 700, color: P.ink4, marginBottom: 5 }}>{label}</div>}
+      <div style={{ fontSize: 12, fontWeight: 700, color: pnlColor, marginBottom: 6 }}>{outcomeLabel}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 22px', fontSize: 13 }}>
+        <span><span style={{ color: P.ink4 }}>P&L </span><b style={{ color: pnlColor }}>{run.pnl >= 0 ? '+' : ''}${Math.round(run.pnl).toLocaleString()}</b></span>
+        <span><span style={{ color: P.ink4 }}>Premium </span>${Math.round(run.premium_collected).toLocaleString()}</span>
+        <span><span style={{ color: P.ink4 }}>Cash tied up </span>${Math.round(run.cash_tied_up).toLocaleString()}</span>
+        {run.net_cost_basis != null && <span><span style={{ color: P.ink4 }}>Cost basis </span>${run.net_cost_basis.toFixed(2)}/sh</span>}
+        {run.margin_required != null && <span><span style={{ color: P.amber }}>Margin posted </span>${Math.round(run.margin_required).toLocaleString()}</span>}
+      </div>
+      {run.plain && <div style={{ marginTop: 7, fontSize: 12, color: P.ink3, lineHeight: 1.5 }}>{run.plain}</div>}
+    </div>
+  );
+}
+
+/* Amber AI narration block with a load button. */
+function AiNarration({ label, fetchFn, deps }) {
+  const P = OPT_PALETTE;
+  const [text, setText] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => { setText(null); }, deps || []);
+
+  const load = async () => {
+    setBusy(true);
+    const r = await fetchFn();
+    setText(r?.text || 'Narration unavailable.');
+    setBusy(false);
+  };
+
+  if (text) return (
+    <div style={{ background: P.amberBg, border: `1px solid ${P.amberLine}`, borderRadius: 8,
+      padding: '11px 14px', fontSize: 13, color: '#6b5118', lineHeight: 1.65, marginTop: 10 }}>
+      <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 700,
+        color: P.amber, marginBottom: 5 }}>◆ {label}</div>
+      {text}
+    </div>
+  );
+  return (
+    <button onClick={load} disabled={busy} style={{
+      marginTop: 10, background: busy ? P.amberBg : 'transparent',
+      border: `1px solid ${P.amberLine}`, borderRadius: 6, cursor: busy ? 'default' : 'pointer',
+      fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+      fontWeight: 700, color: P.amber, padding: '6px 13px' }}>
+      {busy ? '◇ ASKING THE AI…' : `◆ ${label} →`}
+    </button>
+  );
+}
+
+/* Learning lab panel shown after a wheel cycle completes (state==CASH, cycles>0).
+   Lets the user: get an AI recap, try different numbers, compare two runs. */
+function WheelRecapPanel({ wheel, st }) {
+  const P = OPT_PALETTE;
+  const snap = wheel.candidate_snapshot || {};
+  const [termPrice, setTermPrice] = React.useState('');
+  const [altSpec, setAltSpec] = React.useState({
+    strike: snap.strike || '', mid: snap.mid || '', cash_backed: true });
+  const [runA, setRunA] = React.useState(null);
+  const [runB, setRunB] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+
+  const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
+  const inp = { fontFamily: 'monospace', fontSize: 13, padding: '5px 8px', background: P.card,
+    color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6 };
+
+  const runOriginal = async () => {
+    const price = parseFloat(termPrice);
+    if (!snap.strike || !snap.mid || isNaN(price)) {
+      setErr('Enter a terminal price to run the scenario.'); return;
+    }
+    setBusy(true); setErr(null);
+    const specA = { strike: parseFloat(snap.strike), mid: parseFloat(snap.mid),
+                    cash_backed: true, underlying: wheel.underlying || 'SPY' };
+    const r = await window.API.runScenario(specA, price);
+    if (r.error) setErr(r.error); else setRunA(r);
+    setBusy(false);
+  };
+
+  const runAlt = async () => {
+    const price = parseFloat(termPrice);
+    if (isNaN(price) || !altSpec.strike || !altSpec.mid) {
+      setErr('Fill in all fields to run the comparison.'); return;
+    }
+    setBusy(true); setErr(null);
+    const specB = { strike: parseFloat(altSpec.strike), mid: parseFloat(altSpec.mid),
+                    cash_backed: altSpec.cash_backed, underlying: wheel.underlying || 'SPY' };
+    const r = await window.API.runScenario(specB, price);
+    if (r.error) setErr(r.error); else setRunB(r);
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ marginTop: 24, borderTop: `2px solid ${P.mint}`, paddingTop: 16 }}>
+      <div style={{ ...lab, color: P.mintDeep, marginBottom: 4 }}>◆ LEARNING LAB — WHAT IF?</div>
+      <div style={{ fontSize: 13, color: P.ink3, lineHeight: 1.6, marginBottom: 12 }}>
+        Enter the terminal price (where the underlying actually was at expiry) to see the scenario.
+        Then try different numbers and compare.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', marginBottom: 12 }}>
+        <div>
+          <div style={{ ...lab, color: P.ink4, marginBottom: 4 }}>Terminal price at expiry</div>
+          <input value={termPrice} placeholder="e.g. 476"
+            onChange={e => setTermPrice(e.target.value.replace(/[^0-9.]/g, ''))}
+            style={{ ...inp, width: 100 }} />
+        </div>
+        <OptButton label={busy ? 'RUNNING…' : 'RUN ORIGINAL →'} disabled={busy} onClick={runOriginal} />
+      </div>
+      <OptError msg={err} />
+
+      {runA && (
+        <>
+          <ScenarioCard run={runA} label="Original — what your wheel would have done" />
+          <AiNarration label="AI RECAP" fetchFn={() => window.API.learnRecap(runA)} deps={[runA]} />
+
+          <div style={{ marginTop: 18, borderTop: `1px solid ${P.line}`, paddingTop: 14 }}>
+            <div style={{ ...lab, color: P.ink4, marginBottom: 8 }}>Try with different numbers</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+              <div>
+                <div style={{ ...lab, color: P.ink4, marginBottom: 4, fontSize: 11 }}>Strike</div>
+                <input value={altSpec.strike} onChange={e => setAltSpec({ ...altSpec, strike: e.target.value })}
+                  style={{ ...inp, width: 80 }} />
+              </div>
+              <div>
+                <div style={{ ...lab, color: P.ink4, marginBottom: 4, fontSize: 11 }}>Premium (mid)</div>
+                <input value={altSpec.mid} onChange={e => setAltSpec({ ...altSpec, mid: e.target.value })}
+                  style={{ ...inp, width: 70 }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: P.ink }}>
+                <input type="checkbox" checked={altSpec.cash_backed}
+                  onChange={e => setAltSpec({ ...altSpec, cash_backed: e.target.checked })} />
+                cash-backed
+              </label>
+              <OptButton label={busy ? 'RUNNING…' : 'COMPARE →'} disabled={busy} onClick={runAlt} />
+            </div>
+          </div>
+
+          {runB && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <ScenarioCard run={runA} label="Original" />
+                <ScenarioCard run={runB} label="Your variant" />
+              </div>
+              <AiNarration label="AI COMPARE"
+                fetchFn={() => window.API.learnCompare(runA, runB)} deps={[runA, runB]} />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── Simulated Wheel: list view ───────────────────────────────────────────── */
 function WheelList({ onOpened, onBack }) {
   const P = OPT_PALETTE;
@@ -493,6 +659,10 @@ function WheelTracker({ wheel, setWheel, onBack }) {
             ))}
           </div>
         </div>
+      )}
+      {/* Learning lab — appears after at least one cycle completes */}
+      {st.totals && st.totals.cycles_completed > 0 && st.state === 'CASH' && (
+        <WheelRecapPanel wheel={wheel} st={st} />
       )}
     </div>
   );
