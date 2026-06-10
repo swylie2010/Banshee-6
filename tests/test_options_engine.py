@@ -162,7 +162,7 @@ def test_best_candidate_oi_boundary_excludes_1000():
 
 def _u(sym, spot, strike, iv=0.22, oi=5000, dte=42, bid=1.7, ask=1.9):
     """One normalized underlying with a single put that clears the non-size rules.
-    Default spot=500/strike=480 gives delta ~0.258 (inside the 0.20-0.30 band)."""
+    Callers pass spot=500/strike=480 -> delta ~0.258, inside the 0.20-0.30 band."""
     return {"sym": sym, "name": sym, "spot": spot, "failed": False,
             "closes": [spot * (1 + 0.001 * ((i % 7) - 3)) for i in range(60)],
             "contracts": [{"type": "put", "strike": strike, "expiry": "2026-07-22",
@@ -196,3 +196,11 @@ def test_no_account_size_unchanged_behavior():
     assert res["candidate"] is not None
     assert res["account_too_small"] is None
     assert "sizing" not in res["candidate"]
+
+def test_exact_5pct_boundary_is_accepted():
+    # collateral = 100 * 100 = 10_000; 5% of 200_000 = 10_000 -> exactly at the cap, must pass
+    # spot=104 with iv=0.22, dte=42 gives delta ~-0.265 (inside the 0.20-0.30 band)
+    data = [_u("TEST", 104.0, 100.0)]
+    res = oe.best_candidate(data, account_size=200_000)
+    assert res["candidate"] is not None
+    assert res["account_too_small"] is None
