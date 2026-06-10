@@ -9,6 +9,40 @@ const OPT_PALETTE = {
   ink4: '#7C9789', line: '#BCDFCF', amber: '#9A6A18', amberBg: '#F6EBCF', amberLine: '#E4CE94',
 };
 
+/* Quick plain-language glossary — shown on hover so a learner doesn't lose focus. */
+const TERM_DEFS = {
+  cash: "Cash-secured: you set aside the full cash to buy the shares if you're assigned, so you never borrow. The amount = strike × 100.",
+  delta: "Delta: a quick read on the chance you'll be forced to buy the shares. The options chain lists it per contract; Banshee also computes it from price, strike, days left, and volatility. ~0.25 ≈ a 25% chance of assignment.",
+  dte: "Days to expiry (DTE): calendar days until the contract expires. Banshee targets 35–45, where time-decay works hardest in your favor.",
+  oi: "Open interest: how many of this exact contract are currently held across the market. Higher = easier to get in and out at a fair price. It comes straight from the options chain.",
+  ivr: "IV rank: how rich this premium is versus the underlying's own recent volatility, 0–100. High = unusually pricey (often a known event looming). Banshee estimates it here, flagged 'est.'.",
+  underlying: "Underlying: the fund or stock the option is written on. Banshee sticks to broad funds (SPY/QQQ/IWM/DIA) that can't gap violently on a single headline.",
+  size: "Trade size: this trade's collateral as a share of your whole account. Banshee's rule: never more than 5% in one trade, so a single surprise can't sink you.",
+  premium: "Premium: the cash the buyer pays you up front to take on the obligation. It's the contract's mid price × 100 shares.",
+};
+
+/* A jargon term with a dotted underline; hover shows its quick definition. */
+function TermInfo({ termKey, label, style }) {
+  const P = OPT_PALETTE;
+  const [hov, setHov] = React.useState(false);
+  const def = TERM_DEFS[termKey];
+  if (!def) return <b style={style}>{label}</b>;
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
+      <b style={{ borderBottom: `1px dotted ${P.ink4}`, cursor: 'help', ...style }}>{label}</b>
+      {hov && (
+        <span style={{ position: 'absolute', top: '100%', left: 0, zIndex: 60, width: 250, marginTop: 5,
+          background: P.card, color: P.ink, border: `1px solid ${P.mint}`, borderRadius: 8,
+          padding: '9px 12px', fontSize: 12, lineHeight: 1.5, fontWeight: 400, textTransform: 'none',
+          letterSpacing: 'normal', boxShadow: '0 6px 18px rgba(20,60,40,0.18)' }}>
+          {def}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /* Global "teach me" preference — default ON for a first-time user. */
 function useTeachMode() {
   const [on, setOn] = React.useState(() => {
@@ -158,9 +192,11 @@ function OptCard({ data, teach, onRunWheel, onSeeWheels, runError }) {
   const P = OPT_PALETTE;
   const c = data.candidate, t = data.translation;
   const premium = Math.round(c.mid * 100);
-  const num = (label, value) => (
+  const num = (label, value, termKey) => (
     <div style={{ padding: '12px 20px 4px 0' }}>
-      <div style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.ink4 }}>{label}</div>
+      <div style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.ink4 }}>
+        {termKey ? <TermInfo termKey={termKey} label={label} style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.ink4 }} /> : label}
+      </div>
       <div style={{ fontSize: 19, fontWeight: 700, marginTop: 3, color: P.ink }}>{value}</div>
     </div>
   );
@@ -177,7 +213,7 @@ function OptCard({ data, teach, onRunWheel, onSeeWheels, runError }) {
       <div style={{ fontSize: 14, lineHeight: 1.7, color: '#234034', background: P.mintSoft,
         borderLeft: `3px solid ${P.mint}`, padding: '12px 15px', borderRadius: '0 6px 6px 0' }}>{t.plain_english}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', margin: '16px 0 2px', borderTop: `1px solid ${P.line}` }}>
-        {num('You collect', `$${premium.toLocaleString()}`)}
+        {num('You collect', `$${premium.toLocaleString()}`, 'premium')}
         {num('Cash set aside', `$${c.collateral.toLocaleString()}`)}
         {num('Breakeven', `$${c.breakeven.toLocaleString()}`)}
         {num('Odds you keep it', `${Math.round(c.prob_keep * 100)}%`)}
@@ -500,7 +536,7 @@ function OptControlPanel({ data }) {
         {dials.map(d => (
           <div key={d.key} style={{ border: `1px solid ${P.line}`, borderRadius: 9, padding: '11px 14px', background: P.card }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: P.ink }}>{d.label}</span>
+              <TermInfo termKey={d.key} label={d.label} style={{ fontSize: 13, fontWeight: 700, color: P.ink }} />
               <span style={{ fontSize: 11, color: P.mintDeep, border: `1px solid ${P.mint}`, borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap' }}>SAFE · {d.val}</span>
             </div>
             <div style={{ fontSize: 13, color: P.ink3, lineHeight: 1.55, marginTop: 6 }}>{d.why}</div>
@@ -596,7 +632,7 @@ function OptGrader() {
                 <span style={{ flexShrink: 0, color: r.passed === false ? P.amber : (r.passed === true ? P.mint : P.ink4) }}>
                   {r.passed === false ? '🔥' : (r.passed === true ? '✓' : '–')}
                 </span>
-                <span><b>{r.label}:</b> {r.value}. {r.passed === false ? r.risk_if_broken : r.why}</span>
+                <span><TermInfo termKey={r.key} label={r.label} />: {r.value}. {r.passed === false ? r.risk_if_broken : r.why}</span>
               </div>
             ))}
           </div>
