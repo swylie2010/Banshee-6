@@ -146,8 +146,10 @@ def _translation(b):
 
 def best_candidate(universe_data, account_size=None):
     """Scan normalized per-underlying data, return the single best CSP move.
-    See the Phase 1 spec for the output shape. Never raises on bad data — a
-    failed underlying is recorded in partial_failures."""
+    The 5% max-per-trade rule is a HARD GATE: when account_size is given, only
+    contracts whose collateral fits within 5% of the account are eligible. If
+    none fit, candidate is None and account_too_small explains the threshold.
+    Never raises on bad data — a failed underlying is recorded in partial_failures."""
     scanned, failures, eligible = [], [], []
     for u in universe_data or []:
         scanned.append(u.get("sym"))
@@ -156,14 +158,29 @@ def best_candidate(universe_data, account_size=None):
             continue
         eligible.extend(_eligible_from(u))
 
-    base = {"universe_scanned": scanned, "partial_failures": failures, "ivr_estimated": True}
+    base = {"universe_scanned": scanned, "partial_failures": failures,
+            "ivr_estimated": True}
+    none_result = {**base, "candidate": None, "guardrails": [], "translation": None,
+                   "low_iv_warning": False, "account_too_small": None}
     if not eligible:
-        return {**base, "candidate": None, "guardrails": [], "translation": None,
-                "low_iv_warning": False}
+        return none_result
 
-    best = max(eligible, key=lambda e: (e["annualized_yield"],
-                                        -abs(abs(e["delta"]) - 0.25),
-                                        e["open_interest"]))
+    affordable = eligible
+    if account_size and account_size > 0:
+        cap = account_size * 0.05
+        affordable = [e for e in eligible if e["collateral"] <= cap]
+        if not affordable:
+            cheapest = min(e["collateral"] for e in eligible)
+            return {**none_result, "account_too_small": {
+                "account_size": account_size,
+                "max_per_trade": round(cap, 2),
+                "cheapest_collateral": round(cheapest, 2),
+                "min_account_for_5pct": round(cheapest / 0.05, 2),
+            }}
+
+    best = max(affordable, key=lambda e: (e["annualized_yield"],
+                                          -abs(abs(e["delta"]) - 0.25),
+                                          e["open_interest"]))
     if account_size and account_size > 0:
         pct = best["collateral"] / account_size * 100
         best["sizing"] = {"account_size": account_size, "pct": round(pct, 2),
@@ -172,4 +189,5 @@ def best_candidate(universe_data, account_size=None):
     ivr = best["ivr_estimate"]
     return {**base, "candidate": best, "guardrails": _guardrails(best),
             "translation": _translation(best),
-            "low_iv_warning": (ivr is not None and ivr < IVR_MIN)}
+            "low_iv_warning": (ivr is not None and ivr < IVR_MIN),
+            "account_too_small": None}

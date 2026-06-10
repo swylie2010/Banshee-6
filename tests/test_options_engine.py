@@ -156,3 +156,43 @@ def test_best_candidate_oi_boundary_excludes_1000():
     # OI must EXCEED 1000 (strict) — exactly 1000 is rejected
     out = oe.best_candidate([_univ("SPY", 100, [_put(95, 40, 0.25, 1.20, 1000)])])
     assert out["candidate"] is None
+
+
+# ── Task 1: account-size gate ────────────────────────────────────────────────
+
+def _u(sym, spot, strike, iv=0.22, oi=5000, dte=42, bid=1.7, ask=1.9):
+    """One normalized underlying with a single put that clears the non-size rules.
+    Default spot=500/strike=480 gives delta ~0.258 (inside the 0.20-0.30 band)."""
+    return {"sym": sym, "name": sym, "spot": spot, "failed": False,
+            "closes": [spot * (1 + 0.001 * ((i % 7) - 3)) for i in range(60)],
+            "contracts": [{"type": "put", "strike": strike, "expiry": "2026-07-22",
+                           "dte": dte, "bid": bid, "ask": ask,
+                           "mid": round((bid + ask) / 2, 4),
+                           "iv": iv, "open_interest": oi, "volume": 100}]}
+
+def test_small_account_is_rejected_with_threshold():
+    # SPY put, strike 480 -> $48,000 collateral. A $2 account cannot afford it.
+    # spot=500 gives delta ~0.258 (passes the 0.20-0.30 gate).
+    data = [_u("SPY", 500.0, 480.0)]
+    res = oe.best_candidate(data, account_size=2)
+    assert res["candidate"] is None
+    ats = res["account_too_small"]
+    assert ats is not None
+    assert ats["account_size"] == 2
+    assert ats["cheapest_collateral"] == 48000.0
+    # need collateral to be 5% of account -> 48000 / 0.05 = 960000
+    assert ats["min_account_for_5pct"] == 960000.0
+
+def test_large_enough_account_returns_candidate():
+    data = [_u("SPY", 500.0, 480.0)]
+    res = oe.best_candidate(data, account_size=2_000_000)
+    assert res["candidate"] is not None
+    assert res["account_too_small"] is None
+    assert res["candidate"]["sizing"]["within_5pct"] is True
+
+def test_no_account_size_unchanged_behavior():
+    data = [_u("SPY", 500.0, 480.0)]
+    res = oe.best_candidate(data, account_size=None)
+    assert res["candidate"] is not None
+    assert res["account_too_small"] is None
+    assert "sizing" not in res["candidate"]
