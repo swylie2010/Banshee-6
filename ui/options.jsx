@@ -418,6 +418,7 @@ function OptionsPage({ onBack }) {
   const [optView, setOptView] = React.useState("calm");   // "calm" | "list" | "tracker"
   const [wheel, setWheel] = React.useState(null);
   const [runError, setRunError] = React.useState(null);
+  const [teach, setTeach] = useTeachMode();
 
   const runWheel = React.useCallback(async (candidate) => {
     setRunError(null);
@@ -457,10 +458,21 @@ function OptionsPage({ onBack }) {
     <>
       <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
         fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
-      <div style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ THE WHEEL · A CALM WAY TO EARN INCOME</div>
-      <div style={{ fontSize: 23, fontWeight: 700, margin: '7px 0 4px' }}>Here's one good move to consider</div>
-      <div style={{ fontSize: 14, color: P.ink3, lineHeight: 1.65, maxWidth: 580, marginBottom: 18 }}>
-        The Wheel pays you to offer to buy a solid fund at a discount. Banshee only surfaces a move once it clears every safety rule — nothing to hunt for.
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ OPTIONS · ONE CONSERVATIVE PLAY, EXPLAINED</div>
+        <TeachToggle on={teach} setOn={setTeach} />
+      </div>
+      <div style={{ fontSize: 23, fontWeight: 700, margin: '7px 0 6px' }}>First, what an option actually is.</div>
+      <Teach teach={teach} title="What an option is">
+        An option is a contract between two people about a price in the future. One side <b>pays cash now</b> for
+        the right to buy or sell at a set price; the other side <b>collects that cash</b> and takes on the matching
+        obligation. This page puts you on the cash-collecting side of the most conservative version of that deal —
+        and explains every part as you go. It isn't a product or free income: it's a real trade with a real upside
+        and a real obligation, and the goal is that you can explain both before you'd ever consider doing it.
+      </Teach>
+      <div style={{ fontSize: 14, color: P.ink3, lineHeight: 1.65, maxWidth: 600, margin: '10px 0 18px' }}>
+        Banshee doesn't pick for you — it <b>searches</b> the broad-fund options and shows you the ones that clear
+        every safety rule. What you do next is your call.
       </div>
 
       <div style={{ marginBottom: 16 }}>
