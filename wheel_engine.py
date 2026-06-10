@@ -95,8 +95,11 @@ def _on_assigned(st, ev):
     if not leg:
         st["history"].append("ASSIGNED received with no open position — ignored.")
         return
-    # ASSIGNED is CSP-only: a covered call being exercised is the CALLED_AWAY event,
-    # and validate() keeps ASSIGNED legal only from CSP_OPEN. So leg is always the put here.
+    # ASSIGNED is CSP-only: a covered call being exercised is the CALLED_AWAY event.
+    # This handler guards on leg type so a mis-sequenced log can't corrupt state.
+    if leg.get("leg") != "csp":
+        st["history"].append("ASSIGNED received but the open position is not a put — ignored.")
+        return
     strike = leg.get("strike")
     if strike is None:
         strike = ev.get("strike")
@@ -108,12 +111,49 @@ def _on_assigned(st, ev):
     st["history"].append(f"Assigned 100 shares @ ${strike}. Now sell covered calls above your net basis.")
 
 
+def _on_sold_cc(st, ev):
+    prem = round((ev.get("mid") or 0.0) * 100.0, 2)
+    st["leg"] = {"leg": "cc", "strike": ev.get("strike"), "expiry": ev.get("expiry"),
+                 "dte": ev.get("dte"), "delta": ev.get("delta"), "premium": prem}
+    st["premium_collected"] += prem
+    st["cycle_premium"] += prem
+    st["checkpoint_done"] = False
+    st["state"] = "CC_OPEN"
+    st["history"].append(f"Sold a covered call @ ${ev.get('strike')} — collected ${prem:,.0f}.")
+
+
+def _on_called_away(st, ev):
+    leg = st["leg"] or {}
+    if not leg:
+        st["history"].append("CALLED_AWAY received with no open position — ignored.")
+        return
+    if leg.get("leg") != "cc":
+        st["history"].append("CALLED_AWAY received but the open position is not a covered call — ignored.")
+        return
+    cc_strike = leg.get("strike")
+    if cc_strike is None:
+        cc_strike = ev.get("strike")
+    basis = st["cost_basis"] or 0.0
+    pnl = (cc_strike - basis) * 100.0 + st["cycle_premium"]
+    st["realized_pnl"] += pnl
+    st["cycles_completed"] += 1
+    st["shares_held"] = 0
+    st["cost_basis"] = None
+    st["cycle_premium"] = 0.0
+    st["state"] = "CASH"
+    st["leg"] = None
+    st["checkpoint_done"] = False
+    st["history"].append(f"Called away @ ${cc_strike}. Cycle profit ${pnl:,.0f}. Back to cash.")
+
+
 _HANDLERS = {
     "SOLD_CSP": _on_sold_csp,
+    "SOLD_CC": _on_sold_cc,
     "CHECKPOINT_HELD": _on_checkpoint_held,
     "CLOSED_EARLY": _on_closed_early,
     "EXPIRED_WORTHLESS": _on_expired_worthless,
     "ASSIGNED": _on_assigned,
+    "CALLED_AWAY": _on_called_away,
 }
 
 
@@ -204,3 +244,20 @@ def _result(st):
     return {"state": st["state"], "next_move": _next_move(st), "position": _position(st),
             "pending_decision": _pending(st), "totals": _totals(st),
             "history": st["history"], "error": None}
+
+
+def suggest_covered_call(net_cost_basis, annual_vol, dte=40):
+    """Synthetic covered-call suggestion. Phase 2 has NO live calls feed, so this
+    is an estimate: strike = next whole dollar above net basis (never lock in a
+    loss); premium via the ATM approximation price ~= 0.4 * S * vol * sqrt(T).
+    Pure. Returns None when net basis is unusable. A real Alpaca calls adapter
+    replaces this in Phase 3 (feedback_data_source_agnostic)."""
+    if net_cost_basis is None or net_cost_basis <= 0:
+        return None
+    strike = float(math.floor(net_cost_basis) + 1)
+    vol = annual_vol if (annual_vol and annual_vol > 0) else 0.30
+    dte = dte if (dte and dte > 0) else 40
+    mid = round(0.4 * strike * vol * math.sqrt(dte / 365.0), 2)
+    return {"strike": strike, "mid": mid, "dte": dte, "estimated": True,
+            "plain": (f"A covered call at ${strike:,.0f} (just above your net basis) would "
+                      f"collect about ${mid * 100:,.0f} — an estimate (no live options feed yet).")}
