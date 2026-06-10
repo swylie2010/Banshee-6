@@ -124,7 +124,35 @@ function OptError({ msg }) {
   );
 }
 
-function OptCard({ data, onRunWheel, onSeeWheels, runError }) {
+/* Static "you are here" Wheel map — both branches visible before committing. */
+function WheelJourney({ underlying, dte }) {
+  const P = OPT_PALETTE;
+  const node = (text, here) => (
+    <span style={{ border: `1px solid ${here ? P.mint : P.line}`, borderRadius: 20,
+      padding: '5px 11px', fontSize: 12, whiteSpace: 'nowrap',
+      background: here ? P.mintSoft : P.card, color: here ? P.ink : P.ink3,
+      fontWeight: here ? 700 : 400 }}>{text}</span>
+  );
+  const arrow = <span style={{ color: P.ink4 }}>→</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {node(`① Sell put, collect premium`, true)} {arrow} {node(`in ${dte} days…`)}
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingLeft: 18 }}>
+        <span style={{ color: P.mintDeep, fontSize: 11 }}>└ stays above ▸</span>
+        {node('keep the premium')} <span style={{ color: P.ink4 }}>↺ start again</span>
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingLeft: 18 }}>
+        <span style={{ color: P.amber, fontSize: 11 }}>└ drops below ▸</span>
+        {node(`own 100 ${underlying} shares`)} {arrow} {node('② sell a call')} {arrow}
+        <span style={{ color: P.ink4 }}>called away ↺</span>
+      </div>
+    </div>
+  );
+}
+
+function OptCard({ data, teach, onRunWheel, onSeeWheels, runError }) {
   const P = OPT_PALETTE;
   const c = data.candidate, t = data.translation;
   const premium = Math.round(c.mid * 100);
@@ -140,7 +168,9 @@ function OptCard({ data, onRunWheel, onSeeWheels, runError }) {
         fontWeight: 700, color: P.mintDeep, border: `1px solid ${P.mint}`, borderRadius: 5, padding: '3px 9px' }}>
         ◆ CASH-SECURED PUT · {c.underlying}
       </span>
-      <div style={{ fontSize: 18, fontWeight: 700, margin: '13px 0 12px', color: P.ink }}>{t.headline}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, margin: '13px 0 12px', color: P.ink }}>
+        Get paid ${premium.toLocaleString()} now to promise to buy {c.underlying} at ${c.strike.toLocaleString()} — and here's the obligation that comes with it.
+      </div>
       <div style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.ink4, marginBottom: 6 }}>In plain English</div>
       <div style={{ fontSize: 14, lineHeight: 1.7, color: '#234034', background: P.mintSoft,
         borderLeft: `3px solid ${P.mint}`, padding: '12px 15px', borderRadius: '0 6px 6px 0' }}>{t.plain_english}</div>
@@ -151,6 +181,26 @@ function OptCard({ data, onRunWheel, onSeeWheels, runError }) {
         {num('Odds you keep it', `${Math.round(c.prob_keep * 100)}%`)}
         {num('Days', `${c.dte}`)}
         {num('Safety', `✓ Δ${Math.abs(c.delta).toFixed(2)}${c.ivr_estimate != null ? ` · IVR ${Math.round(c.ivr_estimate)} est.` : ''}`)}
+      </div>
+      <Teach teach={teach} title="What 'cash set aside' really means">
+        That ${c.collateral.toLocaleString()} isn't a fee — it's the <b>whole price of the shares you're promising to buy</b>.
+        You keep it in cash, ready. That cash <b>is</b> the obligation; the 5% rule just says it can't be more than a small
+        slice of your account, so one surprise can't sink you.
+      </Teach>
+
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.ink4, marginBottom: 8 }}>The whole journey — you are here</div>
+        <WheelJourney underlying={c.underlying} dte={c.dte} />
+      </div>
+
+      <div style={{ marginTop: 14, background: P.amberBg, border: `1px solid ${P.amberLine}`,
+        borderRadius: 8, padding: '12px 15px' }}>
+        <div style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.amber }}>What could go wrong — the honest worst case</div>
+        <div style={{ fontSize: 13, color: '#6b5118', lineHeight: 1.7, marginTop: 5 }}>
+          If {c.underlying} falls hard, you're obligated to buy 100 shares at ${c.strike.toLocaleString()} = <b>${c.collateral.toLocaleString()}</b> committed,
+          possibly worth less than you paid. You'd then sell calls to claw it back — but that cash is tied up and the
+          position can sit underwater for a while. This is the real risk you're paid ${premium.toLocaleString()} to take.
+        </div>
       </div>
       {c.sizing && (
         <div style={{ fontSize: 13, color: c.sizing.within_5pct ? P.mintDeep : P.amber, marginTop: 6 }}>
@@ -488,7 +538,7 @@ function OptionsPage({ onBack }) {
 
       {!loading && data && data.candidate && (
         <>
-          <OptCard data={data} onRunWheel={runWheel} onSeeWheels={() => setOptView("list")} runError={runError} />
+          <OptCard data={data} teach={teach} onRunWheel={runWheel} onSeeWheels={() => setOptView("list")} runError={runError} />
           {data.low_iv_warning && (
             <div style={{ marginTop: 16, maxWidth: 620, background: P.amberBg, border: `1px solid ${P.amberLine}`,
               borderRadius: 8, padding: '12px 15px', display: 'flex', gap: 9 }}>
