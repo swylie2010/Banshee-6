@@ -804,6 +804,7 @@ def route_nexus(
         for c in contradictions:
             out += f"\n  [{c['severity']}] {c['name']}: {c['description']}"
 
+    providers = load_providers()
     cfg = providers.get("AI_API")
     if use_ai and cfg and cfg.get("key"):
         prompt   = banshee_ai.build_banshee_prompt(
