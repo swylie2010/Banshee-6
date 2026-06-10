@@ -460,6 +460,150 @@ function WheelTracker({ wheel, setWheel, onBack }) {
   );
 }
 
+/* The safety rules as dials at SAFE — each teaches its rule and (statically)
+   what loosening it would cost. The runnable calm/crash sim is Spec 2. */
+function OptControlPanel({ data }) {
+  const P = OPT_PALETTE;
+  const [openKey, setOpenKey] = React.useState(null);
+  const c = data.candidate || {};
+  const ivr = c.ivr_estimate;
+  const dials = [
+    { key: 'cash', label: 'Cash backing (cash-secured)', val: 'fully cash-secured',
+      why: 'The full purchase price sits in cash, ready.',
+      loosen: 'Sell it "naked" on margin: same income, none locked up — until a crash you can\'t cover triggers a margin call.' },
+    { key: 'delta', label: 'Assignment odds (delta)', val: `${Math.abs(c.delta).toFixed(2)} (~${Math.round(c.prob_keep * 100)}% expires)`,
+      why: 'Low odds you\'re forced to buy.',
+      loosen: 'Chase a higher delta for fatter premium and you\'re assigned far more often — buying stock, not collecting income.' },
+    { key: 'underlying', label: 'What you sell against (underlying)', val: `broad fund (${c.underlying})`,
+      why: 'A whole-market basket can\'t gap 30% overnight.',
+      loosen: 'A single hot name pays more because it can crater on one earnings report.' },
+    { key: 'size', label: 'Trade size (% of account)', val: c.sizing ? `${c.sizing.pct}% of account` : '≤ 5% of account',
+      why: 'One bad trade can\'t sink you.',
+      loosen: 'Bet bigger and one assignment ties up everything — no dry powder, stuck holding for months.' },
+    { key: 'dte', label: 'Time to expiry (DTE)', val: `${c.dte} days`,
+      why: '35–45 days is where time-decay works hardest for you.', loosen: null },
+    { key: 'oi', label: 'Liquidity (open interest)', val: (c.open_interest || 0).toLocaleString(),
+      why: 'Enough traders that you can exit at a fair price.', loosen: null },
+    { key: 'ivr', label: 'Premium richness (IV rank, est.)', val: ivr != null ? `~${Math.round(ivr)} est.` : 'n/a',
+      why: 'Pay is worth the risk only when premium is rich; below the line, the Wheel waits — which is why some days Banshee returns nothing, and that\'s correct.', loosen: null },
+  ];
+  const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
+  return (
+    <div style={{ marginTop: 22, maxWidth: 620 }}>
+      <div style={{ ...lab, color: P.mintDeep, marginBottom: 4 }}>◆ THE SAFETY RULES THAT FOUND THIS</div>
+      <div style={{ fontSize: 13, color: P.ink3, lineHeight: 1.6, marginBottom: 12 }}>
+        Each rule is a dial set to <b>SAFE</b>. Together they <b>are</b> the option above. The safe move is just every dial left.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {dials.map(d => (
+          <div key={d.key} style={{ border: `1px solid ${P.line}`, borderRadius: 9, padding: '11px 14px', background: P.card }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: P.ink }}>{d.label}</span>
+              <span style={{ fontSize: 11, color: P.mintDeep, border: `1px solid ${P.mint}`, borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap' }}>SAFE · {d.val}</span>
+            </div>
+            <div style={{ fontSize: 13, color: P.ink3, lineHeight: 1.55, marginTop: 6 }}>{d.why}</div>
+            {d.loosen && (
+              <div style={{ marginTop: 6 }}>
+                <button onClick={() => setOpenKey(openKey === d.key ? null : d.key)} style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+                  fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: P.amber }}>
+                  {openKey === d.key ? '▾ what loosening this costs' : '› what loosening this costs'}
+                </button>
+                {openKey === d.key && (
+                  <div style={{ fontSize: 13, color: '#6b5118', lineHeight: 1.6, marginTop: 5,
+                    background: P.amberBg, border: `1px solid ${P.amberLine}`, borderRadius: 6, padding: '9px 12px' }}>
+                    🔥 {d.loosen}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Compose-your-own option → Banshee grades it rule-by-rule (the inverse search). */
+function OptGrader() {
+  const P = OPT_PALETTE;
+  const [spec, setSpec] = React.useState({ underlying: 'SPY', strike: '', dte: '42', cash_backed: true, account_size: '' });
+  const [res, setRes] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
+  const inp = { fontFamily: 'monospace', fontSize: 13, padding: '6px 9px', background: P.card,
+    color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6 };
+
+  const grade = async () => {
+    setBusy(true); setErr(null); setRes(null);
+    const payload = {
+      underlying: (spec.underlying || '').toUpperCase().trim(),
+      strike: parseFloat(spec.strike),
+      dte: parseInt(spec.dte, 10),
+      cash_backed: spec.cash_backed,
+      account_size: spec.account_size ? parseFloat(spec.account_size) : null,
+    };
+    const r = await window.API.gradeOption(payload);
+    setBusy(false);
+    if (r && r.error) setErr(r.error); else setRes(r);
+  };
+
+  return (
+    <div style={{ marginTop: 22, maxWidth: 620, borderTop: `1px solid ${P.line}`, paddingTop: 18 }}>
+      <div style={{ ...lab, color: P.mintDeep }}>◆ MODEL YOUR OWN OPTION</div>
+      <div style={{ fontSize: 13, color: P.ink3, lineHeight: 1.6, margin: '5px 0 12px' }}>
+        You're going to want to try something. Compose it here and Banshee grades it against the same rules —
+        no money, no broker, just an honest verdict. You choose.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+        <div><div style={{ ...lab, color: P.ink4, marginBottom: 4 }}>Sell against</div>
+          <input value={spec.underlying} onChange={e => setSpec({ ...spec, underlying: e.target.value })} style={{ ...inp, width: 90 }} /></div>
+        <div><div style={{ ...lab, color: P.ink4, marginBottom: 4 }}>Strike</div>
+          <input value={spec.strike} placeholder="480" onChange={e => setSpec({ ...spec, strike: e.target.value.replace(/[^0-9.]/g, '') })} style={{ ...inp, width: 80 }} /></div>
+        <div><div style={{ ...lab, color: P.ink4, marginBottom: 4 }}>Days to expiry</div>
+          <input value={spec.dte} onChange={e => setSpec({ ...spec, dte: e.target.value.replace(/[^0-9]/g, '') })} style={{ ...inp, width: 70 }} /></div>
+        <div><div style={{ ...lab, color: P.ink4, marginBottom: 4 }}>Account</div>
+          <input value={spec.account_size} placeholder="optional" onChange={e => setSpec({ ...spec, account_size: e.target.value.replace(/[^0-9]/g, '') })} style={{ ...inp, width: 100 }} /></div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: P.ink, cursor: 'pointer' }}>
+          <input type="checkbox" checked={spec.cash_backed} onChange={e => setSpec({ ...spec, cash_backed: e.target.checked })} />
+          cash-backed
+        </label>
+        <OptButton label={busy ? 'GRADING…' : 'GRADE IT'} disabled={busy} onClick={grade} />
+      </div>
+      <OptError msg={err} />
+      {res && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 700,
+            color: res.passes_all ? P.mintDeep : (res.failed.length ? P.amber : P.ink3) }}>
+            {res.passes_all
+              ? '✓ This clears every one of Banshee\'s standards.'
+              : (res.failed.length
+                  ? `⚠ This breaks ${res.failed.length} rule${res.failed.length > 1 ? 's' : ''} — here's what you'd be taking on.`
+                  : 'Couldn\'t fully check this yet — add your account size to grade trade size.')}
+          </div>
+          {res.data_quality && res.data_quality.strike_gap > 0 && (
+            <div style={{ fontSize: 12, color: P.ink4, fontStyle: 'italic', marginTop: 5 }}>
+              Estimated from the nearest listed strike ${Number(res.data_quality.nearest_listed_strike).toLocaleString()} (your strike is ${Number(res.data_quality.strike_gap).toLocaleString()} away) — the further off, the rougher the read.
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
+            {res.rules.map(r => (
+              <div key={r.key} style={{ display: 'flex', gap: 9, fontSize: 13, lineHeight: 1.55,
+                color: r.passed === false ? '#6b5118' : P.ink }}>
+                <span style={{ flexShrink: 0, color: r.passed === false ? P.amber : (r.passed === true ? P.mint : P.ink4) }}>
+                  {r.passed === false ? '🔥' : (r.passed === true ? '✓' : '–')}
+                </span>
+                <span><b>{r.label}:</b> {r.value}. {r.passed === false ? r.risk_if_broken : r.why}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OptionsPage({ onBack }) {
   const P = OPT_PALETTE;
   const [data, setData] = React.useState(null);
@@ -539,6 +683,8 @@ function OptionsPage({ onBack }) {
       {!loading && data && data.candidate && (
         <>
           <OptCard data={data} teach={teach} onRunWheel={runWheel} onSeeWheels={() => setOptView("list")} runError={runError} />
+          <OptControlPanel data={data} />
+          <OptGrader />
           {data.low_iv_warning && (
             <div style={{ marginTop: 16, maxWidth: 620, background: P.amberBg, border: `1px solid ${P.amberLine}`,
               borderRadius: 8, padding: '12px 15px', display: 'flex', gap: 9 }}>
