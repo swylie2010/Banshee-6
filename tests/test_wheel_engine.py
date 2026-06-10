@@ -29,3 +29,28 @@ def test_unknown_event_returns_error_state_not_raise():
     r = we.replay([{"type": "NONSENSE"}])
     assert r["state"] == "error"
     assert "NONSENSE" in r["error"]
+
+
+def _csp(strike=100, mid=2.00, dte=40):
+    return {"type": "SOLD_CSP", "strike": strike, "expiry": "2026-07-17", "dte": dte, "mid": mid, "delta": -0.25}
+
+
+def test_checkpoint_held_advances_to_expiry_decision():
+    r = we.replay([_csp(), {"type": "CHECKPOINT_HELD", "leg": "csp"}])
+    assert r["state"] == "CSP_OPEN"
+    assert r["next_move"]["action"] == "RESOLVE_EXPIRY"
+    assert r["pending_decision"]["kind"] == "expiry"
+    assert r["pending_decision"]["needs"] == "expiry_price"
+
+
+def test_close_csp_early_keeps_half_and_returns_to_cash():
+    r = we.replay([_csp(mid=2.00), {"type": "CLOSED_EARLY", "leg": "csp", "est_close_cost": 100.0}])
+    assert r["state"] == "CASH"
+    assert r["totals"]["realized_pnl"] == 100.0   # 200 collected - 100 buyback
+    assert r["totals"]["cycles_completed"] == 1
+    assert r["totals"]["net_cost_basis"] is None
+
+
+def test_close_early_defaults_buyback_to_half_premium():
+    r = we.replay([_csp(mid=2.00), {"type": "CLOSED_EARLY", "leg": "csp"}])
+    assert r["totals"]["realized_pnl"] == 100.0   # default est_close_cost = 50% of 200

@@ -36,8 +36,42 @@ def _on_sold_csp(st, ev):
     st["history"].append(f"Sold a cash-secured put @ ${ev.get('strike')} — collected ${prem:,.0f}.")
 
 
+def _on_checkpoint_held(st, ev):
+    st["checkpoint_done"] = True
+    st["history"].append("Held through the 50%/21-day checkpoint.")
+
+
+def _on_closed_early(st, ev):
+    leg = st["leg"] or {}
+    if not leg:
+        st["history"].append("CLOSED_EARLY received with no open position — ignored.")
+        return
+    prem = leg.get("premium", 0.0)
+    close_cost = ev.get("est_close_cost")
+    if close_cost is None:
+        close_cost = round(prem * 0.5, 2)
+    kept = prem - close_cost
+    if leg.get("leg") == "csp":
+        st["realized_pnl"] += kept
+        st["cycles_completed"] += 1
+        st["cycle_premium"] = 0.0
+        st["state"] = "CASH"
+        st["leg"] = None
+        st["checkpoint_done"] = False
+        st["history"].append(f"Closed the put early — kept ${kept:,.0f}. Back to cash.")
+    else:  # covered call: buy it back, keep ~half, still hold shares
+        # CC gain flows through net_cost_basis (cycle_premium), NOT realized_pnl — shares aren't sold yet
+        st["cycle_premium"] -= close_cost
+        st["state"] = "SHARES"
+        st["leg"] = None
+        st["checkpoint_done"] = False
+        st["history"].append(f"Closed the call early — net kept ${kept:,.0f}. Still hold 100 shares.")
+
+
 _HANDLERS = {
     "SOLD_CSP": _on_sold_csp,
+    "CHECKPOINT_HELD": _on_checkpoint_held,
+    "CLOSED_EARLY": _on_closed_early,
 }
 
 
