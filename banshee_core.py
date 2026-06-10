@@ -1367,6 +1367,35 @@ def route_options_candidate(account_size: float = None):
     return sanitized
 
 
+@app.post("/options/grade")
+def route_options_grade(spec: dict = Body(...)):
+    """Grade a user-composed cash-secured put against Banshee's rules (the inverse
+    of /options/candidate). Read-only; never executes. Structured errors, never 500
+    on bad input."""
+    sym = (spec.get("underlying") or "").upper()
+    if not sym or spec.get("strike") in (None, "") or spec.get("dte") in (None, ""):
+        return JSONResponse(status_code=400, content={"error":
+            "Pick something to sell against, a strike price, and days to expiry to grade an option."})
+    try:
+        contracts, meta = options_data.fetch_chain(sym)
+    except Exception as e:
+        print(f"[options] grade chain fetch failed for {sym}: {e}", file=sys.stderr)
+        return JSONResponse(status_code=404, content={"error":
+            f"Couldn't load market data for {sym} — check the symbol and try again."})
+    try:
+        closes = options_data.fetch_closes(sym)
+    except Exception:
+        closes = []
+    market_ctx = {"spot": meta.get("spot"), "contracts": contracts, "closes": closes}
+    try:
+        result = options_engine.grade_option(spec, market_ctx)
+    except Exception as e:
+        print(f"[options] grade engine failed: {e}", file=sys.stderr)
+        return JSONResponse(status_code=500, content={"error":
+            "Couldn't grade that option right now — try again in a moment."})
+    return _sanitize(result)
+
+
 @app.get("/ohlcv")
 def route_ohlcv(
     symbol: str = Query(...),
