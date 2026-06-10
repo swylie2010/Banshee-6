@@ -139,3 +139,39 @@ def test_called_away_ignored_when_no_covered_call_open():
     assert r["state"] == "CSP_OPEN"
     assert r["totals"]["realized_pnl"] == 0.0
     assert r["totals"]["cycles_completed"] == 0
+
+
+def test_validate_allows_legal_first_move():
+    assert we.validate([], {"type": "SOLD_CSP"})["ok"] is True
+
+
+def test_validate_rejects_selling_cc_from_cash():
+    v = we.validate([], {"type": "SOLD_CC"})
+    assert v["ok"] is False
+    assert "SOLD_CC" in v["reason"]
+
+
+def test_validate_blocks_expiry_before_checkpoint():
+    # open CSP but no CHECKPOINT_HELD yet -> only checkpoint events legal
+    v = we.validate([_csp()], {"type": "ASSIGNED", "strike": 100, "expiry_price": 95})
+    assert v["ok"] is False
+    held = we.validate([_csp(), {"type": "CHECKPOINT_HELD", "leg": "csp"}],
+                       {"type": "ASSIGNED", "strike": 100, "expiry_price": 95})
+    assert held["ok"] is True
+
+
+def test_validate_cc_open_held_allows_called_away_not_assigned():
+    events = [
+        _csp(), {"type": "CHECKPOINT_HELD", "leg": "csp"},
+        {"type": "ASSIGNED", "strike": 100, "expiry_price": 95},
+        {"type": "SOLD_CC", "strike": 102, "expiry": "2026-08-21", "dte": 40, "mid": 1.5, "delta": 0.28},
+        {"type": "CHECKPOINT_HELD", "leg": "cc"},
+    ]
+    assert we.validate(events, {"type": "CALLED_AWAY", "strike": 102, "expiry_price": 105})["ok"] is True
+    assert we.validate(events, {"type": "ASSIGNED", "strike": 102, "expiry_price": 105})["ok"] is False
+
+
+def test_validate_surfaces_error_state():
+    v = we.validate([{"type": "NONSENSE"}], {"type": "SOLD_CSP"})
+    assert v["ok"] is False
+    assert "NONSENSE" in v["reason"]

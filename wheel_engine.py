@@ -246,6 +246,34 @@ def _result(st):
             "history": st["history"], "error": None}
 
 
+def validate(events, new_event):
+    """Return {'ok': bool, 'reason': str}. Pure; never raises. Decides whether
+    new_event is a legal transition from the state implied by `events`."""
+    r = replay(events)
+    state = r.get("state")
+    if state == "error":
+        return {"ok": False, "reason": r.get("error") or "Event log is in an error state."}
+    pend = r.get("pending_decision") or {}
+    et = (new_event or {}).get("type")
+    if state == "CASH":
+        allowed = {"SOLD_CSP"}
+    elif state == "SHARES":
+        allowed = {"SOLD_CC"}
+    elif state in ("CSP_OPEN", "CC_OPEN"):
+        if pend.get("kind") == "checkpoint":
+            allowed = {"CHECKPOINT_HELD", "CLOSED_EARLY"}
+        elif state == "CSP_OPEN":
+            allowed = {"EXPIRED_WORTHLESS", "ASSIGNED"}
+        else:
+            allowed = {"EXPIRED_WORTHLESS", "CALLED_AWAY"}
+    else:
+        allowed = set()
+    if et in allowed:
+        return {"ok": True, "reason": ""}
+    nice = ", ".join(sorted(allowed)) if allowed else "none"
+    return {"ok": False, "reason": f"Can't do '{et}' from state {state}. Allowed here: {nice}."}
+
+
 def suggest_covered_call(net_cost_basis, annual_vol, dte=40):
     """Synthetic covered-call suggestion. Phase 2 has NO live calls feed, so this
     is an estimate: strike = next whole dollar above net basis (never lock in a
