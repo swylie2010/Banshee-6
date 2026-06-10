@@ -139,8 +139,10 @@ def _translation(b):
             f"you agree to buy 100 shares at that discount — a price you'd be glad to own it at. "
             f"Odds of just keeping the ${premium:,.0f}: about {pk}%."),
         "prob_keep": b["prob_keep"],
-        "guidance": (f"If you took this, Banshee aims to close it at half the profit "
-                     f"(~${premium / 2:,.0f}) or by day 21 — whichever first. You never track that yourself."),
+        "guidance": (f"A common safe practice: once you've collected about half the premium "
+                     f"(~${premium / 2:,.0f}) or you're near 21 days out — whichever comes first — many "
+                     f"traders close early to lock the win and cut risk. Banshee can flag when you're "
+                     f"there, but the decision, and tracking it, are yours."),
     }
 
 
