@@ -531,6 +531,52 @@ async function gradeOption(spec) {
   }
 }
 
+/* ── Options Learning Engine (Spec 2) ────────────────────────────────────── */
+
+async function runScenario(spec, terminalPrice) {
+  try {
+    const r = await fetch(`${API_BASE}/options/scenario`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec, terminal_price: terminalPrice }),
+    });
+    return r.ok ? r.json() : { error: (await r.json()).detail?.error || 'Scenario failed.' };
+  } catch (e) { return { error: 'Scenario unavailable — try again.' }; }
+}
+
+async function learnRecap(run) {
+  try {
+    const r = await fetch(`${API_BASE}/options/learn/recap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run }),
+    });
+    return r.ok ? r.json() : { text: 'Narration unavailable.' };
+  } catch (e) { return { text: 'Narration unavailable.' }; }
+}
+
+async function learnCompare(runA, runB) {
+  try {
+    const r = await fetch(`${API_BASE}/options/learn/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_a: runA, run_b: runB }),
+    });
+    return r.ok ? r.json() : { text: 'Comparison unavailable.' };
+  } catch (e) { return { text: 'Comparison unavailable.' }; }
+}
+
+async function learnWhyNot(graded, run) {
+  try {
+    const r = await fetch(`${API_BASE}/options/learn/why-not`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ graded, run }),
+    });
+    return r.ok ? r.json() : { text: 'Narration unavailable.' };
+  } catch (e) { return { text: 'Narration unavailable.' }; }
+}
+
 /* ── Simulated Wheel FSM ──────────────────────────────────────────────────── */
 
 /* list all active wheel positions */
@@ -607,4 +653,4 @@ async function deleteWheel(id) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot };
