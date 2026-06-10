@@ -191,3 +191,102 @@ def best_candidate(universe_data, account_size=None):
             "translation": _translation(best),
             "low_iv_warning": (ivr is not None and ivr < IVR_MIN),
             "account_too_small": None}
+
+
+# Approved underlyings for a beginner Wheel — broad funds that can't gap on one headline.
+BROAD_ETFS = {"SPY", "QQQ", "IWM", "DIA"}
+
+
+def _nearest_contract(contracts, strike):
+    """Closest put by strike, for reading IV/OI of a user-chosen strike. None if none."""
+    puts = [c for c in (contracts or [])
+            if c.get("type") == "put" and c.get("strike") is not None]
+    if not puts or strike is None:
+        return None
+    return min(puts, key=lambda c: abs(c["strike"] - strike))
+
+
+def grade_option(spec, market_ctx):
+    """Grade a user-composed cash-secured put against EVERY rule (the inverse of
+    best_candidate). Pure. spec: {underlying, strike, dte, cash_backed(bool),
+    account_size(optional)}. market_ctx: {spot, contracts, closes}. Returns a
+    rule-by-rule verdict; labels follow the Jargon Naming Standard."""
+    underlying = (spec.get("underlying") or "").upper()
+    strike = spec.get("strike")
+    dte = spec.get("dte")
+    cash_backed = bool(spec.get("cash_backed", True))
+    account_size = spec.get("account_size")
+
+    spot = (market_ctx or {}).get("spot")
+    contracts = (market_ctx or {}).get("contracts") or []
+    rv = realized_vol_series((market_ctx or {}).get("closes") or [])
+    near = _nearest_contract(contracts, strike)
+    iv = near.get("iv") if near else None
+    oi = near.get("open_interest") if near else None
+    d = put_delta(spot, strike, dte, iv) if (spot and strike and dte and iv) else None
+    ivr = estimate_ivr(iv, rv)
+    collateral = round(strike * 100, 2) if strike else None
+
+    rules = []
+    rules.append({"key": "cash", "label": "Cash backing (cash-secured)",
+        "value": "fully cash-secured" if cash_backed else "naked / on margin",
+        "passed": cash_backed,
+        "why": "You keep the full purchase price in cash, ready to actually buy the shares.",
+        "risk_if_broken": "Selling naked means a crash can demand cash you don't have — a margin call and forced liquidation, far past the premium you collected."})
+
+    passed_delta = d is not None and DELTA_LOW <= abs(d) <= DELTA_HIGH
+    rules.append({"key": "delta", "label": "Assignment odds (delta)",
+        "value": (f"{abs(d):.2f}" if d is not None else "n/a"),
+        "passed": passed_delta,
+        "why": "A 0.20–0.30 delta means roughly a 70–80% chance it expires worthless.",
+        "risk_if_broken": "Higher delta pays more, but you're forced to buy the shares far more often — that's buying stock, not collecting income."})
+
+    passed_dte = dte is not None and DTE_MIN <= dte <= DTE_MAX
+    rules.append({"key": "dte", "label": "Time to expiry (DTE)",
+        "value": (f"{dte} days" if dte is not None else "n/a"),
+        "passed": passed_dte,
+        "why": "35–45 days is where time-decay works hardest in your favor.",
+        "risk_if_broken": "Too short collects little premium; too long commits your cash for ages."})
+
+    passed_oi = bool(oi) and oi > OI_MIN
+    rules.append({"key": "oi", "label": "Liquidity (open interest)",
+        "value": (f"{oi:,}" if oi else "n/a"),
+        "passed": passed_oi,
+        "why": "Over 1,000 open contracts means you can get in and out at a fair price.",
+        "risk_if_broken": "A thin contract can trap you — you may not be able to exit without a steep haircut."})
+
+    passed_ivr = ivr is None or ivr >= IVR_MIN
+    rules.append({"key": "ivr", "label": "Premium richness (IV rank, est.)",
+        "value": (f"~{ivr:.0f} est." if ivr is not None else "n/a"),
+        "passed": passed_ivr,
+        "why": "Premium should be rich enough to be worth the risk; below the line, the Wheel usually waits.",
+        "risk_if_broken": "Thin premium isn't worth the obligation you'd take on."})
+
+    passed_under = underlying in BROAD_ETFS
+    rules.append({"key": "underlying", "label": "What you sell against (underlying)",
+        "value": underlying or "n/a",
+        "passed": passed_under,
+        "why": "Broad funds (SPY/QQQ/IWM/DIA) can't gap 30% on a single headline.",
+        "risk_if_broken": "A single name pays more because it can crater on one earnings report overnight."})
+
+    if account_size and account_size > 0 and collateral:
+        pct = collateral / account_size * 100
+        passed_size = pct <= 5.0
+        size_val = f"{round(pct, 2)}% of account"
+    else:
+        passed_size = None
+        size_val = "no account size given"
+    rules.append({"key": "size", "label": "Trade size (% of account)",
+        "value": size_val,
+        "passed": passed_size,
+        "why": "No single trade should use more than 5% of your account.",
+        "risk_if_broken": "One assignment ties up everything — no dry powder, stuck holding for months."})
+
+    failed = [r["key"] for r in rules if r["passed"] is False]
+    return {
+        "underlying": underlying, "strike": strike, "dte": dte,
+        "collateral": collateral,
+        "delta": (round(d, 3) if d is not None else None),
+        "ivr_estimate": ivr,
+        "rules": rules, "failed": failed, "passes_all": len(failed) == 0,
+    }

@@ -214,3 +214,52 @@ def test_guardrail_labels_follow_naming_standard():
     assert labels["oi"] == "Liquidity (open interest)"
     assert labels["cash"] == "Cash backing (cash-secured)"
     assert labels["ivr"] == "Premium richness (IV rank, est.)"
+
+
+# ── Task 3: grade_option ─────────────────────────────────────────────────────
+
+import options_engine
+
+
+def _ctx(spot=500.0, strike=480.0, iv=0.22, oi=5000):
+    return {"spot": spot,
+            "closes": [spot * (1 + 0.001 * ((i % 7) - 3)) for i in range(60)],
+            "contracts": [{"type": "put", "strike": strike, "iv": iv,
+                           "open_interest": oi, "dte": 42}]}
+
+def test_grade_clean_spy_csp_passes_all():
+    spec = {"underlying": "SPY", "strike": 480.0, "dte": 42,
+            "cash_backed": True, "account_size": 2_000_000}
+    res = options_engine.grade_option(spec, _ctx())
+    assert res["passes_all"] is True
+    assert res["failed"] == []
+    labels = {r["key"]: r["label"] for r in res["rules"]}
+    assert labels["underlying"] == "What you sell against (underlying)"
+    assert labels["size"] == "Trade size (% of account)"
+
+def test_grade_naked_fails_cash_rule():
+    spec = {"underlying": "SPY", "strike": 480.0, "dte": 42,
+            "cash_backed": False, "account_size": 2_000_000}
+    res = options_engine.grade_option(spec, _ctx())
+    assert "cash" in res["failed"]
+    cash = next(r for r in res["rules"] if r["key"] == "cash")
+    assert cash["passed"] is False
+    assert cash["risk_if_broken"]
+
+def test_grade_single_stock_fails_underlying_rule():
+    spec = {"underlying": "TSLA", "strike": 480.0, "dte": 42,
+            "cash_backed": True, "account_size": 2_000_000}
+    res = options_engine.grade_option(spec, _ctx())
+    assert "underlying" in res["failed"]
+
+def test_grade_oversize_fails_trade_size_rule():
+    spec = {"underlying": "SPY", "strike": 480.0, "dte": 42,
+            "cash_backed": True, "account_size": 100_000}
+    res = options_engine.grade_option(spec, _ctx())
+    assert "size" in res["failed"]
+
+def test_grade_without_account_size_leaves_size_unknown():
+    spec = {"underlying": "SPY", "strike": 480.0, "dte": 42, "cash_backed": True}
+    res = options_engine.grade_option(spec, _ctx())
+    size = next(r for r in res["rules"] if r["key"] == "size")
+    assert size["passed"] is None
