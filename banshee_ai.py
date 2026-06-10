@@ -802,7 +802,8 @@ def _is_material_difference(run_a: dict, run_b: dict) -> bool:
     """True if outcomes differ or PNL differs by more than 5%."""
     if run_a.get('outcome') != run_b.get('outcome'):
         return True
-    pnl_a, pnl_b = run_a.get('pnl', 0), run_b.get('pnl', 0)
+    pnl_a = run_a.get('pnl') or 0
+    pnl_b = run_b.get('pnl') or 0
     max_abs = max(abs(pnl_a), abs(pnl_b))
     if max_abs < 1.0:
         return False

@@ -141,6 +141,29 @@ def test_summarize_run_graceful_degradation(monkeypatch):
     assert 'narration unavailable' in result.lower() or 'assigned' in result.lower()
 
 
+def test_compare_runs_graceful_degradation(monkeypatch):
+    import banshee_ai
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing', lambda *a, **kw: (_ for _ in ()).throw(Exception("AI down")))
+    run_a = {'outcome': 'expired_worthless', 'pnl': 200.0, 'plain': 'A.'}
+    run_b = {'outcome': 'assigned', 'pnl': -1800.0, 'plain': 'B.'}
+    result = banshee_ai.compare_runs(_mock_cfg(), run_a, run_b)
+    assert isinstance(result, str)
+    assert 'narration unavailable' in result.lower() or 'run a' in result.lower()
+
+
+def test_explain_why_not_graceful_degradation(monkeypatch):
+    import banshee_ai
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing', lambda *a, **kw: (_ for _ in ()).throw(Exception("AI down")))
+    graded = {'failed': ['cash'], 'rules': [
+        {'key': 'cash', 'label': 'Cash backing', 'passed': False,
+         'risk_if_broken': 'Margin call in a crash.'}
+    ]}
+    run = {'outcome': 'margin_call', 'pnl': -7800.0, 'plain': 'Margin call.'}
+    result = banshee_ai.explain_why_not(_mock_cfg(), graded, run)
+    assert isinstance(result, str)
+    assert 'narration unavailable' in result.lower() or 'cash' in result.lower()
+
+
 def test_compare_runs_returns_string(monkeypatch):
     import banshee_ai
     monkeypatch.setattr(banshee_ai, 'call_ai_briefing', lambda cfg, p, **kw: "Run A kept more.")
