@@ -514,6 +514,23 @@ async function fetchOptionsCandidate(accountSize) {
   } catch (e) { console.warn("[api] fetchOptionsCandidate:", e.message); return { candidate: null, error_note: "Options scan unavailable." }; }
 }
 
+/* grade a user-composed option against Banshee's rules (inverse of the candidate search) */
+async function gradeOption(spec) {
+  try {
+    const r = await fetch(`${API_BASE}/options/grade`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(spec),
+    });
+    const body = await r.json();
+    if (!r.ok) return { error: (body && body.error) || `HTTP ${r.status}` };
+    return body;
+  } catch (e) {
+    console.warn("[api] gradeOption:", e.message);
+    return { error: "Couldn't reach the grader — try again in a moment." };
+  }
+}
+
 /* ── Simulated Wheel FSM ──────────────────────────────────────────────────── */
 
 /* list all active wheel positions */
@@ -590,4 +607,4 @@ async function deleteWheel(id) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel };
