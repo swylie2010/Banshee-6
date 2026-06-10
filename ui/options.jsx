@@ -672,11 +672,107 @@ function WheelTracker({ wheel, setWheel, onBack }) {
   );
 }
 
+/* Runs calm+crash scenarios for one danger lever and shows side-by-side + AI compare. */
+function DangerLeverPanel({ leverKey, candidate }) {
+  const P = OPT_PALETTE;
+  const [results, setResults] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+
+  const run = async () => {
+    setBusy(true); setErr(null);
+    const baseSpec = {
+      strike: candidate.strike, mid: candidate.mid,
+      cash_backed: true, underlying: candidate.underlying, dte: candidate.dte,
+    };
+    const spot = candidate.collateral / 100;
+    let recklessSpec, calmPrice, crashPrice, label, description;
+    if (leverKey === 'cash') {
+      recklessSpec = { ...baseSpec, cash_backed: false };
+      calmPrice = candidate.strike + 2;
+      crashPrice = Math.round(candidate.strike * 0.85 * 100) / 100;
+      label = 'Skip the cash backing (naked / on margin)';
+      description = 'Same trade, no cash set aside. Only 20% margin covers you.';
+    } else if (leverKey === 'delta') {
+      const atmStrike = Math.round(spot * 0.99 * 100) / 100;
+      recklessSpec = { ...baseSpec, strike: atmStrike, mid: Math.round(candidate.mid * 2.5 * 100) / 100 };
+      calmPrice = Math.round(spot * 1.02 * 100) / 100;
+      crashPrice = Math.round(spot * 0.85 * 100) / 100;
+      label = 'Chase higher assignment odds (near-ATM strike)';
+      description = `Move the strike to $${atmStrike.toLocaleString()} — near the money.`;
+    } else if (leverKey === 'underlying') {
+      recklessSpec = { ...baseSpec, underlying: 'SINGLE STOCK', mid: Math.round(candidate.mid * 2.0 * 100) / 100 };
+      calmPrice = candidate.strike + 2;
+      crashPrice = Math.round(candidate.strike * 0.62 * 100) / 100;
+      label = 'Sell against a single volatile stock';
+      description = 'Same structure on a single name — with a 40% gap risk.';
+    } else if (leverKey === 'size') {
+      recklessSpec = { ...baseSpec, contracts: 5 };
+      calmPrice = candidate.strike + 2;
+      crashPrice = Math.round(candidate.strike * 0.85 * 100) / 100;
+      label = 'Bet bigger (5 contracts instead of 1)';
+      description = '5× the contracts — same per-contract math, 5× the capital and damage.';
+    } else {
+      setErr('Unknown lever'); setBusy(false); return;
+    }
+
+    const [safeCalm, safeCrash, recklessCalm, recklessCrash] = await Promise.all([
+      window.API.runScenario(baseSpec, calmPrice),
+      window.API.runScenario(baseSpec, crashPrice),
+      window.API.runScenario(recklessSpec, calmPrice),
+      window.API.runScenario(recklessSpec, crashPrice),
+    ]);
+    setResults({ label, description, safeCalm, safeCrash, recklessCalm, recklessCrash, baseSpec, recklessSpec, calmPrice, crashPrice });
+    setBusy(false);
+  };
+
+  if (!results) return (
+    <div style={{ marginTop: 6 }}>
+      <button onClick={run} disabled={busy} style={{
+        background: busy ? P.amberBg : 'transparent', border: `1px solid ${P.amberLine}`,
+        borderRadius: 6, cursor: busy ? 'default' : 'pointer', fontFamily: 'monospace',
+        fontSize: 12, fontWeight: 700, color: P.amber, padding: '5px 11px',
+        letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+        {busy ? '◇ RUNNING SCENARIOS…' : '🔥 SHOW ME WHAT THIS COSTS →'}
+      </button>
+      <OptError msg={err} />
+    </div>
+  );
+
+  const col = { display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 };
+  const sec = (title) => (
+    <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
+      fontWeight: 700, color: P.ink4, margin: '10px 0 4px' }}>{title}</div>
+  );
+  return (
+    <div style={{ marginTop: 10, background: P.amberBg, border: `1px solid ${P.amberLine}`,
+      borderRadius: 8, padding: '12px 14px' }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: P.amber, marginBottom: 4 }}>{results.label}</div>
+      <div style={{ fontSize: 13, color: '#6b5118', marginBottom: 10 }}>{results.description}</div>
+      {sec('CALM MONTH (+2% — option expires safely for both)')}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={col}><ScenarioCard run={results.safeCalm} label="Safe (current Banshee pick)" /></div>
+        <div style={col}><ScenarioCard run={results.recklessCalm} label="Reckless (lever pulled)" /></div>
+      </div>
+      {sec('CRASH MONTH (the tail that matters)')}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={col}><ScenarioCard run={results.safeCrash} label="Safe (current Banshee pick)" /></div>
+        <div style={col}><ScenarioCard run={results.recklessCrash} label="Reckless (lever pulled)" /></div>
+      </div>
+      <AiNarration label="AI — WHY THIS RULE EXISTS"
+        fetchFn={() => window.API.learnCompare(results.safeCrash, results.recklessCrash)}
+        cacheKey={leverKey} />
+      <button onClick={() => setResults(null)} style={{
+        marginTop: 10, background: 'transparent', border: 'none', cursor: 'pointer',
+        fontFamily: 'monospace', fontSize: 12, color: P.amber, padding: 0 }}>✕ close</button>
+    </div>
+  );
+}
+
 /* The safety rules as dials at SAFE — each teaches its rule and (statically)
    what loosening it would cost. The runnable calm/crash sim is Spec 2. */
 function OptControlPanel({ data }) {
   const P = OPT_PALETTE;
-  const [openKey, setOpenKey] = React.useState(null);
   const c = data.candidate || {};
   const ivr = c.ivr_estimate;
   const dials = [
@@ -715,19 +811,7 @@ function OptControlPanel({ data }) {
             </div>
             <div style={{ fontSize: 13, color: P.ink3, lineHeight: 1.55, marginTop: 6 }}>{d.why}</div>
             {d.loosen && (
-              <div style={{ marginTop: 6 }}>
-                <button onClick={() => setOpenKey(openKey === d.key ? null : d.key)} style={{
-                  background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-                  fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: P.amber }}>
-                  {openKey === d.key ? '▾ what loosening this costs' : '› what loosening this costs'}
-                </button>
-                {openKey === d.key && (
-                  <div style={{ fontSize: 13, color: '#6b5118', lineHeight: 1.6, marginTop: 5,
-                    background: P.amberBg, border: `1px solid ${P.amberLine}`, borderRadius: 6, padding: '9px 12px' }}>
-                    🔥 {d.loosen}
-                  </div>
-                )}
-              </div>
+              <DangerLeverPanel leverKey={d.key} candidate={data.candidate} />
             )}
           </div>
         ))}
