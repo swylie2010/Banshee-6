@@ -244,9 +244,11 @@ function WheelTracker({ wheel, setWheel, onBack }) {
       <div>
         {scc.plain && <div style={{ fontSize: 14, lineHeight: 1.7, color: '#234034', background: P.mintSoft,
           borderLeft: `3px solid ${P.mint}`, padding: '12px 15px', borderRadius: '0 6px 6px 0', marginBottom: 12 }}>{scc.plain}</div>}
-        <OptButton label="SELL THE COVERED CALL" disabled={busy} onClick={() => post({
-          type: 'SOLD_CC', strike: scc.strike, mid: scc.mid, dte: scc.dte, expiry: '',
-        })} />
+        {scc.strike
+          ? <OptButton label="SELL THE COVERED CALL" disabled={busy} onClick={() => post({
+              type: 'SOLD_CC', strike: scc.strike, mid: scc.mid, dte: scc.dte, expiry: '',
+            })} />
+          : <OptError msg="Couldn't estimate a covered call right now — try again in a moment." />}
       </div>
     );
   } else if (nm.action === 'CHECKPOINT') {

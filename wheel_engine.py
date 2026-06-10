@@ -9,6 +9,9 @@ States: CASH -> CSP_OPEN -> SHARES -> CC_OPEN (and back). See the Phase 2 spec.
 """
 import math
 
+_DEFAULT_CLOSE_RATIO = 0.5  # close-early ~half the premium (50%-profit Wheel rule)
+
+
 def _init_state():
     return {
         "state": "CASH",
@@ -49,7 +52,7 @@ def _on_closed_early(st, ev):
     prem = leg.get("premium", 0.0)
     close_cost = ev.get("est_close_cost")
     if close_cost is None:
-        close_cost = round(prem * 0.5, 2)
+        close_cost = round(prem * _DEFAULT_CLOSE_RATIO, 2)
     kept = prem - close_cost
     if leg.get("leg") == "csp":
         st["realized_pnl"] += kept
@@ -198,7 +201,7 @@ def _position(st):
 
 def _decay_plain(st):
     prem = (st["leg"] or {}).get("premium", 0.0)
-    half = round(prem * 0.5, 2)
+    half = round(prem * _DEFAULT_CLOSE_RATIO, 2)
     return (f"Time decay has likely eaten about half the premium. Close now to lock in "
             f"~${half:,.0f} and free up, or hold to expiry for the rest.")
 
@@ -224,7 +227,7 @@ def _pending(st):
     if s in ("CSP_OPEN", "CC_OPEN"):
         leg = (st["leg"] or {}).get("leg")
         if not st["checkpoint_done"]:
-            half = round((st["leg"] or {}).get("premium", 0.0) * 0.5, 2)
+            half = round((st["leg"] or {}).get("premium", 0.0) * _DEFAULT_CLOSE_RATIO, 2)
             return {"kind": "checkpoint", "leg": leg, "plain": _decay_plain(st),
                     "est_close_cost": half,
                     "options": [
