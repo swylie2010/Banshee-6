@@ -39,12 +39,14 @@ function TeachToggle({ on, setOn }) {
 /* A collapsible teaching block. Hidden entirely when `teach` is off, unless the
    user has individually opened it. `alwaysShow` keeps it visible regardless
    (used for risk — the downside is never optional). */
+/* A collapsible teaching block. Hidden (shown as a one-line opener) when `teach`
+   is off, unless the user individually opened it. `alwaysShow` forces it visible
+   regardless of the toggle (used for risk — the downside is never optional). */
 function Teach({ teach, title, alwaysShow, children }) {
   const P = OPT_PALETTE;
   const [openOverride, setOpenOverride] = React.useState(null); // null = follow global
-  const open = openOverride === null ? (alwaysShow || teach) : openOverride;
-  if (!teach && !alwaysShow && openOverride !== true) {
-    // collapsed-by-global: show a one-line opener so it's discoverable
+  const open = alwaysShow || (openOverride === null ? teach : openOverride);
+  if (!open) {
     return (
       <button onClick={() => setOpenOverride(true)} style={{
         background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0',
