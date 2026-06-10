@@ -685,7 +685,7 @@ function DangerLeverPanel({ leverKey, candidate }) {
       strike: candidate.strike, mid: candidate.mid,
       cash_backed: true, underlying: candidate.underlying, dte: candidate.dte,
     };
-    const spot = candidate.collateral / 100;
+    const spot = (candidate.collateral / 100) || candidate.strike;
     let recklessSpec, calmPrice, crashPrice, label, description;
     if (leverKey === 'cash') {
       recklessSpec = { ...baseSpec, cash_backed: false };
@@ -716,12 +716,21 @@ function DangerLeverPanel({ leverKey, candidate }) {
       setErr('Unknown lever'); setBusy(false); return;
     }
 
-    const [safeCalm, safeCrash, recklessCalm, recklessCrash] = await Promise.all([
-      window.API.runScenario(baseSpec, calmPrice),
-      window.API.runScenario(baseSpec, crashPrice),
-      window.API.runScenario(recklessSpec, calmPrice),
-      window.API.runScenario(recklessSpec, crashPrice),
-    ]);
+    let safeCalm, safeCrash, recklessCalm, recklessCrash;
+    try {
+      [safeCalm, safeCrash, recklessCalm, recklessCrash] = await Promise.all([
+        window.API.runScenario(baseSpec, calmPrice),
+        window.API.runScenario(baseSpec, crashPrice),
+        window.API.runScenario(recklessSpec, calmPrice),
+        window.API.runScenario(recklessSpec, crashPrice),
+      ]);
+    } catch (e) {
+      setErr('Scenario failed — check the backend is running.');
+      setBusy(false);
+      return;
+    }
+    const firstErr = [safeCalm, safeCrash, recklessCalm, recklessCrash].find(r => r?.error);
+    if (firstErr) { setErr(firstErr.error || 'Scenario unavailable.'); setBusy(false); return; }
     setResults({ label, description, safeCalm, safeCrash, recklessCalm, recklessCrash, baseSpec, recklessSpec, calmPrice, crashPrice });
     setBusy(false);
   };
