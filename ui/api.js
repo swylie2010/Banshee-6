@@ -514,4 +514,80 @@ async function fetchOptionsCandidate(accountSize) {
   } catch (e) { console.warn("[api] fetchOptionsCandidate:", e.message); return { candidate: null, error_note: "Options scan unavailable." }; }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate };
+/* ── Simulated Wheel FSM ──────────────────────────────────────────────────── */
+
+/* list all active wheel positions */
+async function listWheels() {
+  try {
+    const res = await fetch(`${API_BASE}/wheels`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] listWheels:", err.message);
+    return { error: err.message };
+  }
+}
+
+/* create a new wheel position */
+async function createWheel(body) {
+  try {
+    const res = await fetch(`${API_BASE}/wheels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] createWheel:", err.message);
+    return { error: err.message };
+  }
+}
+
+/* get a single wheel position by id */
+async function getWheel(id) {
+  try {
+    const res = await fetch(`${API_BASE}/wheels/${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] getWheel:", err.message);
+    return { error: err.message };
+  }
+}
+
+/* post a state-machine event to a wheel position */
+async function postWheelEvent(id, event) {
+  try {
+    const res = await fetch(`${API_BASE}/wheels/${id}/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event }),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] postWheelEvent:", err.message);
+    return { error: err.message };
+  }
+}
+
+/* delete a wheel position by id */
+async function deleteWheel(id) {
+  try {
+    const res = await fetch(`${API_BASE}/wheels/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn("[api] deleteWheel:", err.message);
+    return { error: err.message };
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel };
