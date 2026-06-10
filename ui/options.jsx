@@ -821,18 +821,20 @@ function OptControlPanel({ data }) {
 }
 
 /* Compose-your-own option → Banshee grades it rule-by-rule (the inverse search). */
-function OptGrader() {
+function OptGrader({ candidate }) {
   const P = OPT_PALETTE;
   const [spec, setSpec] = React.useState({ underlying: 'SPY', strike: '', dte: '42', cash_backed: true, account_size: '' });
   const [res, setRes] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  const [fireRun, setFireRun] = React.useState(null);
+  const [fireBusy, setFireBusy] = React.useState(false);
   const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
   const inp = { fontFamily: 'monospace', fontSize: 13, padding: '6px 9px', background: P.card,
     color: P.ink, border: `1px solid ${P.line}`, borderRadius: 6 };
 
   const grade = async () => {
-    setBusy(true); setErr(null); setRes(null);
+    setBusy(true); setErr(null); setRes(null); setFireRun(null);
     const payload = {
       underlying: (spec.underlying || '').toUpperCase().trim(),
       strike: parseFloat(spec.strike),
@@ -843,6 +845,19 @@ function OptGrader() {
     const r = await window.API.gradeOption(payload);
     setBusy(false);
     if (r && r.error) setErr(r.error); else setRes(r);
+  };
+
+  const lightFire = async () => {
+    if (!res || !res.strike) return;
+    setFireBusy(true); setFireRun(null);
+    const crashTerminal = Math.round(res.strike * 0.85 * 100) / 100;
+    const failSpec = {
+      strike: res.strike, mid: res.mid || 2.0,
+      cash_backed: spec.cash_backed, underlying: res.underlying,
+    };
+    const run = await window.API.runScenario(failSpec, crashTerminal);
+    if (!run.error) setFireRun(run);
+    setFireBusy(false);
   };
 
   return (
@@ -894,6 +909,38 @@ function OptGrader() {
               </div>
             ))}
           </div>
+          {/* Light the fire — only shown when rules are broken */}
+          {res.failed && res.failed.length > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${P.amberLine}` }}>
+              {!fireRun && (
+                <button onClick={lightFire} disabled={fireBusy} style={{
+                  background: fireBusy ? P.amberBg : 'transparent',
+                  border: `1px solid ${P.amberLine}`, borderRadius: 6,
+                  cursor: fireBusy ? 'default' : 'pointer', fontFamily: 'monospace',
+                  fontSize: 12, fontWeight: 700, color: P.amber, padding: '6px 13px',
+                  letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  {fireBusy ? '◇ SIMULATING…' : '🔥 LIGHT THE FIRE — SHOW ME WHAT THIS COSTS'}
+                </button>
+              )}
+              {fireRun && (
+                <>
+                  <div style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
+                    fontWeight: 700, color: P.amber, marginBottom: 6 }}>
+                    CRASH SCENARIO (−15% below your strike):
+                  </div>
+                  <ScenarioCard run={fireRun} />
+                  <AiNarration label="AI — WHY THESE RULES EXIST"
+                    fetchFn={() => window.API.learnWhyNot(res, fireRun)}
+                    cacheKey={fireRun.outcome + fireRun.pnl} />
+                  <button onClick={() => { setFireRun(null); }} style={{
+                    marginTop: 8, background: 'transparent', border: 'none', cursor: 'pointer',
+                    fontFamily: 'monospace', fontSize: 12, color: P.amber, padding: 0 }}>
+                    ✕ hide simulation
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -980,7 +1027,7 @@ function OptionsPage({ onBack }) {
         <>
           <OptCard data={data} teach={teach} onRunWheel={runWheel} onSeeWheels={() => setOptView("list")} runError={runError} />
           <OptControlPanel data={data} />
-          <OptGrader />
+          <OptGrader candidate={data.candidate} />
           {data.low_iv_warning && (
             <div style={{ marginTop: 16, maxWidth: 620, background: P.amberBg, border: `1px solid ${P.amberLine}`,
               borderRadius: 8, padding: '12px 15px', display: 'flex', gap: 9 }}>
