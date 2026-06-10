@@ -511,9 +511,25 @@ function OptionsPage({ onBack }) {
 
       {!loading && data && !data.candidate && (
         <>
-          <div style={{ maxWidth: 620, background: P.card, border: `1px solid ${P.line}`, borderRadius: 10, padding: '16px 18px', fontSize: 14, color: P.ink3, lineHeight: 1.6 }}>
-            {data.error_note || "No Wheel-grade setups right now — premiums are too thin to justify the risk. That's the system protecting you, not a bug."}
-          </div>
+          {data.account_too_small ? (
+            <div style={{ maxWidth: 620, background: P.amberBg, border: `1px solid ${P.amberLine}`,
+              borderRadius: 10, padding: '16px 18px' }}>
+              <div style={{ ...lab, fontSize: 12, color: P.amber }}>This isn't for you yet — and that's okay</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#6b5118', margin: '8px 0 6px' }}>
+                With ${Number(data.account_too_small.account_size).toLocaleString()} on hand, no Wheel-grade trade fits your 5% safety limit.
+              </div>
+              <div style={{ fontSize: 14, color: '#6b5118', lineHeight: 1.7 }}>
+                A cash-secured put means setting aside the <b>whole</b> price of the shares you'd be promising to buy —
+                the cheapest qualifying one here needs about <b>${Number(data.account_too_small.cheapest_collateral).toLocaleString()}</b> in cash.
+                Banshee's 5%-per-trade rule means one trade can't use more than <b>${Number(data.account_too_small.max_per_trade).toLocaleString()}</b> of your account.
+                To run these broad funds safely, you'd want an account around <b>${Number(data.account_too_small.min_account_for_5pct).toLocaleString()}</b> — or wait for a cheaper qualifying fund.
+              </div>
+            </div>
+          ) : (
+            <div style={{ maxWidth: 620, background: P.card, border: `1px solid ${P.line}`, borderRadius: 10, padding: '16px 18px', fontSize: 14, color: P.ink3, lineHeight: 1.6 }}>
+              {data.error_note || "No Wheel-grade setups right now — premiums are too thin to justify the risk. That's the system protecting you, not a bug."}
+            </div>
+          )}
           <button onClick={() => setOptView("list")} style={{
             marginTop: 14, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
             fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
