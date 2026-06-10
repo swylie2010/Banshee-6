@@ -765,3 +765,126 @@ def portfolio_review(cfg: dict, portfolio: dict, analysis: dict) -> PortfolioRev
         thesis_alignment_note="",
         asset_breakdown=[]
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPTIONS LEARNING ENGINE  (Spec 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_OPTIONS_LEARNING_SYSTEM = (
+    "You are a patient, honest options tutor helping a first-time options trader "
+    "understand what just happened — or what they're about to do — in plain language. "
+    "No jargon without explanation. No false reassurance. No scare tactics either — "
+    "just the facts and what they mean. Keep responses under 150 words. "
+    "Short paragraphs only. No markdown headers or bullet lists."
+)
+
+
+def _fmt_run(run: dict) -> str:
+    """Format a scenario result as compact, readable text for an AI prompt."""
+    lines = [
+        f"UNDERLYING: {run.get('underlying', '?')}",
+        f"OUTCOME: {run.get('outcome', '?').replace('_', ' ').upper()}",
+        f"PREMIUM COLLECTED: ${run.get('premium_collected', 0):,.0f}",
+        f"NET P&L: ${run.get('pnl', 0):+,.0f}",
+        f"CASH TIED UP: ${run.get('cash_tied_up', 0):,.0f}",
+    ]
+    if run.get('net_cost_basis') is not None:
+        lines.append(f"NET COST BASIS: ${run['net_cost_basis']:,.2f}/share (own 100 shares)")
+    if run.get('margin_required') is not None:
+        lines.append(f"MARGIN POSTED: ${run['margin_required']:,.0f}")
+    if run.get('plain'):
+        lines.append(f"PLAIN SUMMARY: {run['plain']}")
+    return "\n".join(lines)
+
+
+def _is_material_difference(run_a: dict, run_b: dict) -> bool:
+    """True if outcomes differ or PNL differs by more than 5%."""
+    if run_a.get('outcome') != run_b.get('outcome'):
+        return True
+    pnl_a, pnl_b = run_a.get('pnl', 0), run_b.get('pnl', 0)
+    max_abs = max(abs(pnl_a), abs(pnl_b))
+    if max_abs < 1.0:
+        return False
+    return abs(pnl_a - pnl_b) / max_abs > 0.05
+
+
+def summarize_run(cfg: dict, run: dict) -> str:
+    """Plain-English recap of a single scenario result.
+    Gracefully degrades to a factual fallback if the AI is unavailable."""
+    prompt = (
+        f"A trader just completed a simulated options scenario. Here is the outcome:\n\n"
+        f"{_fmt_run(run)}\n\n"
+        "In 2-3 plain sentences, explain what happened and what it means for the trader. "
+        "Focus on the real economic consequence — did they win, and by how much? "
+        "If they were assigned, acknowledge both the obligation taken on AND that the premium "
+        "softened the cost basis. Never use jargon without explaining it."
+    )
+    try:
+        return call_ai_briefing(cfg, prompt,
+                                system_prompt_override=_OPTIONS_LEARNING_SYSTEM)
+    except Exception:
+        return (f"Narration unavailable — here is what happened: {run.get('plain', 'no summary')} "
+                f"Net P&L: ${run.get('pnl', 0):+,.0f}.")
+
+
+def compare_runs(cfg: dict, run_a: dict, run_b: dict) -> str:
+    """Comparative narration of two scenario results.
+    When there is no material difference, explains WHY and suggests what to change."""
+    material = _is_material_difference(run_a, run_b)
+    if not material:
+        prompt = (
+            "Two simulated options scenarios were run — the outcomes are nearly identical:\n\n"
+            f"RUN A:\n{_fmt_run(run_a)}\n\nRUN B:\n{_fmt_run(run_b)}\n\n"
+            "No material difference was detected between these two runs. "
+            "Explain in plain language why the numbers are the same — what made the difference "
+            "irrelevant? Then suggest concretely what the trader would need to change to see a "
+            "different outcome (e.g. 'move the strike below $X to trigger assignment')."
+        )
+    else:
+        prompt = (
+            "Two simulated options scenarios were run. Compare them:\n\n"
+            f"RUN A (safe/baseline):\n{_fmt_run(run_a)}\n\nRUN B (variant/reckless):\n{_fmt_run(run_b)}\n\n"
+            "In plain language: what changed between these two runs? Why did one do better or worse? "
+            "Focus on the consequence that matters most — the dollar outcome and the risk the trader "
+            "took on. If the reckless run looked better in this scenario, say so honestly, but also "
+            "explain what condition would have made it much worse."
+        )
+    try:
+        return call_ai_briefing(cfg, prompt,
+                                system_prompt_override=_OPTIONS_LEARNING_SYSTEM)
+    except Exception:
+        delta = run_b.get('pnl', 0) - run_a.get('pnl', 0)
+        return (f"Narration unavailable. "
+                f"Run A P&L: ${run_a.get('pnl', 0):+,.0f}. "
+                f"Run B P&L: ${run_b.get('pnl', 0):+,.0f}. "
+                f"Difference: ${delta:+,.0f}.")
+
+
+def explain_why_not(cfg: dict, graded: dict, run: dict) -> str:
+    """Narrates a failing grade + the simulated consequence of ignoring it.
+    graded: grade_option() result with failed rules (each has risk_if_broken).
+    run: run_scenario() result showing what actually happened in a crash."""
+    failed_rules = [r for r in graded.get('rules', []) if r.get('passed') is False]
+    rule_lines = "\n".join(
+        f"  - {r['label']}: {r.get('risk_if_broken', 'see rule')}"
+        for r in failed_rules
+    )
+    prompt = (
+        f"A trader composed a custom option that breaks {len(failed_rules)} rule(s):\n"
+        f"{rule_lines}\n\n"
+        f"Here is what happened when we simulated that trade in a crash:\n\n"
+        f"{_fmt_run(run)}\n\n"
+        "In plain language: connect the rules broken to the outcome just shown. "
+        "Explain the WHY — not just 'this rule says X', but what the rule is protecting against "
+        "and how the simulation demonstrates exactly that risk. "
+        "If the trader still wants to do it, that is their right — just make sure they understand "
+        "what they saw."
+    )
+    try:
+        return call_ai_briefing(cfg, prompt,
+                                system_prompt_override=_OPTIONS_LEARNING_SYSTEM)
+    except Exception:
+        return (f"Narration unavailable. Rules broken: {', '.join(r['label'] for r in failed_rules)}. "
+                f"Simulated outcome: {run.get('plain', 'no summary')}. "
+                f"Net P&L: ${run.get('pnl', 0):+,.0f}.")

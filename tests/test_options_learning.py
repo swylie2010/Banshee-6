@@ -114,3 +114,63 @@ def test_danger_lever_calm_above_safe_strike():
         # calm scenario: option expires OTM for both safe AND reckless (safe_spec strike = 480)
         r_safe = oe.run_scenario(d['safe_spec'], d['calm_price'])
         assert r_safe['outcome'] == 'expired_worthless', f"lever={lever} calm should expire worthless"
+
+
+# ── AI narrative functions ────────────────────────────────────────────────────
+
+def _mock_cfg():
+    return {'type': 'test', 'key': 'test', 'model': 'test'}
+
+
+def test_summarize_run_returns_string_with_real_cfg_mocked(monkeypatch):
+    import banshee_ai
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing',
+                        lambda cfg, prompt, **kw: "Option expired worthless. You kept the premium.")
+    run = {'outcome': 'expired_worthless', 'pnl': 200.0, 'premium_collected': 200.0,
+           'underlying': 'SPY', 'plain': 'Expired worthless.'}
+    result = banshee_ai.summarize_run(_mock_cfg(), run)
+    assert isinstance(result, str) and len(result) > 5
+
+
+def test_summarize_run_graceful_degradation(monkeypatch):
+    import banshee_ai
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing', lambda *a, **kw: (_ for _ in ()).throw(Exception("AI down")))
+    run = {'outcome': 'assigned', 'pnl': -1800.0, 'plain': 'Assigned.'}
+    result = banshee_ai.summarize_run(_mock_cfg(), run)
+    assert isinstance(result, str)
+    assert 'narration unavailable' in result.lower() or 'assigned' in result.lower()
+
+
+def test_compare_runs_returns_string(monkeypatch):
+    import banshee_ai
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing', lambda cfg, p, **kw: "Run A kept more.")
+    run_a = {'outcome': 'expired_worthless', 'pnl': 200.0, 'plain': 'A expired.'}
+    run_b = {'outcome': 'assigned', 'pnl': -1800.0, 'plain': 'B assigned.'}
+    result = banshee_ai.compare_runs(_mock_cfg(), run_a, run_b)
+    assert isinstance(result, str) and len(result) > 5
+
+
+def test_compare_runs_no_material_difference_flagged(monkeypatch):
+    import banshee_ai
+    captured = {}
+    def fake_ai(cfg, prompt, **kw):
+        captured['prompt'] = prompt
+        return "No difference."
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing', fake_ai)
+    # Same outcome, same PNL
+    run_a = {'outcome': 'expired_worthless', 'pnl': 200.0, 'plain': 'A.'}
+    run_b = {'outcome': 'expired_worthless', 'pnl': 201.0, 'plain': 'B.'}
+    banshee_ai.compare_runs(_mock_cfg(), run_a, run_b)
+    assert 'no material difference' in captured['prompt'].lower() or 'same outcome' in captured['prompt'].lower()
+
+
+def test_explain_why_not_returns_string(monkeypatch):
+    import banshee_ai
+    monkeypatch.setattr(banshee_ai, 'call_ai_briefing', lambda cfg, p, **kw: "Naked selling is dangerous.")
+    graded = {'failed': ['cash'], 'rules': [
+        {'key': 'cash', 'label': 'Cash backing', 'passed': False,
+         'risk_if_broken': 'Margin call in a crash.'}
+    ]}
+    run = {'outcome': 'margin_call', 'pnl': -7800.0, 'plain': 'Margin call.'}
+    result = banshee_ai.explain_why_not(_mock_cfg(), graded, run)
+    assert isinstance(result, str) and len(result) > 5
