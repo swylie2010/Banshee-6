@@ -857,7 +857,7 @@ function OptGrader({ candidate }) {
   };
 
   const lightFire = async () => {
-    if (!res || !res.strike) return;
+    if (!res || !(res.strike > 0)) return;
     setFireBusy(true); setFireRun(null);
     const crashTerminal = Math.round(res.strike * 0.85 * 100) / 100;
     const failSpec = {
@@ -865,7 +865,8 @@ function OptGrader({ candidate }) {
       cash_backed: spec.cash_backed, underlying: res.underlying,
     };
     const run = await window.API.runScenario(failSpec, crashTerminal);
-    if (!run.error) setFireRun(run);
+    if (run.error) setErr(run.error);
+    else setFireRun(run);
     setFireBusy(false);
   };
 
