@@ -204,3 +204,13 @@ def test_exact_5pct_boundary_is_accepted():
     res = oe.best_candidate(data, account_size=200_000)
     assert res["candidate"] is not None
     assert res["account_too_small"] is None
+
+def test_guardrail_labels_follow_naming_standard():
+    data = [_u("SPY", 500.0, 480.0)]
+    res = oe.best_candidate(data, account_size=2_000_000)
+    labels = {g["key"]: g["label"] for g in res["guardrails"]}
+    assert labels["dte"] == "Time to expiry (DTE)"
+    assert labels["delta"] == "Assignment odds (delta)"
+    assert labels["oi"] == "Liquidity (open interest)"
+    assert labels["cash"] == "Cash backing (cash-secured)"
+    assert labels["ivr"] == "Premium richness (IV rank, est.)"

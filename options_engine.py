@@ -109,15 +109,15 @@ def _guardrails(b):
     pk = round(b["prob_keep"] * 100)
     ivr = b["ivr_estimate"]
     return [
-        {"key": "dte", "label": "Days to expiry", "value": f"{b['dte']} days", "passed": True,
+        {"key": "dte", "label": "Time to expiry (DTE)", "value": f"{b['dte']} days", "passed": True,
          "plain": f"{b['dte']} days out — enough time for the clock to work in your favor."},
-        {"key": "delta", "label": "Delta", "value": f"{abs(b['delta']):.2f}", "passed": True,
+        {"key": "delta", "label": "Assignment odds (delta)", "value": f"{abs(b['delta']):.2f}", "passed": True,
          "plain": f"Delta {abs(b['delta']):.2f} — about {pk}% chance it expires worthless."},
-        {"key": "oi", "label": "Open interest", "value": f"{b['open_interest']:,}", "passed": True,
+        {"key": "oi", "label": "Liquidity (open interest)", "value": f"{b['open_interest']:,}", "passed": True,
          "plain": f"Open interest {b['open_interest']:,} — easy to get in and out at a fair price."},
-        {"key": "cash", "label": "Cash-secured", "value": f"${b['collateral']:,.0f}", "passed": True,
+        {"key": "cash", "label": "Cash backing (cash-secured)", "value": f"${b['collateral']:,.0f}", "passed": True,
          "plain": "Fully cash-secured — no borrowing, ever."},
-        {"key": "ivr", "label": "IV Rank (est.)",
+        {"key": "ivr", "label": "Premium richness (IV rank, est.)",
          "value": (f"~{ivr:.0f} est." if ivr is not None else "n/a"),
          "passed": (ivr is None or ivr >= IVR_MIN),
          "plain": ("Premium is rich enough relative to recent calm to be worth the risk."
