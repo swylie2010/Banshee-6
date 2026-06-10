@@ -74,6 +74,123 @@ def estimate_ivr(current_iv, realized_vols):
     return round(100.0 * below / len(vals), 1)
 
 
+def run_scenario(spec, terminal_price):
+    """Compute the deterministic outcome of a put option at expiry.
+    spec: {strike, mid, cash_backed (bool), underlying (str), contracts (int, default 1)}.
+    terminal_price: float — hypothetical underlying price at expiry.
+    Never raises. Returns a result dict."""
+    try:
+        contracts = int(spec.get('contracts') or 1)
+        strike = float(spec['strike'])
+        mid = float(spec['mid'])
+        cash_backed = bool(spec.get('cash_backed', True))
+        underlying = spec.get('underlying', '?')
+        premium = round(mid * 100 * contracts, 2)
+        collateral = round(strike * 100 * contracts, 2)
+        margin_required = round(strike * 100 * contracts * 0.20, 2)
+
+        if float(terminal_price) >= strike:
+            outcome = 'expired_worthless'
+            pnl = premium
+            cash_tied_up = collateral if cash_backed else margin_required
+            net_cost_basis = None
+            mr = None if cash_backed else margin_required
+            plain = (f"Option expired worthless — you kept ${premium:,.0f} in premium "
+                     f"and the obligation disappeared.")
+        else:
+            gross_loss = round((strike - float(terminal_price)) * 100 * contracts, 2)
+            pnl = round(premium - gross_loss, 2)
+            if cash_backed:
+                outcome = 'assigned'
+                cash_tied_up = collateral
+                net_cost_basis = round(strike - mid, 2)
+                mr = None
+                plain = (f"Assigned — own {contracts * 100} shares at ${strike:,.2f} "
+                         f"(net cost basis ${net_cost_basis:,.2f}/share). "
+                         f"Cycle P&L so far: ${pnl:,.0f}.")
+            else:
+                outcome = 'margin_call'
+                cash_tied_up = margin_required
+                net_cost_basis = None
+                mr = margin_required
+                unhedged = round(max(0.0, gross_loss - premium), 2)
+                plain = (f"Margin call — collected ${premium:,.0f} but owe ${gross_loss:,.0f}. "
+                         f"Net hit: ${unhedged:,.0f}. Margin posted was ${margin_required:,.0f}.")
+
+        return {
+            'underlying': underlying,
+            'strike': strike,
+            'terminal_price': round(float(terminal_price), 2),
+            'contracts': contracts,
+            'premium_collected': premium,
+            'outcome': outcome,
+            'pnl': pnl,
+            'cash_tied_up': cash_tied_up,
+            'net_cost_basis': net_cost_basis,
+            'margin_required': mr,
+            'cash_backed': cash_backed,
+            'plain': plain,
+        }
+    except Exception as e:
+        return {'outcome': 'error', 'error': str(e), 'pnl': 0,
+                'plain': f'Scenario calculation failed: {e}'}
+
+
+def danger_lever_scenarios(base_spec, lever, spot):
+    """Build the reckless spec + calm/crash terminal prices for one of the 4 danger levers.
+    base_spec: the safe candidate spec dict (strike, mid, underlying, dte, cash_backed).
+    lever: 'naked' | 'high_delta' | 'single_stock' | 'oversize'.
+    spot: float — current underlying price.
+    Returns result dict, or None for an unknown lever. Never raises."""
+    try:
+        base_strike = float(base_spec.get('strike', spot * 0.97))
+        base_mid = float(base_spec.get('mid', 2.0))
+
+        if lever == 'naked':
+            reckless = {**base_spec, 'cash_backed': False}
+            calm_price = round(base_strike + 2.0, 2)
+            crash_price = round(base_strike * 0.85, 2)
+            label = 'Skip the cash backing (naked / on margin)'
+            description = 'Same trade, no cash set aside. Only 20% margin covers you.'
+        elif lever == 'high_delta':
+            atm_strike = round(spot * 0.99, 2)
+            atm_mid = round(base_mid * 2.5, 2)
+            reckless = {**base_spec, 'strike': atm_strike, 'mid': atm_mid, 'cash_backed': True}
+            calm_price = round(spot * 1.02, 2)
+            crash_price = round(spot * 0.85, 2)
+            label = 'Chase higher assignment odds (high delta / near-ATM strike)'
+            description = (f'Move the strike to ${atm_strike:,.2f} — near the money. '
+                           f'Richer premium (${round(atm_mid * 100):,}), far more likely to be assigned.')
+        elif lever == 'single_stock':
+            reckless = {**base_spec, 'underlying': 'SINGLE STOCK (hypothetical)',
+                        'mid': round(base_mid * 2.0, 2)}
+            calm_price = round(base_strike + 2.0, 2)
+            crash_price = round(base_strike * 0.62, 2)
+            label = 'Sell against a single volatile stock'
+            description = ('Same structure, single name. Double the premium — '
+                           'because a 40%+ gap on earnings is real.')
+        elif lever == 'oversize':
+            reckless = {**base_spec, 'contracts': 5}
+            calm_price = round(base_strike + 2.0, 2)
+            crash_price = round(base_strike * 0.85, 2)
+            label = 'Bet bigger than 5% (5 contracts instead of 1)'
+            description = '5× the contracts — same per-contract math, 5× the capital and damage.'
+        else:
+            return None
+
+        return {
+            'lever': lever,
+            'label': label,
+            'description': description,
+            'safe_spec': dict(base_spec),
+            'reckless_spec': reckless,
+            'calm_price': calm_price,
+            'crash_price': crash_price,
+        }
+    except Exception as e:
+        return None
+
+
 def _eligible_from(u):
     """Yield candidate dicts for one underlying that pass the HARD guardrails."""
     spot = u.get("spot")
@@ -224,6 +341,7 @@ def grade_option(spec, market_ctx):
     rv = realized_vol_series((market_ctx or {}).get("closes") or [])
     near = _nearest_contract(contracts, strike)
     iv = near.get("iv") if near else None
+    mid = near.get("mid") if near else None
     oi = near.get("open_interest") if near else None
     d = put_delta(spot, strike, dte, iv) if (spot and strike and dte and iv) else None
     ivr = estimate_ivr(iv, rv)
@@ -291,6 +409,7 @@ def grade_option(spec, market_ctx):
         "collateral": collateral,
         "delta": (round(d, 3) if d is not None else None),
         "ivr_estimate": ivr,
+        "mid": mid,
         "data_quality": {
             "nearest_listed_strike": (near["strike"] if near else None),
             "strike_gap": (round(abs(near["strike"] - strike), 2)
