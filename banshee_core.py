@@ -43,6 +43,7 @@ import predator_engine
 import sector_rotation_engine
 import options_engine
 import options_data
+import wheel_engine
 from shared_data import load_providers, fetch_crypto_ohlcv, fetch_sector_closes
 from knowledge_graph import get_regime_weights
 
@@ -2424,6 +2425,108 @@ def update_portfolio(portfolio_id: str, body: dict = Body(...)):
             _save_portfolios(data)
             return p
     return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
+
+
+# ── Simulated Wheel (Options Phase 2) ───────────────────────────
+_WHEELS_PATH = Path(__file__).parent / "banshee_wheels.json"
+
+
+def _load_wheels() -> dict:
+    if _WHEELS_PATH.exists():
+        try:
+            return json.loads(_WHEELS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"wheels": []}
+
+
+def _save_wheels(data: dict) -> None:
+    _WHEELS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _wheel_view(wheel: dict, include_cc: bool = True) -> dict:
+    """A wheel plus its replayed state. Adds a synthetic CC suggestion while in
+    SHARES (estimate — Phase 2 has no live calls feed).
+    Pass include_cc=False for list views to skip the per-wheel vol fetch."""
+    state = wheel_engine.replay(wheel.get("events", []))
+    view = {"id": wheel["id"], "name": wheel.get("name", ""),
+            "underlying": wheel.get("underlying", ""), "created": wheel.get("created", ""),
+            "candidate_snapshot": wheel.get("candidate_snapshot"),
+            "events": wheel.get("events", []), "state": state}
+    if include_cc and state.get("state") == "SHARES":
+        ncb = (state.get("totals") or {}).get("net_cost_basis")
+        annual_vol = None
+        try:
+            closes = options_data.fetch_closes(wheel.get("underlying", ""))
+            rv = options_engine.realized_vol_series(closes)
+            annual_vol = rv[-1] if rv else None
+        except Exception as e:
+            print(f"[wheels] vol fetch failed for {wheel.get('underlying')}: {e}", file=sys.stderr)
+        view["suggested_cc"] = wheel_engine.suggest_covered_call(ncb, annual_vol)
+    return _sanitize(view)
+
+
+@app.get("/wheels")
+def route_wheels_list():
+    data = _load_wheels()
+    return {"wheels": [_wheel_view(w, include_cc=False) for w in data.get("wheels", [])]}
+
+
+@app.post("/wheels")
+def route_wheels_create(body: dict = Body(...)):
+    from datetime import date as _date
+    snap = body.get("candidate_snapshot") or {}
+    underlying = body.get("underlying") or snap.get("underlying") or ""
+    if not underlying:
+        return JSONResponse(status_code=400,
+                            content={"error": "A candidate (with an underlying) is required to start a wheel."})
+    data = _load_wheels()
+    wheel = {
+        "id": str(uuid.uuid4()),
+        "name": body.get("name") or f"{underlying} Wheel",
+        "underlying": underlying,
+        "created": _date.today().isoformat(),
+        "candidate_snapshot": snap,
+        "events": [],
+    }
+    data["wheels"].append(wheel)
+    _save_wheels(data)
+    return _wheel_view(wheel)
+
+
+@app.get("/wheels/{wheel_id}")
+def route_wheels_get(wheel_id: str):
+    for w in _load_wheels().get("wheels", []):
+        if w["id"] == wheel_id:
+            return _wheel_view(w)
+    return JSONResponse(status_code=404, content={"error": "Wheel not found"})
+
+
+@app.post("/wheels/{wheel_id}/event")
+def route_wheels_event(wheel_id: str, body: dict = Body(...)):
+    data = _load_wheels()
+    for w in data.get("wheels", []):
+        if w["id"] == wheel_id:
+            ev = body.get("event")
+            new_event = ev if isinstance(ev, dict) and ev else body
+            verdict = wheel_engine.validate(w.get("events", []), new_event)
+            if not verdict.get("ok"):
+                return JSONResponse(status_code=400, content={"error": verdict.get("reason")})
+            w.setdefault("events", []).append(new_event)
+            _save_wheels(data)
+            return _wheel_view(w)
+    return JSONResponse(status_code=404, content={"error": "Wheel not found"})
+
+
+@app.delete("/wheels/{wheel_id}")
+def route_wheels_delete(wheel_id: str):
+    data = _load_wheels()
+    before = len(data.get("wheels", []))
+    data["wheels"] = [w for w in data.get("wheels", []) if w["id"] != wheel_id]
+    if len(data["wheels"]) == before:
+        return JSONResponse(status_code=404, content={"error": "Wheel not found"})
+    _save_wheels(data)
+    return {"ok": True}
 
 
 def fetch_all_radar_for_syms(syms: list) -> dict:
