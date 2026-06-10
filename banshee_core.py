@@ -1396,6 +1396,75 @@ def route_options_grade(spec: dict = Body(...)):
     return _sanitize(result)
 
 
+@app.post("/options/scenario")
+def route_options_scenario(body: dict = Body(...)):
+    """Deterministic scenario: given a spec and terminal price, return the outcome. No AI."""
+    try:
+        spec = body.get("spec") or {}
+        terminal_price = body.get("terminal_price")
+        if not spec or terminal_price is None:
+            raise HTTPException(status_code=400,
+                detail={"error": "requires spec and terminal_price"})
+        return options_engine.run_scenario(spec, float(terminal_price))
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[options/scenario] error: {e}", file=sys.stderr)
+        raise HTTPException(status_code=400,
+            detail={"error": f"Scenario calculation failed: {e}"})
+
+
+@app.post("/options/learn/recap")
+def route_learn_recap(body: dict = Body(...)):
+    """AI plain-English recap of a single scenario run. Returns {text}."""
+    run = body.get("run") or {}
+    if not run:
+        raise HTTPException(status_code=400, detail={"error": "requires run"})
+    try:
+        providers = load_providers()
+        cfg = providers.get("AI_API", {})
+        text = banshee_ai.summarize_run(cfg, run)
+        return {"text": text}
+    except Exception as e:
+        print(f"[learn/recap] error: {e}", file=sys.stderr)
+        return {"text": f"Narration unavailable — {run.get('plain', 'no summary')} Net P&L: ${run.get('pnl', 0):+,.0f}."}
+
+
+@app.post("/options/learn/compare")
+def route_learn_compare(body: dict = Body(...)):
+    """AI comparative narration of two scenario runs. Returns {text}."""
+    run_a = body.get("run_a") or {}
+    run_b = body.get("run_b") or {}
+    if not run_a or not run_b:
+        raise HTTPException(status_code=400, detail={"error": "requires run_a and run_b"})
+    try:
+        providers = load_providers()
+        cfg = providers.get("AI_API", {})
+        text = banshee_ai.compare_runs(cfg, run_a, run_b)
+        return {"text": text}
+    except Exception as e:
+        print(f"[learn/compare] error: {e}", file=sys.stderr)
+        delta = run_b.get("pnl", 0) - run_a.get("pnl", 0)
+        return {"text": f"Narration unavailable. Run A: ${run_a.get('pnl', 0):+,.0f}. Run B: ${run_b.get('pnl', 0):+,.0f}. Δ: ${delta:+,.0f}."}
+
+
+@app.post("/options/learn/why-not")
+def route_learn_why_not(body: dict = Body(...)):
+    """AI explanation linking a failing grade to its simulated consequence. Returns {text}."""
+    graded = body.get("graded") or {}
+    run = body.get("run") or {}
+    if not graded or not run:
+        raise HTTPException(status_code=400, detail={"error": "requires graded and run"})
+    try:
+        providers = load_providers()
+        cfg = providers.get("AI_API", {})
+        text = banshee_ai.explain_why_not(cfg, graded, run)
+        return {"text": text}
+    except Exception as e:
+        print(f"[learn/why-not] error: {e}", file=sys.stderr)
+        return {"text": f"Narration unavailable. Simulated outcome: {run.get('plain', '')}. P&L: ${run.get('pnl', 0):+,.0f}."}
+
+
 @app.get("/ohlcv")
 def route_ohlcv(
     symbol: str = Query(...),
