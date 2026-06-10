@@ -141,7 +141,9 @@ def danger_lever_scenarios(base_spec, lever, spot):
     base_spec: the safe candidate spec dict (strike, mid, underlying, dte, cash_backed).
     lever: 'naked' | 'high_delta' | 'single_stock' | 'oversize'.
     spot: float — current underlying price.
-    Returns result dict, or None for an unknown lever. Never raises."""
+    Returns result dict, or None for an unknown lever. Never raises.
+    NOTE: The UI (DangerLeverPanel in options.jsx) duplicates the lever constants (0.85/0.62/×2.5/5)
+    to fan out 4 parallel runScenario calls without a round-trip. Keep the two in sync."""
     try:
         base_strike = float(base_spec.get('strike', spot * 0.97))
         base_mid = float(base_spec.get('mid', 2.0))

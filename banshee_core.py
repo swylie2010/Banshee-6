@@ -1405,7 +1405,11 @@ def route_options_scenario(body: dict = Body(...)):
         if not spec or terminal_price is None:
             raise HTTPException(status_code=400,
                 detail={"error": "requires spec and terminal_price"})
-        return options_engine.run_scenario(spec, float(terminal_price))
+        tp = float(terminal_price)
+        if not (0 < tp < 1e9):
+            raise HTTPException(status_code=400,
+                detail={"error": "terminal_price must be a finite positive number"})
+        return _sanitize(options_engine.run_scenario(spec, tp))
     except HTTPException:
         raise
     except Exception as e:

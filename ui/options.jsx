@@ -674,6 +674,8 @@ function WheelTracker({ wheel, setWheel, onBack }) {
 
 /* Runs calm+crash scenarios for one danger lever and shows side-by-side + AI compare. */
 function DangerLeverPanel({ leverKey, candidate }) {
+  // NOTE: lever constants (0.85/0.62/×2.5/5) are duplicated in options_engine.py danger_lever_scenarios().
+  // Keep the two in sync if you change the numbers here.
   const P = OPT_PALETTE;
   const [results, setResults] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
@@ -778,8 +780,8 @@ function DangerLeverPanel({ leverKey, candidate }) {
   );
 }
 
-/* The safety rules as dials at SAFE — each teaches its rule and (statically)
-   what loosening it would cost. The runnable calm/crash sim is Spec 2. */
+/* The safety rules as dials at SAFE — each teaches its rule and shows what
+   loosening it would cost (via the live calm/crash DangerLeverPanel below each dial). */
 function OptControlPanel({ data }) {
   const P = OPT_PALETTE;
   const c = data.candidate || {};
