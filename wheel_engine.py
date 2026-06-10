@@ -68,10 +68,52 @@ def _on_closed_early(st, ev):
         st["history"].append(f"Closed the call early — net kept ${kept:,.0f}. Still hold 100 shares.")
 
 
+def _on_expired_worthless(st, ev):
+    leg = st["leg"] or {}
+    if not leg:
+        st["history"].append("EXPIRED_WORTHLESS received with no open position — ignored.")
+        return
+    if leg.get("leg") == "csp":
+        st["realized_pnl"] += st["cycle_premium"]
+        st["cycles_completed"] += 1
+        st["cycle_premium"] = 0.0
+        st["state"] = "CASH"
+        st["leg"] = None
+        st["checkpoint_done"] = False
+        st["history"].append("Put expired worthless — kept the full premium. Back to cash.")
+    else:  # covered call expired worthless: keep premium, still hold shares
+        # CC premium stays in cycle_premium (lowering net_cost_basis); it is booked into
+        # realized_pnl later when the shares are sold (CALLED_AWAY).
+        st["state"] = "SHARES"
+        st["leg"] = None
+        st["checkpoint_done"] = False
+        st["history"].append("Call expired worthless — kept the premium, still hold 100 shares.")
+
+
+def _on_assigned(st, ev):
+    leg = st["leg"] or {}
+    if not leg:
+        st["history"].append("ASSIGNED received with no open position — ignored.")
+        return
+    # ASSIGNED is CSP-only: a covered call being exercised is the CALLED_AWAY event,
+    # and validate() keeps ASSIGNED legal only from CSP_OPEN. So leg is always the put here.
+    strike = leg.get("strike")
+    if strike is None:
+        strike = ev.get("strike")
+    st["shares_held"] = 100
+    st["cost_basis"] = strike
+    st["state"] = "SHARES"
+    st["leg"] = None
+    st["checkpoint_done"] = False
+    st["history"].append(f"Assigned 100 shares @ ${strike}. Now sell covered calls above your net basis.")
+
+
 _HANDLERS = {
     "SOLD_CSP": _on_sold_csp,
     "CHECKPOINT_HELD": _on_checkpoint_held,
     "CLOSED_EARLY": _on_closed_early,
+    "EXPIRED_WORTHLESS": _on_expired_worthless,
+    "ASSIGNED": _on_assigned,
 }
 
 

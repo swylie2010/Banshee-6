@@ -54,3 +54,26 @@ def test_close_csp_early_keeps_half_and_returns_to_cash():
 def test_close_early_defaults_buyback_to_half_premium():
     r = we.replay([_csp(mid=2.00), {"type": "CLOSED_EARLY", "leg": "csp"}])
     assert r["totals"]["realized_pnl"] == 100.0   # default est_close_cost = 50% of 200
+
+
+def test_csp_expires_worthless_keeps_full_premium_and_loops():
+    r = we.replay([
+        _csp(mid=2.00), {"type": "CHECKPOINT_HELD", "leg": "csp"},
+        {"type": "EXPIRED_WORTHLESS", "leg": "csp", "expiry_price": 105},
+    ])
+    assert r["state"] == "CASH"
+    assert r["totals"]["realized_pnl"] == 200.0
+    assert r["totals"]["cycles_completed"] == 1
+    assert r["next_move"]["action"] == "SELL_CSP"
+
+
+def test_csp_assigned_moves_to_shares_with_net_cost_basis():
+    r = we.replay([
+        _csp(strike=100, mid=2.00), {"type": "CHECKPOINT_HELD", "leg": "csp"},
+        {"type": "ASSIGNED", "strike": 100, "expiry_price": 95},
+    ])
+    assert r["state"] == "SHARES"
+    assert r["totals"]["shares_held"] == 100
+    assert r["position"]["cost_basis"] == 100
+    assert r["totals"]["net_cost_basis"] == 98.0   # 100 strike - 2.00/share premium
+    assert r["next_move"]["action"] == "SELL_CC"
