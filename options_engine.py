@@ -248,7 +248,7 @@ def grade_option(spec, market_ctx):
         "why": "35–45 days is where time-decay works hardest in your favor.",
         "risk_if_broken": "Too short collects little premium; too long commits your cash for ages."})
 
-    passed_oi = bool(oi) and oi > OI_MIN
+    passed_oi = oi is not None and oi > OI_MIN
     rules.append({"key": "oi", "label": "Liquidity (open interest)",
         "value": (f"{oi:,}" if oi else "n/a"),
         "passed": passed_oi,
@@ -283,10 +283,17 @@ def grade_option(spec, market_ctx):
         "risk_if_broken": "One assignment ties up everything — no dry powder, stuck holding for months."})
 
     failed = [r["key"] for r in rules if r["passed"] is False]
+    skipped = [r["key"] for r in rules if r["passed"] is None]
     return {
         "underlying": underlying, "strike": strike, "dte": dte,
         "collateral": collateral,
         "delta": (round(d, 3) if d is not None else None),
         "ivr_estimate": ivr,
-        "rules": rules, "failed": failed, "passes_all": len(failed) == 0,
+        "data_quality": {
+            "nearest_listed_strike": (near["strike"] if near else None),
+            "strike_gap": (round(abs(near["strike"] - strike), 2)
+                           if (near and strike is not None) else None),
+        },
+        "rules": rules, "failed": failed, "skipped": skipped,
+        "passes_all": len(failed) == 0 and not skipped,
     }

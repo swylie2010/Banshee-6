@@ -2,6 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import options_engine as oe
+import options_engine
 
 
 def test_put_delta_otm_in_range():
@@ -218,9 +219,6 @@ def test_guardrail_labels_follow_naming_standard():
 
 # ── Task 3: grade_option ─────────────────────────────────────────────────────
 
-import options_engine
-
-
 def _ctx(spot=500.0, strike=480.0, iv=0.22, oi=5000):
     return {"spot": spot,
             "closes": [spot * (1 + 0.001 * ((i % 7) - 3)) for i in range(60)],
@@ -233,6 +231,7 @@ def test_grade_clean_spy_csp_passes_all():
     res = options_engine.grade_option(spec, _ctx())
     assert res["passes_all"] is True
     assert res["failed"] == []
+    assert res["skipped"] == []
     labels = {r["key"]: r["label"] for r in res["rules"]}
     assert labels["underlying"] == "What you sell against (underlying)"
     assert labels["size"] == "Trade size (% of account)"
@@ -263,3 +262,19 @@ def test_grade_without_account_size_leaves_size_unknown():
     res = options_engine.grade_option(spec, _ctx())
     size = next(r for r in res["rules"] if r["key"] == "size")
     assert size["passed"] is None
+    assert "size" in res["skipped"]
+    assert res["passes_all"] is False
+
+
+def test_grade_bad_dte_fails():
+    spec = {"underlying": "SPY", "strike": 480.0, "dte": 10,
+            "cash_backed": True, "account_size": 2_000_000}
+    res = options_engine.grade_option(spec, _ctx())
+    assert "dte" in res["failed"]
+
+
+def test_grade_thin_oi_fails():
+    spec = {"underlying": "SPY", "strike": 480.0, "dte": 42,
+            "cash_backed": True, "account_size": 2_000_000}
+    res = options_engine.grade_option(spec, _ctx(oi=50))
+    assert "oi" in res["failed"]
