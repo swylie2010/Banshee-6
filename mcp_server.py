@@ -573,6 +573,32 @@ def get_options_candidate(account_size: float | None = None) -> str:
         return raw
 
 
+@mcp.tool()
+def get_paper_wheel_alerts() -> str:
+    """
+    Returns paper Wheel positions that need attention right now.
+    Flags: checkpoint_due (50%-profit or 21-DTE decision point), expiry_due (0 DTE),
+    needs_attention (fill pending, order expired/canceled).
+
+    Use as a morning check: "Do any of my paper options need action today?"
+    Returns a clear message when nothing is pending — never an empty string.
+    """
+    import json
+    raw = _get("/paper-wheels/alerts")
+    try:
+        data = json.loads(raw)
+        alerts = data.get("alerts", [])
+        if not alerts:
+            return "NO PAPER WHEEL ALERTS — all paper wheels are on track."
+        lines = [f"PAPER WHEEL ALERTS ({len(alerts)}):"]
+        for a in alerts:
+            reason = a.get("attention_reason") or "needs attention"
+            lines.append(f"  #{a['id'][:8]} {a.get('underlying', '?')} — {reason}")
+        return "\n".join(lines)
+    except Exception:
+        return raw
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
