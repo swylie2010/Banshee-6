@@ -2710,6 +2710,150 @@ def route_paper_wheels_delete(wheel_id: str):
     return {"ok": True}
 
 
+@app.post("/paper-wheels")
+def route_paper_wheels_create(body: dict = Body(...)):
+    from datetime import date as _date
+    snap       = body.get("candidate_snapshot") or {}
+    candidate  = snap.get("candidate") or snap
+    underlying = body.get("underlying") or candidate.get("underlying") or ""
+    if not underlying:
+        return JSONResponse(status_code=400,
+                            content={"error": "A candidate (with an underlying) is required."})
+
+    strike = candidate.get("strike")
+    expiry = candidate.get("expiry")
+    mid    = candidate.get("mid")
+    delta  = candidate.get("delta")
+    dte    = candidate.get("dte")
+    if not all([strike, expiry, mid]):
+        return JSONResponse(status_code=400,
+                            content={"error": "Candidate snapshot missing strike, expiry, or mid."})
+
+    occ_symbol = alpaca_options.build_occ_symbol(underlying, expiry, "put", float(strike))
+    try:
+        order = alpaca_options.place_option_order(occ_symbol, "sell", 1, float(mid))
+    except alpaca_options.AlpacaOrderRejectedError as e:
+        return JSONResponse(status_code=400, content={
+            "error": "alpaca_order_rejected",
+            "plain": f"Alpaca rejected the order: {e.reason}. Check your paper account buying power.",
+        })
+    except alpaca_options.AlpacaUnavailableError:
+        return JSONResponse(status_code=503, content={
+            "error": "alpaca_unavailable",
+            "plain": "Alpaca paper API is not responding. Your wheel record is intact — try again shortly.",
+        })
+
+    data = _load_paper_wheels()
+    wheel = {
+        "id":                 str(uuid.uuid4()),
+        "name":               body.get("name") or f"{underlying} Paper Wheel",
+        "underlying":         underlying,
+        "created":            _date.today().isoformat(),
+        "candidate_snapshot": snap,
+        "events": [{
+            "type": "SOLD_CSP", "strike": float(strike), "expiry": expiry,
+            "dte": dte, "mid": float(mid),
+            "delta": float(delta) if delta else None,
+            "alpaca_order_id": order["order_id"], "fill_price": None,
+        }],
+        "needs_attention": False, "attention_reason": None,
+        "live": None, "last_polled": None,
+    }
+    data["wheels"].append(wheel)
+    _save_paper_wheels(data)
+    return _paper_wheel_view(wheel)
+
+
+@app.get("/paper-wheels/{wheel_id}/calls")
+def route_paper_wheel_calls(wheel_id: str):
+    data = _load_paper_wheels()
+    wheel = next((w for w in data.get("wheels", []) if w["id"] == wheel_id), None)
+    if not wheel:
+        return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
+    try:
+        calls = alpaca_options.fetch_calls_chain(
+            wheel.get("underlying", ""), min_dte=7, max_dte=55
+        )
+    except alpaca_options.AlpacaUnavailableError:
+        return JSONResponse(status_code=503, content={
+            "error": "alpaca_unavailable",
+            "plain": "Alpaca paper API is not responding. Try again shortly.",
+        })
+    return {"calls": calls, "underlying": wheel.get("underlying", "")}
+
+
+@app.get("/paper-wheels/{wheel_id}")
+def route_paper_wheels_get(wheel_id: str):
+    for w in _load_paper_wheels().get("wheels", []):
+        if w["id"] == wheel_id:
+            return _paper_wheel_view(w)
+    return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
+
+
+@app.post("/paper-wheels/{wheel_id}/submit-cc")
+def route_paper_wheel_submit_cc(wheel_id: str, body: dict = Body(...)):
+    data = _load_paper_wheels()
+    wheel = next((w for w in data.get("wheels", []) if w["id"] == wheel_id), None)
+    if not wheel:
+        return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
+
+    state = wheel_engine.replay(wheel.get("events", []))
+    if state.get("state") != "SHARES":
+        return JSONResponse(status_code=400, content={
+            "error": f"Cannot submit CC: wheel is in state '{state.get('state')}', expected 'SHARES'."
+        })
+
+    strike = body.get("strike")
+    expiry = body.get("expiry")
+    mid    = body.get("mid")
+    delta  = body.get("delta")
+    dte    = body.get("dte")
+    if not all([strike, expiry, mid]):
+        return JSONResponse(status_code=400,
+                            content={"error": "strike, expiry, and mid are required."})
+
+    occ_symbol = alpaca_options.build_occ_symbol(
+        wheel.get("underlying", ""), expiry, "call", float(strike)
+    )
+    try:
+        order = alpaca_options.place_option_order(occ_symbol, "sell", 1, float(mid))
+    except alpaca_options.AlpacaOrderRejectedError as e:
+        return JSONResponse(status_code=400, content={
+            "error": "alpaca_order_rejected",
+            "plain": f"Alpaca rejected the CC order: {e.reason}.",
+        })
+    except alpaca_options.AlpacaUnavailableError:
+        return JSONResponse(status_code=503, content={
+            "error": "alpaca_unavailable",
+            "plain": "Alpaca paper API is not responding. Try again shortly.",
+        })
+
+    wheel["events"].append({
+        "type": "SOLD_CC", "strike": float(strike), "expiry": expiry,
+        "dte": dte, "mid": float(mid),
+        "delta": float(delta) if delta else None,
+        "alpaca_order_id": order["order_id"], "fill_price": None,
+    })
+    _save_paper_wheels(data)
+    return _paper_wheel_view(wheel)
+
+
+@app.post("/paper-wheels/{wheel_id}/event")
+def route_paper_wheels_event(wheel_id: str, body: dict = Body(...)):
+    data = _load_paper_wheels()
+    for w in data.get("wheels", []):
+        if w["id"] == wheel_id:
+            ev = body.get("event")
+            new_event = ev if isinstance(ev, dict) and ev else body
+            verdict = wheel_engine.validate(w.get("events", []), new_event)
+            if not verdict.get("ok"):
+                return JSONResponse(status_code=400, content={"error": verdict.get("reason")})
+            w.setdefault("events", []).append(new_event)
+            _save_paper_wheels(data)
+            return _paper_wheel_view(w)
+    return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
+
+
 def fetch_all_radar_for_syms(syms: list) -> dict:
     """Fetch radar data for a list of symbols. Returns {sym: radar_result}."""
     cached_macro = _load_macro_cache()

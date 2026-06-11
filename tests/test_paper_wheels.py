@@ -105,3 +105,174 @@ def test_delete_404_for_unknown_id():
     with patch.object(bc, "_load_paper_wheels", return_value={"wheels": []}):
         r = client.delete("/paper-wheels/nonexistent")
     assert r.status_code == 404
+
+
+# ── POST /paper-wheels ────────────────────────────────────────────────────────
+
+def _candidate_snap():
+    return {
+        "candidate": {
+            "underlying": "SPY", "strike": 450.0, "expiry": "2026-08-15",
+            "dte": 45, "mid": 2.35, "delta": -0.25,
+            "bid": 2.20, "ask": 2.50, "iv": 0.18,
+            "open_interest": 5000, "volume": 1200, "spot": 465.0,
+        }
+    }
+
+
+def _fake_order(order_id="placed-ord"):
+    return {"order_id": order_id, "status": "accepted", "submitted_at": "2026-06-10T10:00:00"}
+
+
+def test_create_paper_wheel_places_csp_and_returns_pending_fill():
+    saved = {}
+    def fake_save(d): saved.update(d)
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": []}), \
+         patch.object(bc, "_save_paper_wheels", side_effect=fake_save), \
+         patch("banshee_core.alpaca_options.place_option_order", return_value=_fake_order()):
+        r = client.post("/paper-wheels", json={
+            "candidate_snapshot": _candidate_snap(), "underlying": "SPY", "name": "Test"
+        })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["pending_fill"] is True
+    assert len(saved["wheels"]) == 1
+    ev = saved["wheels"][0]["events"][0]
+    assert ev["type"] == "SOLD_CSP"
+    assert ev["alpaca_order_id"] == "placed-ord"
+    assert ev["fill_price"] is None
+
+
+def test_create_paper_wheel_rejected_order_no_record_created():
+    saved = {}
+    def fake_save(d): saved.update(d)
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": []}), \
+         patch.object(bc, "_save_paper_wheels", side_effect=fake_save), \
+         patch("banshee_core.alpaca_options.place_option_order",
+               side_effect=alpaca_options.AlpacaOrderRejectedError("insufficient buying power")):
+        r = client.post("/paper-wheels", json={
+            "candidate_snapshot": _candidate_snap(), "underlying": "SPY"
+        })
+    assert r.status_code == 400
+    assert "insufficient buying power" in r.json()["plain"]
+    assert saved == {}  # no record created
+
+
+def test_create_paper_wheel_alpaca_unavailable_returns_503():
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": []}), \
+         patch("banshee_core.alpaca_options.place_option_order",
+               side_effect=alpaca_options.AlpacaUnavailableError("timeout")):
+        r = client.post("/paper-wheels", json={
+            "candidate_snapshot": _candidate_snap(), "underlying": "SPY"
+        })
+    assert r.status_code == 503
+    assert r.json()["error"] == "alpaca_unavailable"
+
+
+def test_create_paper_wheel_missing_underlying_returns_400():
+    r = client.post("/paper-wheels", json={"candidate_snapshot": {}, "underlying": ""})
+    assert r.status_code == 400
+
+
+# ── GET /paper-wheels/{id} ────────────────────────────────────────────────────
+
+def test_get_paper_wheel_returns_pending_fill_true_when_no_fill_price():
+    w = _make_wheel(events=[_sold_csp(fill_price=None)])
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [w]}):
+        r = client.get(f"/paper-wheels/{w['id']}")
+    assert r.status_code == 200
+    assert r.json()["pending_fill"] is True
+
+
+def test_get_paper_wheel_returns_pending_fill_false_when_filled():
+    w = _make_wheel(events=[_sold_csp(fill_price=2.40)])
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [w]}):
+        r = client.get(f"/paper-wheels/{w['id']}")
+    assert r.status_code == 200
+    assert r.json()["pending_fill"] is False
+
+
+def test_get_paper_wheel_404_unknown():
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": []}):
+        r = client.get("/paper-wheels/nope")
+    assert r.status_code == 404
+
+
+# ── GET /paper-wheels/{id}/calls ──────────────────────────────────────────────
+
+def test_get_calls_returns_chain():
+    w = _make_wheel()
+    fake_calls = [{"type": "call", "strike": 460.0, "expiry": "2026-08-15",
+                   "dte": 65, "mid": 1.50, "delta": 0.28, "occ_symbol": "SPY260815C00460000",
+                   "underlying": "SPY", "spot": 465.0, "bid": 1.40, "ask": 1.60,
+                   "iv": 0.18, "open_interest": 0, "volume": 0}]
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [w]}), \
+         patch("banshee_core.alpaca_options.fetch_calls_chain", return_value=fake_calls):
+        r = client.get(f"/paper-wheels/{w['id']}/calls")
+    assert r.status_code == 200
+    assert len(r.json()["calls"]) == 1
+    assert r.json()["calls"][0]["strike"] == 460.0
+
+
+def test_get_calls_503_on_unavailable():
+    w = _make_wheel()
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [w]}), \
+         patch("banshee_core.alpaca_options.fetch_calls_chain",
+               side_effect=alpaca_options.AlpacaUnavailableError("timeout")):
+        r = client.get(f"/paper-wheels/{w['id']}/calls")
+    assert r.status_code == 503
+
+
+# ── POST /paper-wheels/{id}/submit-cc ────────────────────────────────────────
+
+def _assigned_wheel():
+    """Wheel that reached SHARES state (assigned CSP, no CC yet)."""
+    return _make_wheel(events=[
+        _sold_csp(fill_price=2.40),
+        {"type": "CHECKPOINT_HELD", "leg": "csp"},
+        {"type": "ASSIGNED", "strike": 450.0, "expiry_price": 445.0},
+    ])
+
+
+def test_submit_cc_places_order_and_appends_event():
+    w = _assigned_wheel()
+    data = {"wheels": [w]}
+    saved = {}
+    def fake_save(d): saved.update(d)
+    with patch.object(bc, "_load_paper_wheels", return_value=data), \
+         patch.object(bc, "_save_paper_wheels", side_effect=fake_save), \
+         patch("banshee_core.alpaca_options.place_option_order",
+               return_value={"order_id": "cc-ord-1", "status": "accepted", "submitted_at": "2026-06-10T11:00:00"}):
+        r = client.post(f"/paper-wheels/{w['id']}/submit-cc", json={
+            "strike": 455.0, "expiry": "2026-08-15", "mid": 1.80, "delta": 0.28, "dte": 45
+        })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["pending_fill"] is True
+    assert body["state"]["state"] == "CC_OPEN"
+    last_ev = saved["wheels"][0]["events"][-1]
+    assert last_ev["type"] == "SOLD_CC"
+    assert last_ev["alpaca_order_id"] == "cc-ord-1"
+    assert last_ev["fill_price"] is None
+
+
+def test_submit_cc_rejected_returns_400():
+    w = _assigned_wheel()
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [w]}), \
+         patch("banshee_core.alpaca_options.place_option_order",
+               side_effect=alpaca_options.AlpacaOrderRejectedError("insufficient")):
+        r = client.post(f"/paper-wheels/{w['id']}/submit-cc", json={
+            "strike": 455.0, "expiry": "2026-08-15", "mid": 1.80
+        })
+    assert r.status_code == 400
+
+
+def test_submit_cc_wrong_state_returns_400():
+    # Wheel in CASH state cannot submit a CC
+    w = _make_wheel(events=[])  # CASH state
+    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [w]}):
+        r = client.post(f"/paper-wheels/{w['id']}/submit-cc", json={
+            "strike": 455.0, "expiry": "2026-08-15", "mid": 1.80
+        })
+    assert r.status_code == 400
+    assert "SHARES" in r.json()["error"]
