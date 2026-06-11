@@ -599,6 +599,69 @@ def get_paper_wheel_alerts() -> str:
         return raw
 
 
+@mcp.tool()
+def get_paper_wheels() -> str:
+    """
+    Returns all paper Wheel positions with FSM state, live P&L, and attention flags.
+    Also shows a track record summary: total completed cycles and net realized P&L.
+
+    FSM states: CASH (ready for next CSP), CSP_OPEN, SHARES (assigned, ready for CC), CC_OPEN.
+    A single wheel can complete multiple cycles — the 'Cycles' count reflects total reps.
+
+    Use to answer: "Where am I in the Wheel?" and "How is my paper track record?"
+    """
+    import json
+    raw = _get("/paper-wheels")
+    try:
+        data = json.loads(raw)
+        wheels = data.get("wheels", [])
+
+        total_cycles = sum(
+            w.get("state", {}).get("totals", {}).get("cycles_completed", 0)
+            for w in wheels
+        )
+        net_pnl = sum(
+            w.get("state", {}).get("totals", {}).get("realized_pnl", 0.0)
+            for w in wheels
+        )
+        active = sum(1 for w in wheels if w.get("state", {}).get("state") != "CASH")
+        attention = sum(1 for w in wheels if w.get("needs_attention"))
+
+        lines = [
+            "PAPER WHEEL TRACK RECORD",
+            f"  Cycles completed: {total_cycles}  |  Net P&L: ${net_pnl:+.2f}  |  Active legs: {active}",
+        ]
+        if attention:
+            lines.append(f"  ⚠ NEEDS ATTENTION: {attention} wheel(s)")
+
+        if not wheels:
+            lines.append(
+                "\n  No paper wheels yet. "
+                "Use get_options_candidate then open_paper_wheel to start."
+            )
+        else:
+            lines.append(f"\nWHEELS ({len(wheels)}):")
+            for w in wheels:
+                st        = w.get("state", {})
+                fsm       = st.get("state", "?")
+                totals    = st.get("totals", {})
+                pnl       = totals.get("realized_pnl", 0.0)
+                cycles    = totals.get("cycles_completed", 0)
+                live      = w.get("live") or {}
+                dte       = live.get("dte", "")
+                dte_str   = f" | DTE: {dte}" if dte != "" else ""
+                pending   = " [FILL PENDING]" if w.get("pending_fill") else ""
+                flag      = " ⚠ NEEDS ATTENTION" if w.get("needs_attention") else ""
+                lines.append(
+                    f"  #{w.get('id', '?')[:8]} {w.get('underlying', '?')} — {fsm} | "
+                    f"P&L: ${pnl:+.2f} | Cycles: {cycles}{dte_str}{pending}{flag}"
+                )
+
+        return "\n".join(lines)
+    except Exception:
+        return raw
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
