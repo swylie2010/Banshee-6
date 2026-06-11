@@ -662,6 +662,50 @@ def get_paper_wheels() -> str:
         return raw
 
 
+@mcp.tool()
+def open_paper_wheel(
+    underlying: str,
+    strike: float,
+    expiry: str,
+    premium: float,
+    name: str = "",
+) -> str:
+    """
+    Open a new paper Wheel trade — places a Cash-Secured Put sell-to-open order on Alpaca paper.
+
+    CALL AFTER get_options_candidate confirms all guardrails pass. Never call cold.
+    The order targets paper-api.alpaca.markets only — never the live endpoint.
+
+    Args:
+        underlying: Ticker, e.g. "SPY"
+        strike:     Put strike price, e.g. 450.0
+        expiry:     Expiry date ISO format, e.g. "2024-09-20"
+        premium:    Mid-price per share from the candidate's 'mid' field, e.g. 2.50
+        name:       Optional label (defaults to "<UNDERLYING> Paper Wheel")
+
+    Returns: JSON with the new wheel record, pending_fill status, and Alpaca order_id.
+             On Alpaca rejection (400) or unavailability (503): structured error string,
+             no wheel record is created.
+    """
+    import json
+    body = {
+        "candidate_snapshot": {
+            "candidate": {
+                "underlying": underlying,
+                "strike":     strike,
+                "expiry":     expiry,
+                "mid":        premium,
+            }
+        },
+        "name": name or f"{underlying.upper()} Paper Wheel",
+    }
+    raw = _post("/paper-wheels", body)
+    try:
+        return json.dumps(json.loads(raw), indent=2)
+    except Exception:
+        return raw
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
