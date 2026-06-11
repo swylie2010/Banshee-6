@@ -653,4 +653,74 @@ async function deleteWheel(id) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot };
+/* ── Paper Wheel FSM (Alpaca paper trading) ──────────────────────────────── */
+
+/* list all paper wheel positions */
+async function listPaperWheels() {
+  const r = await fetch(`${API_BASE}/paper-wheels`);
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* get a single paper wheel by id */
+async function getPaperWheel(id) {
+  const r = await fetch(`${API_BASE}/paper-wheels/${id}`);
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* create a new paper wheel position */
+async function createPaperWheel(body) {
+  const r = await fetch(`${API_BASE}/paper-wheels`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* submit a covered call order on a paper wheel */
+async function submitPaperCC(wheelId, body) {
+  const r = await fetch(`${API_BASE}/paper-wheels/${wheelId}/submit-cc`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* fetch the calls chain for a paper wheel (used when state===SHARES) */
+async function getPaperWheelCalls(wheelId) {
+  const r = await fetch(`${API_BASE}/paper-wheels/${wheelId}/calls`);
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* delete a paper wheel by id */
+async function deletePaperWheel(id) {
+  const r = await fetch(`${API_BASE}/paper-wheels/${id}`, { method: "DELETE" });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* fetch wheels that need attention (alert strip) */
+async function getPaperWheelAlerts() {
+  const r = await fetch(`${API_BASE}/paper-wheels/alerts`);
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+/* post a manual FSM event to a paper wheel */
+async function postPaperWheelEvent(wheelId, event) {
+  const r = await fetch(`${API_BASE}/paper-wheels/${wheelId}/event`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event }),
+  });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent };

@@ -188,10 +188,29 @@ function WheelJourney({ underlying, dte }) {
   );
 }
 
-function OptCard({ data, teach, onRunWheel, onSeeWheels, runError }) {
+function OptCard({ data, teach, onRunWheel, onSeeWheels, onPaperTrade, runError }) {
   const P = OPT_PALETTE;
   const c = data.candidate, t = data.translation;
   const premium = Math.round(c.mid * 100);
+  const [showPaperConfirm, setShowPaperConfirm] = React.useState(false);
+  const [paperBusy, setPaperBusy] = React.useState(false);
+  const [paperErr, setPaperErr] = React.useState(null);
+
+  const handlePaperConfirm = async () => {
+    setPaperBusy(true); setPaperErr(null);
+    try {
+      const w = await window.API.createPaperWheel({
+        candidate_snapshot: c,
+        underlying: c.underlying,
+        name: c.underlying + ' Paper Wheel',
+      });
+      setShowPaperConfirm(false);
+      onPaperTrade(w.id);
+    } catch (e) {
+      setPaperErr(e?.detail || e?.error || "Couldn't start paper trade — try again.");
+    }
+    setPaperBusy(false);
+  };
   const num = (label, value, termKey) => (
     <div style={{ padding: '12px 20px 4px 0' }}>
       <div style={{ fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700, color: P.ink4 }}>
@@ -251,6 +270,7 @@ function OptCard({ data, teach, onRunWheel, onSeeWheels, runError }) {
       <OptWhy guardrails={data.guardrails} />
       <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${P.line}`, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
         <OptButton label="RUN THIS AS A SIMULATED WHEEL →" onClick={() => onRunWheel(c)} />
+        <OptButton label="PAPER TRADE THIS →" onClick={() => { setShowPaperConfirm(true); setPaperErr(null); }} />
         <button onClick={onSeeWheels} style={{
           background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
           fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -259,6 +279,15 @@ function OptCard({ data, teach, onRunWheel, onSeeWheels, runError }) {
         </button>
       </div>
       <OptError msg={runError} />
+      {showPaperConfirm && (
+        <PaperTradeConfirm
+          candidate={c}
+          onConfirm={handlePaperConfirm}
+          onCancel={() => { setShowPaperConfirm(false); setPaperErr(null); }}
+          busy={paperBusy}
+          err={paperErr}
+        />
+      )}
     </div>
   );
 }
@@ -672,6 +701,441 @@ function WheelTracker({ wheel, setWheel, onBack }) {
   );
 }
 
+/* ── Paper Wheel helpers ──────────────────────────────────────────────────── */
+
+function _alertReason(r) {
+  if (r === "order_pending") return "order expired or canceled — resubmit?";
+  if (r === "checkpoint_due") return "≤21 DTE — time to evaluate";
+  if (r === "expiry_due") return "expiry today — take action";
+  if (r === "expired") return "position closed — review outcome";
+  return r || "needs attention";
+}
+
+/* Alert strip — polls /paper-wheels/alerts every 60 s; shown above candidate card. */
+function PaperAlertStrip({ onGoToWheel }) {
+  const P = OPT_PALETTE;
+  const [alerts, setAlerts] = React.useState([]);
+  React.useEffect(() => {
+    const load = () => window.API.getPaperWheelAlerts().then(d => setAlerts(Array.isArray(d) ? d : (d.alerts || []))).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, []);
+  if (!alerts.length) return null;
+  return (
+    <div style={{ background: 'var(--sell, #E05252)', color: '#fff', padding: '8px 16px',
+                  marginBottom: 12, borderRadius: 4, fontSize: 12 }}>
+      {alerts.map(w => (
+        <div key={w.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span>{w.underlying} paper wheel — {_alertReason(w.attention_reason)}</span>
+          <button onClick={() => onGoToWheel(w.id)}
+                  style={{ background: 'none', border: '1px solid #fff',
+                           color: '#fff', cursor: 'pointer', padding: '1px 8px',
+                           borderRadius: 3, fontSize: 11 }}>
+            GO TO WHEEL →
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Paper wheel list view — shows all paper trades with FSM state + live P&L. */
+function PaperWheelList({ onSelect, onNew, onBack }) {
+  const P = OPT_PALETTE;
+  const [wheels, setWheels] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState(null);
+  const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
+
+  React.useEffect(() => {
+    window.API.listPaperWheels()
+      .then(d => { setWheels(d.wheels || []); setLoading(false); })
+      .catch(e => { setErr(e?.detail || e?.error || 'Could not load paper trades.'); setLoading(false); });
+  }, []);
+
+  const del = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await window.API.deletePaperWheel(id);
+      setWheels(ws => ws.filter(w => w.id !== id));
+    } catch (ex) {
+      setErr(ex?.detail || ex?.error || 'Delete failed.');
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+        fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase',
+        color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ PAPER TRADES</span>
+        <button onClick={onNew}
+                style={{ background: P.mint, color: '#fff', border: 'none',
+                         padding: '4px 12px', borderRadius: 4, cursor: 'pointer',
+                         fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.08em',
+                         textTransform: 'uppercase', fontWeight: 700 }}>
+          + NEW
+        </button>
+      </div>
+      <OptError msg={err} />
+      {loading && <div style={{ color: P.ink3, opacity: 0.5, fontSize: 12 }}>Loading…</div>}
+      {!loading && !wheels.length && (
+        <div style={{ color: P.ink3, opacity: 0.5, fontSize: 12 }}>
+          No paper trades yet. Use "PAPER TRADE THIS →" on a CSP candidate.
+        </div>
+      )}
+      {wheels.map(w => {
+        const state = w.state?.state || 'CASH';
+        const pnl = w.live?.unrealized_pl;
+        return (
+          <div key={w.id} onClick={() => onSelect(w.id)}
+               style={{ padding: '10px 14px', marginBottom: 6, borderRadius: 4,
+                        background: P.card, border: `1px solid ${P.line}`, cursor: 'pointer',
+                        display: 'flex', justifyContent: 'space-between',
+                        alignItems: 'center', gap: 12 }}>
+            <div>
+              <span style={{ fontWeight: 700, fontSize: 13, color: P.ink }}>{w.underlying}</span>
+              <span style={{ color: P.ink3, fontSize: 11, marginLeft: 8 }}>{state}</span>
+              {w.needs_attention && (
+                <span style={{ background: P.amber, color: '#fff',
+                               fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                               marginLeft: 8 }}>!</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              {pnl != null && (
+                <span style={{ color: pnl >= 0 ? P.mint : P.amber,
+                               fontSize: 12, fontWeight: 600 }}>
+                  {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
+                </span>
+              )}
+              <button onClick={(e) => del(e, w.id)} style={{
+                background: 'transparent', border: `1px solid ${P.line}`, borderRadius: 4,
+                cursor: 'pointer', color: P.amber, fontFamily: 'monospace', fontSize: 11, padding: '3px 8px' }}>
+                DELETE
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Inline confirmation panel shown inside OptCard before creating a paper wheel. */
+function PaperTradeConfirm({ candidate, onConfirm, onCancel, busy, err }) {
+  const P = OPT_PALETTE;
+  const c = candidate;
+  const mid = c.mid || 0;
+  const premium = Math.round(mid * 100);
+  const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
+  return (
+    <div style={{ marginTop: 12, background: P.mintSoft, border: `1px solid ${P.mint}`,
+                  borderRadius: 8, padding: '14px 16px' }}>
+      <div style={{ ...lab, color: P.mintDeep, marginBottom: 8 }}>◆ CONFIRM PAPER TRADE</div>
+      <div style={{ fontSize: 13, color: P.ink, lineHeight: 1.65, marginBottom: 10 }}>
+        <b>Order spec:</b> SELL TO OPEN · {c.underlying} {c.expiry} ${c.strike} PUT ·
+        1 contract (100 shares obligation) · limit ${mid.toFixed(2)} (mid)
+      </div>
+      <div style={{ background: P.amberBg, border: `1px solid ${P.amberLine}`,
+                    borderRadius: 6, padding: '10px 13px', fontSize: 13, color: '#6b5118', lineHeight: 1.6 }}>
+        You are committing to buy 100 shares of <b>{c.underlying}</b> at <b>${c.strike}</b> for
+        a <b>${premium.toLocaleString()}</b> premium. This order will be submitted to your
+        Alpaca paper account.
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', gap: 10 }}>
+        <OptButton label={busy ? 'SUBMITTING…' : 'CONFIRM — SUBMIT TO ALPACA PAPER'} disabled={busy} onClick={onConfirm} />
+        <button onClick={onCancel} style={{ background: 'transparent', border: `1px solid ${P.line}`,
+          borderRadius: 6, cursor: 'pointer', padding: '8px 14px', fontFamily: 'monospace',
+          fontSize: 12, color: P.ink4, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+          CANCEL
+        </button>
+      </div>
+      <OptError msg={err} />
+    </div>
+  );
+}
+
+/* Paper Wheel tracker — live Alpaca paper panel + FSM strip + CC selection + manual events. */
+function PaperWheelTracker({ wheelId, onBack }) {
+  const P = OPT_PALETTE;
+  const [wheel, setWheel] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [calls, setCalls] = React.useState(null);
+  const [callsErr, setCallsErr] = React.useState(null);
+  const [selectedCall, setSelectedCall] = React.useState(null);
+  const [ccConfirm, setCcConfirm] = React.useState(false);
+  const [ccBusy, setCcBusy] = React.useState(false);
+  const [ccErr, setCcErr] = React.useState(null);
+  const [manualOpen, setManualOpen] = React.useState(false);
+
+  const lab = { fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 700 };
+
+  const reload = React.useCallback(() => {
+    window.API.getPaperWheel(wheelId)
+      .then(w => { setWheel(w); setLoading(false); })
+      .catch(e => { setErr(e?.detail || e?.error || 'Could not load paper wheel.'); setLoading(false); });
+  }, [wheelId]);
+
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const postEvent = async (event) => {
+    setBusy(true); setErr(null);
+    try {
+      const w = await window.API.postPaperWheelEvent(wheelId, event);
+      setWheel(w);
+    } catch (e) {
+      setErr(e?.detail || e?.error || 'Event failed — try again.');
+    }
+    setBusy(false);
+  };
+
+  const loadCalls = async () => {
+    setCallsErr(null);
+    try {
+      const d = await window.API.getPaperWheelCalls(wheelId);
+      setCalls(d.calls || d || []);
+    } catch (e) {
+      setCallsErr(e?.detail || e?.error || 'Could not fetch calls chain.');
+    }
+  };
+
+  const submitCC = async () => {
+    if (!selectedCall) return;
+    setCcBusy(true); setCcErr(null);
+    try {
+      const w = await window.API.submitPaperCC(wheelId, {
+        strike: selectedCall.strike,
+        expiry: selectedCall.expiry,
+        mid: selectedCall.mid,
+        delta: selectedCall.delta,
+        dte: selectedCall.dte,
+      });
+      setWheel(w);
+      setCcConfirm(false);
+      setSelectedCall(null);
+      setCalls(null);
+    } catch (e) {
+      setCcErr(e?.detail || e?.error || 'CC submission failed — try again.');
+    }
+    setCcBusy(false);
+  };
+
+  if (loading) return (
+    <div style={{ color: P.ink3, fontSize: 13, letterSpacing: '0.1em' }}>◇ LOADING…</div>
+  );
+
+  if (!wheel) return (
+    <div>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+        fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase',
+        color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
+      <OptError msg={err || 'Paper wheel not found.'} />
+    </div>
+  );
+
+  const st = wheel.state || {};
+  const live = wheel.live || {};
+  const state = st.state || 'CASH';
+  const pendingFill = st.pending_fill === true;
+
+  /* FSM strip — same chip pattern as WheelTracker */
+  const chips = [
+    { key: 'CASH', label: 'CASH' },
+    { key: 'CSP_OPEN', label: 'CSP OPEN' },
+    { key: 'SHARES', label: 'SHARES' },
+    { key: 'CC_OPEN', label: 'CC OPEN' },
+  ];
+
+  /* last-polled freshness */
+  const lastPolledAge = () => {
+    if (!live.last_polled) return null;
+    const mins = Math.round((Date.now() - new Date(live.last_polled).getTime()) / 60000);
+    return mins;
+  };
+  const age = lastPolledAge();
+  const stale = age != null && age > 10;
+
+  /* manual event options */
+  const MANUAL_EVENTS = [
+    { event: 'CHECKPOINT_HELD', label: 'CHECKPOINT HELD' },
+    { event: 'EXPIRED_WORTHLESS', label: 'EXPIRED WORTHLESS' },
+    { event: 'ASSIGNED', label: 'ASSIGNED (CSP)' },
+    { event: 'CALLED_AWAY', label: 'CALLED AWAY (CC)' },
+  ];
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+        fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase',
+        color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
+      <div style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ PAPER WHEEL · {wheel.underlying}</div>
+
+      {/* LIVE ALPACA PAPER panel */}
+      <div style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 10, padding: '16px 18px', marginTop: 14 }}>
+        <div style={{ ...lab, fontSize: 12, color: P.ink4, marginBottom: 10 }}>LIVE ALPACA PAPER</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 28px' }}>
+          {live.unrealized_pl != null && (
+            <div>
+              <div style={{ ...lab, fontSize: 11, color: P.ink4 }}>Unrealized P&L</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: live.unrealized_pl >= 0 ? P.mint : P.amber }}>
+                {live.unrealized_pl >= 0 ? '+' : ''}${live.unrealized_pl.toFixed(2)}
+              </div>
+            </div>
+          )}
+          {live.current_price != null && (
+            <div>
+              <div style={{ ...lab, fontSize: 11, color: P.ink4 }}>Current Option Price</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: P.ink }}>${live.current_price.toFixed(2)}</div>
+            </div>
+          )}
+          {live.dte != null && (
+            <div>
+              <div style={{ ...lab, fontSize: 11, color: P.ink4 }}>DTE</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: P.ink }}>{live.dte}</div>
+            </div>
+          )}
+        </div>
+        {age != null && (
+          <div style={{ fontSize: 11, color: stale ? P.amber : P.ink4, marginTop: 8 }}>
+            Last updated {age === 0 ? 'just now' : `${age} min ago`}
+            {stale && ' — may be stale'}
+          </div>
+        )}
+      </div>
+
+      {/* FSM strip */}
+      <div style={{ display: 'flex', gap: 6, margin: '14px 0 4px' }}>
+        {chips.map((ch, i) => {
+          const on = ch.key === state;
+          return (
+            <React.Fragment key={ch.key}>
+              <span style={{ ...lab, fontSize: 12, padding: '6px 10px', borderRadius: 6,
+                background: on ? P.mint : P.bg2, color: on ? '#fff' : P.ink4,
+                border: `1px solid ${on ? P.mintDeep : P.line}` }}>{ch.label}</span>
+              {i < chips.length - 1 && <span style={{ color: P.ink4, alignSelf: 'center' }}>▸</span>}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Pending fill banner */}
+      {pendingFill && (
+        <div style={{ marginTop: 14, background: P.amberBg, border: `1px solid ${P.amberLine}`,
+                      borderRadius: 8, padding: '12px 15px' }}>
+          <div style={{ ...lab, fontSize: 12, color: P.amber }}>ORDER SUBMITTED — WAITING FOR FILL</div>
+          {age != null && (
+            <div style={{ fontSize: 12, color: '#6b5118', marginTop: 4 }}>
+              Last polled {age === 0 ? 'just now' : `${age} min ago`}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CC selection flow when state === SHARES */}
+      {!pendingFill && state === 'SHARES' && (
+        <div style={{ marginTop: 16, background: P.card, border: `1px solid ${P.line}`, borderRadius: 10, padding: '16px 18px' }}>
+          <div style={{ ...lab, fontSize: 12, color: P.ink4, marginBottom: 8 }}>SELECT A COVERED CALL TO SELL</div>
+          {!calls && !callsErr && (
+            <OptButton label="LOAD CALLS CHAIN" disabled={busy} onClick={loadCalls} />
+          )}
+          {callsErr && <OptError msg={callsErr} />}
+          {calls && calls.length === 0 && (
+            <div style={{ fontSize: 12, color: P.ink3 }}>No calls available right now.</div>
+          )}
+          {calls && calls.length > 0 && !ccConfirm && (
+            <div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    {['Strike', 'Mid', 'Delta', 'DTE', ''].map(h => (
+                      <th key={h} style={{ ...lab, fontSize: 11, color: P.ink4, textAlign: 'left',
+                                           padding: '4px 8px', borderBottom: `1px solid ${P.line}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {calls.map((c, i) => {
+                    const sel = selectedCall && selectedCall.strike === c.strike && selectedCall.expiry === c.expiry;
+                    return (
+                      <tr key={i} onClick={() => setSelectedCall(c)}
+                          style={{ background: sel ? P.mintSoft : 'transparent', cursor: 'pointer' }}>
+                        <td style={{ padding: '6px 8px', color: P.ink, fontWeight: sel ? 700 : 400 }}>${c.strike}</td>
+                        <td style={{ padding: '6px 8px', color: P.ink }}>${c.mid?.toFixed(2)}</td>
+                        <td style={{ padding: '6px 8px', color: P.ink }}>{c.delta?.toFixed(2)}</td>
+                        <td style={{ padding: '6px 8px', color: P.ink }}>{c.dte}</td>
+                        <td style={{ padding: '6px 8px' }}>
+                          {sel && (
+                            <button onClick={(e) => { e.stopPropagation(); setCcConfirm(true); }}
+                                    style={{ background: P.mint, color: '#fff', border: 'none', cursor: 'pointer',
+                                             padding: '3px 10px', borderRadius: 4, fontFamily: 'monospace',
+                                             fontSize: 11, fontWeight: 700, letterSpacing: '0.08em' }}>
+                              SELECT →
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {ccConfirm && selectedCall && (
+            <div style={{ marginTop: 10, background: P.mintSoft, border: `1px solid ${P.mint}`,
+                          borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ ...lab, fontSize: 12, color: P.mintDeep, marginBottom: 6 }}>CONFIRM COVERED CALL</div>
+              <div style={{ fontSize: 13, color: P.ink, lineHeight: 1.6, marginBottom: 8 }}>
+                SELL TO OPEN · {wheel.underlying} {selectedCall.expiry} ${selectedCall.strike} CALL ·
+                1 contract · limit ${selectedCall.mid?.toFixed(2)} (mid) · {selectedCall.dte} DTE
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <OptButton label={ccBusy ? 'SUBMITTING…' : 'SUBMIT CC TO ALPACA PAPER'} disabled={ccBusy} onClick={submitCC} />
+                <button onClick={() => { setCcConfirm(false); setSelectedCall(null); }}
+                        style={{ background: 'transparent', border: `1px solid ${P.line}`, borderRadius: 6,
+                                 cursor: 'pointer', padding: '8px 14px', fontFamily: 'monospace',
+                                 fontSize: 12, color: P.ink4, letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+                  CANCEL
+                </button>
+              </div>
+              <OptError msg={ccErr} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <OptError msg={err} />
+
+      {/* Manual events expander */}
+      <div style={{ marginTop: 16, borderTop: `1px solid ${P.line}`, paddingTop: 12 }}>
+        <button onClick={() => setManualOpen(o => !o)} style={{
+          background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+          fontWeight: 700, color: P.ink4 }}>
+          {manualOpen ? '▾ RECORD MANUAL EVENT' : '› RECORD MANUAL EVENT'}
+        </button>
+        {manualOpen && (
+          <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {MANUAL_EVENTS.map(me => (
+              <button key={me.event} disabled={busy} onClick={() => postEvent(me.event)}
+                      style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 6,
+                               cursor: busy ? 'default' : 'pointer', padding: '6px 13px',
+                               fontFamily: 'monospace', fontSize: 11, color: P.ink,
+                               letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 }}>
+                {me.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* Runs calm+crash scenarios for one danger lever and shows side-by-side + AI compare. */
 function DangerLeverPanel({ leverKey, candidate }) {
   // NOTE: lever constants (0.85/0.62/×2.5/5) are duplicated in options_engine.py danger_lever_scenarios().
@@ -964,8 +1428,10 @@ function OptionsPage({ onBack }) {
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [acct, setAcct] = React.useState(() => localStorage.getItem('banshee_options_acct') || '');
-  const [optView, setOptView] = React.useState("calm");   // "calm" | "list" | "tracker"
+  // optView: "calm" | "list" | "tracker" | "paperList" | "paperTracker"
+  const [optView, setOptView] = React.useState("calm");
   const [wheel, setWheel] = React.useState(null);
+  const [selectedPaperWheelId, setSelectedPaperWheelId] = React.useState(null);
   const [runError, setRunError] = React.useState(null);
   const [teach, setTeach] = useTeachMode();
 
@@ -978,6 +1444,11 @@ function OptionsPage({ onBack }) {
     });
     if (w && !w.error) { setWheel(w); setOptView("tracker"); }
     else { setRunError((w && w.error) || "Couldn't start the simulated wheel — try again."); }
+  }, []);
+
+  const goToPaperWheel = React.useCallback((id) => {
+    setSelectedPaperWheelId(id);
+    setOptView("paperTracker");
   }, []);
 
   const load = React.useCallback(() => {
@@ -1002,6 +1473,23 @@ function OptionsPage({ onBack }) {
   if (optView === "tracker" && wheel) {
     return shell(<WheelTracker wheel={wheel} setWheel={setWheel} onBack={() => setOptView("list")} />);
   }
+  if (optView === "paperList") {
+    return shell(
+      <PaperWheelList
+        onSelect={goToPaperWheel}
+        onNew={() => setOptView("calm")}
+        onBack={() => setOptView("calm")}
+      />
+    );
+  }
+  if (optView === "paperTracker" && selectedPaperWheelId) {
+    return shell(
+      <PaperWheelTracker
+        wheelId={selectedPaperWheelId}
+        onBack={() => setOptView("paperList")}
+      />
+    );
+  }
 
   return shell(
     <>
@@ -1009,7 +1497,15 @@ function OptionsPage({ onBack }) {
         fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
         <div style={{ ...lab, fontSize: 12, letterSpacing: '0.18em', color: P.mintDeep }}>◆ OPTIONS · ONE CONSERVATIVE PLAY, EXPLAINED</div>
-        <TeachToggle on={teach} setOn={setTeach} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button onClick={() => setOptView("paperList")} style={{
+            background: 'transparent', border: `1px solid ${P.mint}`, borderRadius: 5,
+            cursor: 'pointer', fontFamily: 'monospace', fontSize: 12, letterSpacing: '0.08em',
+            textTransform: 'uppercase', fontWeight: 700, color: P.mintDeep, padding: '5px 12px' }}>
+            PAPER TRADES →
+          </button>
+          <TeachToggle on={teach} setOn={setTeach} />
+        </div>
       </div>
       <div style={{ fontSize: 23, fontWeight: 700, margin: '7px 0 6px' }}>First, what an option actually is.</div>
       <Teach teach={teach} title="What an option is">
@@ -1035,9 +1531,11 @@ function OptionsPage({ onBack }) {
 
       {loading && <div style={{ fontSize: 14, color: P.ink3, letterSpacing: '0.1em' }}>◇ SCANNING THE WHEEL UNIVERSE…</div>}
 
+      <PaperAlertStrip onGoToWheel={goToPaperWheel} />
+
       {!loading && data && data.candidate && (
         <>
-          <OptCard data={data} teach={teach} onRunWheel={runWheel} onSeeWheels={() => setOptView("list")} runError={runError} />
+          <OptCard data={data} teach={teach} onRunWheel={runWheel} onSeeWheels={() => setOptView("list")} onPaperTrade={goToPaperWheel} runError={runError} />
           <OptControlPanel data={data} />
           <OptGrader candidate={data.candidate} />
           {data.low_iv_warning && (
