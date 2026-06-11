@@ -941,7 +941,7 @@ function PaperWheelTracker({ wheelId, onBack }) {
   const st = wheel.state || {};
   const live = wheel.live || {};
   const state = st.state || 'CASH';
-  const pendingFill = st.pending_fill === true;
+  const pendingFill = wheel.pending_fill === true;
 
   /* FSM strip — same chip pattern as WheelTracker */
   const chips = [

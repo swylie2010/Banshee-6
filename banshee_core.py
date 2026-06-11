@@ -2738,17 +2738,27 @@ def _poll_one_paper_wheel(wheel: dict) -> bool:
             return False
 
         if pos:
+            # Compute DTE before building live dict so it can be included
+            try:
+                from datetime import date as _d2
+                exp_date = _d2.fromisoformat(expiry)
+                live_dte = (exp_date - _d2.today()).days
+            except Exception:
+                exp_date = None
+                live_dte = None
             wheel["live"] = {
                 "unrealized_pl":  pos.get("unrealized_pl"),
                 "current_price":  pos.get("current_price"),
                 "last_polled":    _dt.utcnow().isoformat(),
+                "dte":            live_dte,
             }
             changed = True
             # DTE checks for attention prompts
             try:
-                from datetime import date as _d2
-                exp_date = _d2.fromisoformat(expiry)
-                dte = (exp_date - _d2.today()).days
+                if exp_date is None:
+                    from datetime import date as _d2
+                    exp_date = _d2.fromisoformat(expiry)
+                dte = live_dte if live_dte is not None else (exp_date - _d2.today()).days
                 fsm_state = wheel_engine.replay(events)
                 already_held = any(e.get("type") == "CHECKPOINT_HELD" for e in events)
                 if dte <= 0 and not wheel.get("attention_reason") == "expiry_due":
