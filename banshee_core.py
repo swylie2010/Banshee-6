@@ -2677,6 +2677,39 @@ def _paper_wheel_view(wheel: dict) -> dict:
     })
 
 
+@app.get("/paper-wheels/alerts")
+def route_paper_wheels_alerts():
+    data = _load_paper_wheels()
+    alerts = [
+        {"id": w["id"], "name": w.get("name", ""), "underlying": w.get("underlying", ""),
+         "attention_reason": w.get("attention_reason")}
+        for w in data.get("wheels", [])
+        if w.get("needs_attention")
+    ]
+    return {"alerts": alerts}
+
+
+@app.get("/paper-wheels")
+def route_paper_wheels_list():
+    data = _load_paper_wheels()
+    return {"wheels": [_paper_wheel_view(w) for w in data.get("wheels", [])]}
+
+
+@app.delete("/paper-wheels/{wheel_id}")
+def route_paper_wheels_delete(wheel_id: str):
+    data = _load_paper_wheels()
+    wheel = next((w for w in data.get("wheels", []) if w["id"] == wheel_id), None)
+    if not wheel:
+        return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
+    for ev in reversed(wheel.get("events", [])):
+        if ev.get("alpaca_order_id") and ev.get("fill_price") is None:
+            alpaca_options.cancel_order(ev["alpaca_order_id"])
+            break
+    data["wheels"] = [w for w in data["wheels"] if w["id"] != wheel_id]
+    _save_paper_wheels(data)
+    return {"ok": True}
+
+
 def fetch_all_radar_for_syms(syms: list) -> dict:
     """Fetch radar data for a list of symbols. Returns {sym: radar_result}."""
     cached_macro = _load_macro_cache()
