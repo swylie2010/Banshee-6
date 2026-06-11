@@ -65,3 +65,193 @@ def _safe_float(v, default=0.0) -> float:
     except (TypeError, ValueError):
         return default
     return default if math.isnan(f) else f
+
+
+# ── Client factories ──────────────────────────────────────────────────────────
+
+def _get_trading_client():
+    """TradingClient(paper=True) using keys from .banshee_keys.json."""
+    try:
+        from alpaca.trading.client import TradingClient
+        from shared_data import load_providers
+    except ImportError as e:
+        raise AlpacaUnavailableError(f"alpaca-py not installed: {e}")
+    p      = load_providers()
+    key    = p.get("ALPACA_KEY", {}).get("key", "")
+    secret = p.get("ALPACA_SECRET", {}).get("key", "")
+    if not key or not secret:
+        raise AlpacaUnavailableError("Alpaca keys not configured — add them in Settings.")
+    try:
+        return TradingClient(key, secret, paper=True)
+    except Exception as e:
+        raise AlpacaUnavailableError(str(e))
+
+
+def _get_data_client():
+    """OptionHistoricalDataClient using same keys."""
+    try:
+        from alpaca.data.historical.option import OptionHistoricalDataClient
+        from shared_data import load_providers
+    except ImportError as e:
+        raise AlpacaUnavailableError(f"alpaca-py not installed: {e}")
+    p      = load_providers()
+    key    = p.get("ALPACA_KEY", {}).get("key", "")
+    secret = p.get("ALPACA_SECRET", {}).get("key", "")
+    if not key or not secret:
+        raise AlpacaUnavailableError("Alpaca keys not configured — add them in Settings.")
+    try:
+        return OptionHistoricalDataClient(key, secret)
+    except Exception as e:
+        raise AlpacaUnavailableError(str(e))
+
+
+# ── Public I/O functions ──────────────────────────────────────────────────────
+
+def fetch_calls_chain(symbol: str, min_dte: int, max_dte: int, spot: float = None) -> list:
+    """Fetch calls chain from Alpaca. Returns list of normalized contracts.
+    Same shape as options_data.normalize_puts() plus delta and occ_symbol fields."""
+    from datetime import date, timedelta
+    try:
+        from alpaca.data.requests import OptionChainRequest
+        from alpaca.trading.enums import ContractType
+    except ImportError as e:
+        raise AlpacaUnavailableError(str(e))
+
+    if spot is None:
+        try:
+            import yfinance as yf
+            spot = float(yf.Ticker(symbol).fast_info["lastPrice"])
+        except Exception:
+            spot = 0.0
+
+    today   = date.today()
+    exp_gte = (today + timedelta(days=min_dte)).isoformat()
+    exp_lte = (today + timedelta(days=max_dte)).isoformat()
+
+    try:
+        client = _get_data_client()
+        req    = OptionChainRequest(
+            underlying_symbol=symbol,
+            expiration_date_gte=exp_gte,
+            expiration_date_lte=exp_lte,
+            type=ContractType.CALL,
+        )
+        chain = client.get_option_chain(req)
+    except AlpacaUnavailableError:
+        raise
+    except Exception as e:
+        raise AlpacaUnavailableError(str(e))
+
+    today_iso = today.isoformat()
+    out = []
+    for occ_sym, snap in (chain or {}).items():
+        parsed = _parse_occ_symbol(occ_sym)
+        if not parsed:
+            continue
+        dte = _dte(parsed["expiry"], today_iso)
+        if not (min_dte <= dte <= max_dte):
+            continue
+        quote = snap.latest_quote
+        bid   = _safe_float(quote.bid_price if quote else None)
+        ask   = _safe_float(quote.ask_price if quote else None)
+        mid   = round((bid + ask) / 2.0, 4) if (bid > 0 or ask > 0) else 0.0
+        iv    = _safe_float(snap.implied_volatility)
+        delta = _safe_float(snap.greeks.delta, None) if snap.greeks else None
+        out.append({
+            "type": "call", "underlying": symbol, "spot": spot,
+            "strike": parsed["strike"], "expiry": parsed["expiry"], "dte": dte,
+            "bid": bid, "ask": ask, "mid": mid, "iv": iv,
+            "open_interest": 0, "volume": 0,
+            "delta": delta, "occ_symbol": occ_sym,
+        })
+    return sorted(out, key=lambda c: (c["dte"], c["strike"]))
+
+
+def place_option_order(occ_symbol: str, side: str, qty: int, limit_price: float) -> dict:
+    """Submit a limit order to Alpaca paper. side should be 'sell'.
+    Returns {order_id, status, submitted_at}.
+    Raises AlpacaOrderRejectedError or AlpacaUnavailableError."""
+    try:
+        from alpaca.trading.requests import LimitOrderRequest
+        from alpaca.trading.enums import OrderSide, TimeInForce, PositionIntent
+        from alpaca.common.exceptions import APIError
+    except ImportError as e:
+        raise AlpacaUnavailableError(str(e))
+
+    order_side = OrderSide.SELL if side.lower() == "sell" else OrderSide.BUY
+    req = LimitOrderRequest(
+        symbol=occ_symbol,
+        qty=qty,
+        side=order_side,
+        time_in_force=TimeInForce.DAY,
+        limit_price=float(limit_price),
+        position_intent=PositionIntent.SELL_TO_OPEN,
+    )
+    try:
+        client = _get_trading_client()
+        order  = client.submit_order(req)
+    except AlpacaUnavailableError:
+        raise
+    except APIError as e:
+        raise AlpacaOrderRejectedError(str(e))
+    except Exception as e:
+        raise AlpacaUnavailableError(str(e))
+
+    return {
+        "order_id":     str(order.id),
+        "status":       order.status.value,
+        "submitted_at": order.submitted_at.isoformat() if order.submitted_at else None,
+    }
+
+
+def get_order(order_id: str) -> dict:
+    """Poll an order by ID. Returns {status, filled_avg_price, filled_at}.
+    Raises AlpacaUnavailableError on network failure."""
+    try:
+        from alpaca.common.exceptions import APIError
+    except ImportError as e:
+        raise AlpacaUnavailableError(str(e))
+    try:
+        client = _get_trading_client()
+        order  = client.get_order_by_id(order_id)
+    except AlpacaUnavailableError:
+        raise
+    except Exception as e:
+        raise AlpacaUnavailableError(str(e))
+    return {
+        "status":           order.status.value,
+        "filled_avg_price": _safe_float(order.filled_avg_price, None) if order.filled_avg_price else None,
+        "filled_at":        order.filled_at.isoformat() if order.filled_at else None,
+    }
+
+
+def get_position(occ_symbol: str):
+    """Return open position dict or None if not found.
+    Raises AlpacaUnavailableError on network failure."""
+    try:
+        from alpaca.common.exceptions import APIError
+    except ImportError as e:
+        raise AlpacaUnavailableError(str(e))
+    try:
+        client = _get_trading_client()
+        pos    = client.get_open_position(occ_symbol)
+    except AlpacaUnavailableError:
+        raise
+    except Exception:
+        return None   # position not found (404) or other error
+    return {
+        "qty":             _safe_float(pos.qty),
+        "avg_entry_price": _safe_float(pos.avg_entry_price),
+        "unrealized_pl":   _safe_float(pos.unrealized_pl),
+        "current_price":   _safe_float(pos.current_price, None) if pos.current_price else None,
+    }
+
+
+def cancel_order(order_id: str) -> bool:
+    """Attempt to cancel an order. Returns True on success, False if already terminal."""
+    try:
+        client = _get_trading_client()
+        client.cancel_order_by_id(order_id)
+        return True
+    except Exception:
+        return False
