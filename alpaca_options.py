@@ -69,18 +69,27 @@ def _safe_float(v, default=0.0) -> float:
 
 # ── Client factories ──────────────────────────────────────────────────────────
 
-def _get_trading_client():
-    """TradingClient(paper=True) using keys from .banshee_keys.json."""
+def _get_alpaca_keys() -> tuple:
+    """Load Alpaca API key/secret from .banshee_keys.json. Raises AlpacaUnavailableError if missing."""
     try:
-        from alpaca.trading.client import TradingClient
         from shared_data import load_providers
     except ImportError as e:
-        raise AlpacaUnavailableError(f"alpaca-py not installed: {e}")
+        raise AlpacaUnavailableError(f"shared_data not found: {e}")
     p      = load_providers()
     key    = p.get("ALPACA_KEY", {}).get("key", "")
     secret = p.get("ALPACA_SECRET", {}).get("key", "")
     if not key or not secret:
         raise AlpacaUnavailableError("Alpaca keys not configured — add them in Settings.")
+    return key, secret
+
+
+def _get_trading_client():
+    """TradingClient(paper=True) using keys from .banshee_keys.json."""
+    try:
+        from alpaca.trading.client import TradingClient
+    except ImportError as e:
+        raise AlpacaUnavailableError(f"alpaca-py not installed: {e}")
+    key, secret = _get_alpaca_keys()
     try:
         return TradingClient(key, secret, paper=True)
     except Exception as e:
@@ -91,14 +100,9 @@ def _get_data_client():
     """OptionHistoricalDataClient using same keys."""
     try:
         from alpaca.data.historical.option import OptionHistoricalDataClient
-        from shared_data import load_providers
     except ImportError as e:
         raise AlpacaUnavailableError(f"alpaca-py not installed: {e}")
-    p      = load_providers()
-    key    = p.get("ALPACA_KEY", {}).get("key", "")
-    secret = p.get("ALPACA_SECRET", {}).get("key", "")
-    if not key or not secret:
-        raise AlpacaUnavailableError("Alpaca keys not configured — add them in Settings.")
+    key, secret = _get_alpaca_keys()
     try:
         return OptionHistoricalDataClient(key, secret)
     except Exception as e:

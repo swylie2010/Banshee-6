@@ -209,3 +209,15 @@ def test_get_position_returns_none_when_not_found():
     with patch("alpaca_options._get_trading_client") as mock_tc:
         mock_tc.return_value.get_open_position.side_effect = APIError("position not found")
         assert ao.get_position("SPY260715P00450000") is None
+
+
+def test_cancel_order_returns_true_on_success():
+    with patch("alpaca_options._get_trading_client") as mock_tc:
+        mock_tc.return_value.cancel_order_by_id.return_value = None
+        assert ao.cancel_order("order-uuid-123") is True
+
+
+def test_cancel_order_returns_false_on_exception():
+    with patch("alpaca_options._get_trading_client") as mock_tc:
+        mock_tc.return_value.cancel_order_by_id.side_effect = Exception("already filled")
+        assert ao.cancel_order("order-uuid-123") is False
