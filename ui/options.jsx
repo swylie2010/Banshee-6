@@ -740,6 +740,62 @@ function PaperAlertStrip({ onGoToWheel }) {
   );
 }
 
+/* Paper track record + locked live-mode teaser. Reads wheels already fetched by PaperWheelList. */
+function LiveGateTeaser({ wheels, loading }) {
+  const P = OPT_PALETTE;
+  if (loading || !wheels) return null;
+
+  const totalCycles = wheels.reduce((s, w) => s + ((w.state?.totals?.cycles_completed) || 0), 0);
+  const netPnl      = wheels.reduce((s, w) => s + ((w.state?.totals?.realized_pnl)      || 0), 0);
+  const active      = wheels.filter(w => w.state?.state !== 'CASH').length;
+
+  const pnlColor = netPnl > 0 ? P.mint : netPnl < 0 ? P.amber : P.ink3;
+  const pnlStr   = netPnl === 0 ? '—' : `${netPnl >= 0 ? '+' : ''}$${Math.abs(netPnl).toFixed(2)}`;
+
+  const tile = (label, value, color) =>
+    React.createElement('div', {
+      key: label,
+      style: {
+        flex: 1, background: P.bg2, border: `1px solid ${P.line}`,
+        borderRadius: 6, padding: '10px 14px',
+      },
+    },
+      React.createElement('div', {
+        style: { fontSize: 9, letterSpacing: '0.16em', color: P.ink3, marginBottom: 4,
+                 textTransform: 'uppercase' },
+      }, label),
+      React.createElement('div', {
+        style: { fontSize: 18, fontWeight: 700, color },
+      }, value),
+    );
+
+  return React.createElement('div', { style: { marginTop: 28 } },
+    React.createElement('div', {
+      style: { fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
+               color: P.ink3, marginBottom: 10 },
+    }, 'PAPER TRACK RECORD'),
+    React.createElement('div', { style: { display: 'flex', gap: 10, marginBottom: 16 } },
+      tile('CYCLES',  totalCycles, P.ink),
+      tile('NET P&L', pnlStr,      pnlColor),
+      tile('ACTIVE',  active,      P.ink),
+    ),
+    React.createElement('div', {
+      style: {
+        background: P.bg2, border: `1px solid ${P.line}`, borderRadius: 6,
+        padding: '12px 16px', opacity: 0.55,
+      },
+    },
+      React.createElement('div', {
+        style: { fontSize: 11, fontWeight: 700, color: P.ink3, marginBottom: 5,
+                 letterSpacing: '0.08em', textTransform: 'uppercase' },
+      }, '◈ LIVE MODE'),
+      React.createElement('div', {
+        style: { fontSize: 11, color: P.ink3, lineHeight: 1.6 },
+      }, 'Live execution coming in a future update. Keep building your paper track record.'),
+    ),
+  );
+}
+
 /* Paper wheel list view — shows all paper trades with FSM state + live P&L. */
 function PaperWheelList({ onSelect, onNew, onBack }) {
   const P = OPT_PALETTE;
@@ -820,6 +876,7 @@ function PaperWheelList({ onSelect, onNew, onBack }) {
           </div>
         );
       })}
+      {React.createElement(LiveGateTeaser, { wheels, loading })}
     </div>
   );
 }
