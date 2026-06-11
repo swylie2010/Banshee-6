@@ -44,6 +44,7 @@ import sector_rotation_engine
 import options_engine
 import options_data
 import wheel_engine
+import alpaca_options
 from shared_data import load_providers, fetch_crypto_ohlcv, fetch_sector_closes
 from knowledge_graph import get_regime_weights
 
@@ -2629,6 +2630,51 @@ def route_wheels_delete(wheel_id: str):
         return JSONResponse(status_code=404, content={"error": "Wheel not found"})
     _save_wheels(data)
     return {"ok": True}
+
+
+# ── Paper Wheel store ──────────────────────────────────────────────────────────
+
+_PAPER_WHEELS_PATH = Path(__file__).parent / "paper_wheels.json"
+
+
+def _load_paper_wheels() -> dict:
+    if _PAPER_WHEELS_PATH.exists():
+        try:
+            return json.loads(_PAPER_WHEELS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"wheels": []}
+
+
+def _save_paper_wheels(data: dict) -> None:
+    _PAPER_WHEELS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _pending_fill(wheel: dict) -> bool:
+    """True when the most recent Alpaca-linked event has fill_price=None."""
+    for ev in reversed(wheel.get("events", [])):
+        if ev.get("alpaca_order_id"):
+            return ev.get("fill_price") is None
+    return False
+
+
+def _paper_wheel_view(wheel: dict) -> dict:
+    """Full view: FSM replay + paper-path metadata."""
+    state = wheel_engine.replay(wheel.get("events", []))
+    return _sanitize({
+        "id":                 wheel["id"],
+        "name":               wheel.get("name", ""),
+        "underlying":         wheel.get("underlying", ""),
+        "created":            wheel.get("created", ""),
+        "candidate_snapshot": wheel.get("candidate_snapshot"),
+        "events":             wheel.get("events", []),
+        "state":              state,
+        "pending_fill":       _pending_fill(wheel),
+        "needs_attention":    wheel.get("needs_attention", False),
+        "attention_reason":   wheel.get("attention_reason"),
+        "live":               wheel.get("live"),
+        "last_polled":        wheel.get("last_polled"),
+    })
 
 
 def fetch_all_radar_for_syms(syms: list) -> dict:
