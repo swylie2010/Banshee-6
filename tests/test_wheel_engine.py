@@ -175,3 +175,41 @@ def test_validate_surfaces_error_state():
     v = we.validate([{"type": "NONSENSE"}], {"type": "SOLD_CSP"})
     assert v["ok"] is False
     assert "NONSENSE" in v["reason"]
+
+
+# ── Phase 3: paper event compatibility ────────────────────────────────────────
+
+def test_paper_event_extra_fields_ignored_by_fsm():
+    """SOLD_CSP with alpaca_order_id and fill_price=None is a valid FSM event."""
+    r = we.replay([{
+        "type": "SOLD_CSP", "strike": 450, "expiry": "2026-08-15",
+        "dte": 45, "mid": 2.35, "delta": -0.25,
+        "alpaca_order_id": "abc-123", "fill_price": None,
+    }])
+    assert r["state"] == "CSP_OPEN"
+    assert r["totals"]["premium_collected"] == 235.0
+
+
+def test_paper_event_fill_price_set_also_ignored():
+    """fill_price with a float value is still ignored by the FSM fold."""
+    r = we.replay([{
+        "type": "SOLD_CSP", "strike": 450, "expiry": "2026-08-15",
+        "dte": 45, "mid": 2.35, "delta": -0.25,
+        "alpaca_order_id": "abc-123", "fill_price": 2.40,
+    }])
+    assert r["state"] == "CSP_OPEN"
+    assert r["totals"]["premium_collected"] == 235.0
+
+
+def test_full_paper_cycle_extra_fields_ignored():
+    """Full cycle with alpaca_order_id/fill_price on every event replays cleanly."""
+    r = we.replay([
+        {"type": "SOLD_CSP", "strike": 450, "expiry": "2026-08-15", "dte": 45,
+         "mid": 2.35, "delta": -0.25, "alpaca_order_id": "ord-1", "fill_price": 2.40},
+        {"type": "CHECKPOINT_HELD", "leg": "csp"},
+        {"type": "EXPIRED_WORTHLESS", "leg": "csp", "expiry_price": 460,
+         "alpaca_order_id": "ord-1", "fill_price": 2.40},
+    ])
+    assert r["state"] == "CASH"
+    assert r["totals"]["realized_pnl"] == 235.0
+    assert r["totals"]["cycles_completed"] == 1
