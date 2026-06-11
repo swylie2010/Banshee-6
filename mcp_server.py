@@ -22,6 +22,10 @@ Tools exposed:
   check_kill_switch      — close all open paper positions if CRACK DETECTED (domino_phase >= 2)
   log_signal_outcome     — record exit reason, signal correctness, or timestamped note on any trade
   get_signal_log         — retrieve judged trades + regime/exit-reason pattern stats
+  get_options_candidate  — best CSP candidate from the Wheel universe (SPY/QQQ/IWM/DIA)
+  get_paper_wheels       — all paper Wheel positions with track record summary
+  get_paper_wheel_alerts — paper wheels needing attention (checkpoint/expiry/fill)
+  open_paper_wheel       — create a paper Wheel + place Alpaca paper CSP order
 """
 
 import os
