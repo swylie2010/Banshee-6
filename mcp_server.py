@@ -593,7 +593,7 @@ def get_paper_wheel_alerts() -> str:
         lines = [f"PAPER WHEEL ALERTS ({len(alerts)}):"]
         for a in alerts:
             reason = a.get("attention_reason") or "needs attention"
-            lines.append(f"  #{a['id'][:8]} {a.get('underlying', '?')} — {reason}")
+            lines.append(f"  #{a.get('id', '?')[:8]} {a.get('underlying', '?')} — {reason}")
         return "\n".join(lines)
     except Exception:
         return raw
