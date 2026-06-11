@@ -649,7 +649,7 @@ def get_paper_wheels() -> str:
                 cycles    = totals.get("cycles_completed", 0)
                 live      = w.get("live") or {}
                 dte       = live.get("dte", "")
-                dte_str   = f" | DTE: {dte}" if dte != "" else ""
+                dte_str   = f" | DTE: {dte}" if dte not in ("", None) else ""
                 pending   = " [FILL PENDING]" if w.get("pending_fill") else ""
                 flag      = " ⚠ NEEDS ATTENTION" if w.get("needs_attention") else ""
                 lines.append(
