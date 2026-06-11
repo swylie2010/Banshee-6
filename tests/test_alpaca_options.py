@@ -57,3 +57,52 @@ def test_parse_occ_fractional():
 def test_parse_occ_invalid_returns_none():
     assert ao._parse_occ_symbol("NOT_AN_OCC_SYMBOL") is None
     assert ao._parse_occ_symbol("") is None
+
+
+# ── _dte ─────────────────────────────────────────────────────────────────────
+
+def test_dte_same_day():
+    assert ao._dte("2024-09-20", "2024-09-20") == 0
+
+
+def test_dte_positive():
+    assert ao._dte("2024-09-21", "2024-09-20") == 1
+
+
+def test_dte_45_days():
+    assert ao._dte("2024-11-04", "2024-09-20") == 45
+
+
+# ── _safe_float ───────────────────────────────────────────────────────────────
+
+def test_safe_float_numeric_string():
+    assert ao._safe_float("123.45") == 123.45
+
+
+def test_safe_float_none_returns_default_zero():
+    assert ao._safe_float(None) == 0.0
+
+
+def test_safe_float_none_with_none_default():
+    assert ao._safe_float(None, None) is None
+
+
+def test_safe_float_nan_returns_default():
+    assert ao._safe_float(float('nan')) == 0.0
+
+
+def test_safe_float_invalid_string_returns_default():
+    assert ao._safe_float("not-a-number") == 0.0
+
+
+# ── Exception classes ────────────────────────────────────────────────────────
+
+def test_alpaca_order_rejected_error_reason():
+    e = ao.AlpacaOrderRejectedError("insufficient buying power")
+    assert e.reason == "insufficient buying power"
+    assert "insufficient buying power" in str(e)
+
+
+def test_alpaca_unavailable_error():
+    e = ao.AlpacaUnavailableError("timeout")
+    assert "timeout" in str(e)
