@@ -545,6 +545,35 @@ def scan_xabcd(symbol: str, pct: float = 0.03) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# OPTIONS WHEEL
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def get_options_candidate(account_size: float | None = None) -> str:
+    """
+    Returns the current best Cash-Secured Put (CSP) candidate from the Wheel strategy universe.
+    Checks guardrails: 35–45 DTE, 0.20–0.30 |delta|, OI > 1000, IVR estimate > 35, cash-secured only.
+    Universe: SPY, QQQ, IWM, DIA (broad ETFs — no single-name earnings risk).
+
+    Args:
+        account_size: Account size in dollars. If provided, triggers the honest 5% eligibility gate —
+                      a too-small account returns a clear account_too_small message, not a footnote.
+                      Omit to get the candidate without the size check.
+
+    Returns: JSON with the best candidate (strike, expiry, delta, mid premium, IVR estimate,
+             guardrail verdicts) or an error/no-candidate message. Cached for 5 minutes.
+
+    Call before open_paper_wheel to confirm the spec passes all guardrails.
+    """
+    import json
+    raw = _get("/options/candidate", account_size=account_size)
+    try:
+        return json.dumps(json.loads(raw), indent=2)
+    except Exception:
+        return raw
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
 
