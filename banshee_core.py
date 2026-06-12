@@ -1,5 +1,5 @@
 """
-banshee_core.py — Banshee 5 Core Server
+banshee_core.py — Banshee 6 Core Server
 ============================================
 FastAPI server on port 8765. Owns all engine calls and the unified cache.
 Runs 24/7 independently of Streamlit or MCP clients.
@@ -16,6 +16,7 @@ import sys
 import json
 import time
 import uuid
+import secrets as _secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,6 +28,7 @@ from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -45,8 +47,20 @@ import options_engine
 import options_data
 import wheel_engine
 import alpaca_options
-from shared_data import load_providers, fetch_crypto_ohlcv, fetch_sector_closes
+from shared_data import load_providers, save_providers, fetch_crypto_ohlcv, fetch_sector_closes
 from knowledge_graph import get_regime_weights
+from core_state import (
+    PORT, MODE_ALIASES,
+    _MACRO_CACHE_FILE, _CACHE_TTL,
+    _OHLCV_TTL, _OHLCV_CACHE,
+    _RESP_TTL, _RESP_CACHE,
+    _KILL_SWITCH_FILE,
+    _STRATEGIES_FILE, _PRESETS_PATH, _PORTFOLIO_PATH,
+    _WHEELS_PATH, _PAPER_WHEELS_PATH,
+    _sanitize, _df_to_records, _ts, _cache_age_min, _cache_header,
+    _load_macro_cache, _save_macro_cache,
+    _load_kill_switch_state, _save_kill_switch_state,
+)
 
 app = FastAPI(title="Banshee Core", version="5.0")
 
@@ -57,12 +71,31 @@ app.add_middleware(
         "http://127.0.0.1:8765",
     ],
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-Banshee-Token"],
 )
 
 _UI_DIR = Path(__file__).parent / "ui"
 if _UI_DIR.exists():
     app.mount("/ui", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
+
+_BANSHEE_TOKEN: str = ""
+
+
+class _TokenGate(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        if path not in {"/health", "/auth/token"} and not path.startswith("/ui"):
+            if request.headers.get("x-banshee-token") != _BANSHEE_TOKEN:
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
+
+app.add_middleware(_TokenGate)
+
+
+@app.get("/auth/token")
+async def route_auth_token():
+    return {"token": _BANSHEE_TOKEN}
 
 
 def _sanitize(obj):
@@ -1224,8 +1257,16 @@ def route_settings_test(body: SettingsBody):
             )
             return {"status": "ok", "message": resp.choices[0].message.content.strip()}
         elif provider in ("ollama", "custom"):
-            import requests as _req
+            import requests as _req, urllib.parse as _up, socket as _sock, ipaddress as _ip
             base = (url or "http://localhost:11434").rstrip("/")
+            _host = _up.urlparse(base).hostname or ""
+            try:
+                _addr = _ip.ip_address(_sock.gethostbyname(_host))
+                if _addr.is_private or _addr.is_loopback or _addr.is_link_local:
+                    if _host not in ("localhost", "127.0.0.1"):
+                        return JSONResponse(content={"status": "error", "message": "URL resolves to a private/internal address"})
+            except Exception:
+                pass
             r = _req.post(f"{base}/api/generate",
                           json={"model": model, "prompt": "Say OK", "stream": False},
                           timeout=10)
@@ -3359,6 +3400,16 @@ def route_shutdown():
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _init_token():
+    global _BANSHEE_TOKEN
+    p = load_providers()
+    if not p.get("banshee_token"):
+        p["banshee_token"] = _secrets.token_hex(32)
+        save_providers(p)
+    _BANSHEE_TOKEN = p["banshee_token"]
+
+
 if __name__ == "__main__":
+    _init_token()
     print(f"Banshee Core starting on http://127.0.0.1:{PORT}")
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
