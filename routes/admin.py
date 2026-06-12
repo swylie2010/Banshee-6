@@ -18,7 +18,6 @@ from core_state import (
     _PRESETS_PATH,
     _load_macro_cache,
 )
-from routes.shared_helpers import _get_sensors, _get_ohlcv_cached, _fetch_smc_df
 from shared_data import load_providers, save_providers, fetch_sector_closes
 
 router = APIRouter()
@@ -229,6 +228,8 @@ def route_predator_run(req: PredatorRunRequest):
 @router.post("/ai/briefing", response_class=PlainTextResponse)
 def route_ai_briefing(req: AIBriefingRequest):
     """Generate an AI synthesis briefing for the React UI tabs."""
+    # Lazy import to avoid circular: banshee_core -> routes.admin -> banshee_core
+    from banshee_core import _get_sensors, _get_ohlcv_cached, _fetch_smc_df
     mode = MODE_ALIASES.get(req.mode.lower(), "swing")
 
     providers = load_providers()
