@@ -36,7 +36,6 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import macro_engine
-import ledger_engine
 import banshee_ai
 import predator_engine
 import sector_rotation_engine
@@ -66,6 +65,7 @@ from routes.analysis import (
     fetch_all_radar_for_syms,
     _resolve_one, _norm_symbol, _live_price,
 )
+from routes.portfolio import router as _portfolio_router
 
 # resolve_symbol defined here (not imported) so tests can monkeypatch bc._live_price
 def resolve_symbol(sym: str):
@@ -105,6 +105,7 @@ app.include_router(_admin_router)
 app.include_router(_macro_router)
 app.include_router(_journal_router)
 app.include_router(_analysis_router)
+app.include_router(_portfolio_router)
 
 
 @app.get("/auth/token")
@@ -538,10 +539,10 @@ except ImportError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ROUTE 14 — Portfolio CRUD
+# ROUTE 14 — Portfolio CRUD helpers
+# Route handlers live in routes/portfolio.py; helpers stay here so tests can
+# monkeypatch bc._PORTFOLIO_PATH and call bc._load_portfolios() etc. directly.
 # ─────────────────────────────────────────────────────────────────────────────
-
-_PORTFOLIO_PATH = Path(__file__).parent / "banshee_portfolio.json"
 
 def _load_portfolios() -> dict:
     if _PORTFOLIO_PATH.exists():
@@ -551,8 +552,10 @@ def _load_portfolios() -> dict:
             pass
     return {"portfolios": []}
 
+
 def _save_portfolios(data: dict) -> None:
     _PORTFOLIO_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
 
 def _ensure_transactions(portfolio: dict, today: str) -> bool:
     """Phase 2: make the persisted ledger authoritative.
@@ -567,15 +570,12 @@ def _ensure_transactions(portfolio: dict, today: str) -> bool:
     holdings = portfolio.get("holdings") or []
     if not holdings:
         return False
-    portfolio["transactions"] = ledger_engine.holdings_to_transactions(holdings, today)
+    import ledger_engine as _le
+    portfolio["transactions"] = _le.holdings_to_transactions(holdings, today)
     return True
 
-@app.get("/portfolios")
-def get_portfolios():
-    return _load_portfolios()
 
-@app.post("/portfolios")
-def create_portfolio(body: dict = Body(...)):
+def create_portfolio(body: dict):
     data = _load_portfolios()
     portfolio = {
         "id": str(uuid.uuid4()),
@@ -590,8 +590,8 @@ def create_portfolio(body: dict = Body(...)):
     _save_portfolios(data)
     return portfolio
 
-@app.put("/portfolios/{portfolio_id}")
-def update_portfolio(portfolio_id: str, body: dict = Body(...)):
+
+def update_portfolio(portfolio_id: str, body: dict):
     data = _load_portfolios()
     for p in data["portfolios"]:
         if p["id"] == portfolio_id:
@@ -1032,355 +1032,7 @@ def route_paper_wheels_event(wheel_id: str, body: dict = Body(...)):
     return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
 
 
-# fetch_all_radar_for_syms moved to routes/analysis.py and imported above
-
-
-def _join_names(names: list) -> str:
-    """'A' / 'A and B' — plain-English join for at most two names."""
-    if not names:
-        return ""
-    return names[0] if len(names) == 1 else " and ".join(names[:2])
-
-
-def _build_rotation_note(fred_key):
-    """Plain-English market sector-rotation note for the Portfolio page.
-
-    Pure information — where market money is flowing right now — NOT a grade
-    input and not a judgment on the user's basket. Mirrors the /rotation data
-    path. Returns None on any failure (the UI just omits the section)."""
-    try:
-        closes = fetch_sector_closes()
-        if closes.empty:
-            return None
-        rot = sector_rotation_engine.run(closes, fred_key)
-        sectors = rot.get("sectors") or []
-        if not sectors:
-            return None
-        # sectors arrive sorted by 21-day relative strength, strongest first.
-        inflows  = [s for s in sectors if s["roc_21"] > 0][:3]
-        outflows = [s for s in reversed(sectors) if s["roc_21"] < 0][:3]
-        parts = []
-        if inflows:
-            parts.append("into "  + _join_names([s["name"] for s in inflows]))
-        if outflows:
-            parts.append("out of " + _join_names([s["name"] for s in outflows]))
-        summary = ("Money is rotating " + ", ".join(parts) + ".") if parts \
-                  else "Sector flows are mixed — no clear rotation right now."
-        return {
-            "summary":        summary,
-            "inflows":        [{"name": s["name"], "roc_21": s["roc_21"]} for s in inflows],
-            "outflows":       [{"name": s["name"], "roc_21": s["roc_21"]} for s in outflows],
-            "interpretation": (rot.get("macro_env") or {}).get("interpretation"),
-            "spy_roc_21":     rot.get("spy_roc_21"),
-        }
-    except Exception as e:
-        print(f"[portfolio] rotation note failed: {e}", file=sys.stderr)
-        return None
-
-
-@app.get("/portfolios/{portfolio_id}/analysis")
-def get_portfolio_analysis(portfolio_id: str):
-    import yfinance as yf
-
-    data = _load_portfolios()
-    portfolio = next((p for p in data["portfolios"] if p["id"] == portfolio_id), None)
-    if not portfolio:
-        return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
-
-    from datetime import date as _date
-
-    holdings = portfolio.get("holdings", [])
-
-    # Phase 2: the persisted transaction ledger is the source of truth. A legacy
-    # portfolio (holdings, no transactions) is migrated once and written back;
-    # thereafter `transactions` is authoritative and the holdings array is just a
-    # denormalized {sym,cls,shares} cache (its cls feeds the sector-class map below).
-    if _ensure_transactions(portfolio, _date.today().isoformat()):
-        _save_portfolios(data)
-
-    txns = portfolio.get("transactions") or []
-
-    state = ledger_engine.replay(txns)
-    positions = state["positions"]
-    if not positions:
-        return JSONResponse(status_code=400, content={"error": "Portfolio has no holdings"})
-
-    # Static asset-class map from the legacy holdings (preserves sector tags like
-    # TECH/FINANCE for the blended benchmark); fall back to a crypto/equity guess.
-    cls_map = {h.get("sym"): h.get("cls") for h in holdings}
-
-    def _cls_for_sym(sym):
-        c = cls_map.get(sym)
-        if c and c != "EQUITY":
-            return c
-        s = str(sym)
-        return "CRYPTO" if ("/" in s or s.upper().endswith("-USD")) else (c or "EQUITY")
-
-    syms = [p["sym"] for p in positions]
-
-    # yfinance uses "BTC-USD" for crypto pairs, not "BTC/USD" (the app's display form)
-    def _yf_symbol(s):
-        s = str(s)
-        return s.replace("/", "-") if "/" in s else s
-
-    yf_map = {p["sym"]: _yf_symbol(p["sym"]) for p in positions}
-
-    # Fetch current prices from yfinance — include sector ETFs + SPY for blended benchmark
-    sector_etfs = ["XLK", "XLF", "IBIT", "XLC", "XLE", "XLV", "XLY", "XLU", "SPY"]
-    all_syms = list(dict.fromkeys(list(yf_map.values()) + sector_etfs))  # dedupe, preserve order
-    try:
-        tickers = yf.download(all_syms, period="1y", progress=False, auto_adjust=True)
-        closes = tickers["Close"] if isinstance(tickers.columns, pd.MultiIndex) else tickers
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Price fetch failed: {e}"})
-
-    # Banshee's own radar prices assets that Yahoo can't (TAO/USD, SUI/USD are
-    # absent from yfinance — "possibly delisted"). Fetch once; use it as a price
-    # fallback here and for momentum scoring below.
-    radar_data = fetch_all_radar_for_syms(syms)
-
-    # Build holdings rows from the replayed ledger positions: avg_cost is the
-    # entry price, first_date is the entry date. Price from yfinance close,
-    # falling back to radar price. Same shape the rest of the endpoint consumes.
-    holdings_rows = []
-    for p in positions:
-        sym = p["sym"]
-        yfs = yf_map[sym]
-        last = closes[yfs].iloc[-1] if yfs in closes.columns else None
-        current_price = float(last) if last is not None and not pd.isna(last) else 0.0
-        if current_price <= 0:
-            rp = radar_data.get(sym, {}).get("price")
-            if isinstance(rp, (int, float)) and rp > 0:
-                current_price = float(rp)
-        avg_cost = p["avg_cost"]
-        holdings_rows.append({
-            "sym": sym,
-            "shares": p["shares"],
-            "entry_price": avg_cost if avg_cost and avg_cost > 0 else None,
-            "entry_date": p.get("first_date"),
-            "current_price": current_price,
-            "cls": _cls_for_sym(sym),
-        })
-
-    total_value  = sum(r["shares"] * r["current_price"] for r in holdings_rows)
-    equal_weight = total_value <= 0   # no share counts entered → analyse as an equal-weight basket
-
-    import portfolio_engine as pe
-
-    # Build the REAL weighted daily-return series from the holdings' price history,
-    # so Sharpe / drawdown / alpha / beta reflect this portfolio (not a synthetic
-    # scaling of the benchmark). weight_of() returns each holding's weight.
-    def _weighted_returns(weight_of):
-        series = None
-        for r in holdings_rows:
-            w = weight_of(r)
-            if w <= 0:
-                continue
-            col = yf_map.get(r["sym"])
-            if col and col in closes.columns:
-                ret = closes[col].pct_change().fillna(0) * w
-                series = ret if series is None else series.add(ret, fill_value=0)
-        return series.dropna() if series is not None else None
-
-    if equal_weight:
-        # Equal-weight basket: 1/N each. No dollar value, but real return-based
-        # risk metrics + momentum (radar edge) + sector alignment still grade it.
-        n = len(holdings_rows) or 1
-        weights = [{
-            "sym": r["sym"], "shares": 0, "weight": round(1.0 / n, 4),
-            "value": 0, "cls": r["cls"],
-        } for r in holdings_rows]
-        sector_weights = {}
-        for r in holdings_rows:
-            sector_weights[r["cls"]] = sector_weights.get(r["cls"], 0) + (1.0 / n)
-        benchmark_returns = pe.build_blended_benchmark(sector_weights, closes)
-        port_returns = _weighted_returns(lambda r: 1.0 / n)
-        rm = pe.risk_metrics(port_returns, benchmark_returns)
-        engine_result = {
-            "sharpe": rm["sharpe"], "alpha": rm["alpha"], "beta": rm["beta"],
-            "max_drawdown": rm["max_drawdown"], "twrr": None, "total_value": 0,
-            "weights": weights, "equal_weight": True,
-        }
-    else:
-        holdings_df = pd.DataFrame(holdings_rows)
-        # Group by cls, use cls as sector proxy
-        sector_weights = {}
-        for r in holdings_rows:
-            w = (r["shares"] * r["current_price"]) / total_value
-            sector_weights[r["cls"]] = sector_weights.get(r["cls"], 0) + w
-        benchmark_returns = pe.build_blended_benchmark(sector_weights, closes)
-        port_returns = _weighted_returns(lambda r: (r["shares"] * r["current_price"]) / total_value)
-        engine_result = pe.run(holdings_df, benchmark_returns, portfolio_returns=port_returns)
-        if "error" in engine_result:
-            return JSONResponse(status_code=400, content=engine_result)
-
-    # Normalise the engine's raw `edge` (unbounded bull−bear, can be negative) to
-    # the 0-100 scale score_portfolio expects — same mapping the UI uses.
-    for _sym, _r in radar_data.items():
-        if isinstance(_r, dict) and isinstance(_r.get("edge"), (int, float)):
-            _r["edge"] = max(0.0, min(100.0, round(50 + _r["edge"] * 2.5, 1)))
-
-    # Score the portfolio — BASKET HEALTH = current momentum + trailing-year real
-    # risk. Sector alignment is NOT a grade input; it's surfaced separately below
-    # as an informational market-rotation note.
-    scored = pe.score_portfolio(engine_result, radar_data)
-
-    # Market rotation note — informational context only (where market money is
-    # flowing), never a judgment on the basket. Gracefully absent for all-crypto
-    # books, since sector rotation is an equity-sector concept.
-    rotation_note = None
-    if any(r.get("cls") != "CRYPTO" for r in holdings_rows):
-        rotation_note = _build_rotation_note(
-            load_providers().get("FRED_API", {}).get("key"))
-
-    # Cumulative return series (real weighted history) for the Returns chart
-    returns_series = []
-    if port_returns is not None and len(port_returns) > 0:
-        cum = (1 + port_returns).cumprod() - 1
-        for ts, v in cum.items():
-            try:
-                returns_series.append({
-                    "time":  pd.Timestamp(ts).strftime("%Y-%m-%d"),
-                    "value": round(float(v) * 100, 2),
-                })
-            except Exception:
-                pass
-
-    # Performance vs S&P 500 — two honest lenses:
-    #   recent  : the current basket vs SPY over the last ~21 trading days
-    #   overall : your actual return since entry vs SPY over each holding's own
-    #             holding period (needs entry_price + entry_date) — this is what
-    #             makes entry dates meaningful.
-    performance = {}
-    spy = closes["SPY"] if "SPY" in closes.columns else None
-    try:
-        if spy is not None and port_returns is not None and len(port_returns) > 5:
-            spy_ret = spy.pct_change().reindex(port_returns.index).fillna(0)
-            n = min(21, len(port_returns))
-            p = float((1 + port_returns.tail(n)).prod() - 1) * 100
-            b = float((1 + spy_ret.tail(n)).prod() - 1) * 100
-            performance["recent"] = {"days": int(n), "portfolio": round(p, 1),
-                                     "benchmark": round(b, 1), "vs_benchmark": round(p - b, 1)}
-    except Exception:
-        pass
-    try:
-        # Holdings with a usable entry price + date (tolerate bad dates per-row).
-        dated = []
-        for r in holdings_rows:
-            ep, ed = r.get("entry_price"), r.get("entry_date")
-            if not (ep and ep > 0 and ed and r["current_price"] > 0):
-                continue
-            try:
-                dated.append((r, pd.Timestamp(ed)))
-            except Exception:
-                continue
-        if dated and total_value > 0:
-            # Entries can predate the 1y window (e.g. a 2022 dip buy) — fetch SPY
-            # history back to the earliest entry so the benchmark spans the real period.
-            start = (min(ts for _, ts in dated) - pd.Timedelta(days=5)).strftime("%Y-%m-%d")
-            spy_hist = yf.download("SPY", start=start, progress=False, auto_adjust=True)
-            spy_long = spy_hist["Close"] if "Close" in spy_hist else None
-            if isinstance(spy_long, pd.DataFrame):
-                spy_long = spy_long.iloc[:, 0]
-            if spy_long is not None and len(spy_long):
-                spy_now = float(spy_long.iloc[-1])
-                ov_you = ov_spy = ov_w = 0.0
-                for r, ts in dated:
-                    after = spy_long[spy_long.index >= ts]
-                    if not len(after):
-                        continue
-                    w = (r["shares"] * r["current_price"]) / total_value
-                    ov_you += (r["current_price"] / r["entry_price"] - 1) * w
-                    ov_spy += (spy_now / float(after.iloc[0]) - 1) * w
-                    ov_w += w
-                if ov_w > 0:
-                    py, bm = ov_you / ov_w * 100, ov_spy / ov_w * 100
-                    performance["overall"] = {"portfolio": round(py, 1), "benchmark": round(bm, 1),
-                                              "vs_benchmark": round(py - bm, 1), "coverage": round(ov_w, 3)}
-    except Exception:
-        pass
-
-    # ── Phase 3: quarterly evolution one-liner ──────────────────────────
-    # Reuse the already-fetched 1y `closes` (no new download). For a quarter-end
-    # date, take the last close on/before it; fall back to the flat radar price
-    # for coins yfinance can't price (TAO/SUI) so they stay in the basket.
-    def _price_at(sym, d):
-        col = yf_map.get(sym)
-        if col and col in closes.columns:
-            try:
-                ser = closes[col].loc[:pd.Timestamp(d)].dropna()
-                if len(ser):
-                    return float(ser.iloc[-1])
-            except Exception:
-                pass
-        rp = radar_data.get(sym, {}).get("price")
-        return float(rp) if isinstance(rp, (int, float)) and rp > 0 else None
-
-    today_iso = _date.today().isoformat()
-    earliest_txn = min((str(t.get("date", "")) for t in txns if t.get("date")),
-                       default=None)
-    try:
-        evolution = ledger_engine.evolution_line(
-            txns,
-            ledger_engine.prev_quarter_end(today_iso),
-            today_iso,
-            _price_at,
-            _cls_for_sym,
-            ledger_engine.has_two_quarters(earliest_txn, today_iso),
-        )
-    except Exception:
-        evolution = {"status": "unavailable", "reason": "internal",
-                     "line": ledger_engine._INTERNAL_LINE}
-
-    # Build full result
-    result = {
-        **engine_result,
-        **scored,
-        "returns_series": returns_series,
-        "performance": performance or None,
-        "rotation": rotation_note,
-        "evolution":       evolution,
-        "cash":            state["cash"],
-        "realized_pnl":    state["realized_pnl"],
-        "total_deposited": state["total_deposited"],
-        "total_return":    ledger_engine.total_return(
-            state["realized_pnl"], state["total_deposited"], holdings_rows,
-            opening_cost_basis=state.get("opening_cost_basis", 0.0)),
-        "ledger_warnings": state["warnings"],
-        "portfolio_id": portfolio_id,
-        "name": portfolio.get("name", ""),
-    }
-
-    # Grade history snapshot (monthly)
-    from datetime import date
-    today = date.today()
-    month_key = today.strftime("%Y-%m")
-    grade_history = portfolio.get("grade_history", [])
-    existing = next((g for g in grade_history if g["date"].startswith(month_key)), None)
-    if existing is None:
-        grade_history.append({"date": today.strftime("%Y-%m-01"), "month": today.strftime("%b '%y"), "grade": scored["grade"], "score": scored["score"]})
-    elif scored["score"] > existing["score"]:
-        existing["grade"] = scored["grade"]
-        existing["score"] = scored["score"]
-        if "month" not in existing:
-            existing["month"] = today.strftime("%b '%y")
-    portfolio["grade_history"] = grade_history
-    _save_portfolios(data)
-    result["grade_history"] = grade_history
-
-    # AI commentary
-    try:
-        providers = load_providers()
-        ai_cfg = providers.get("AI_API", {})
-        if ai_cfg and ai_cfg.get("key"):
-            review = banshee_ai.portfolio_review(ai_cfg, portfolio, result)
-            result["ai_review"] = review.dict()
-        else:
-            result["ai_review"] = None
-    except Exception:
-        result["ai_review"] = None
-
-    return _sanitize(result)
+# _join_names, _build_rotation_note, get_portfolio_analysis moved to portfolio_engine.py / routes/portfolio.py
 
 
 # ─────────────────────────────────────────────────────────────────────────────
