@@ -144,3 +144,19 @@ def test_score_perfect_portfolio():
     )
     assert abs(result["score"] - 100.0) < 0.01
     assert result["grade"] == "A+"
+
+
+def test_run_portfolio_analysis_returns_required_keys():
+    """run_portfolio_analysis must return a dict with the expected top-level keys."""
+    import portfolio_engine as pe
+    portfolio = {
+        "id": "test",
+        "name": "Test",
+        "holdings": [{"sym": "SPY", "cls": "EQUITY", "shares": 1}],
+        "transactions": [
+            {"type": "BUY", "sym": "SPY", "shares": 1, "price": 400.0, "date": "2024-01-02"}
+        ],
+    }
+    result = pe.run_portfolio_analysis(portfolio, "2025-01-01")
+    for key in ("holdings", "sector_weights", "risk", "grade", "performance"):
+        assert key in result, f"Missing key: {key}"
