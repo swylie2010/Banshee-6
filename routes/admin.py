@@ -228,8 +228,9 @@ def route_predator_run(req: PredatorRunRequest):
 @router.post("/ai/briefing", response_class=PlainTextResponse)
 def route_ai_briefing(req: AIBriefingRequest):
     """Generate an AI synthesis briefing for the React UI tabs."""
-    # Lazy import to avoid circular: banshee_core -> routes.admin -> banshee_core
-    from banshee_core import _get_sensors, _get_ohlcv_cached, _fetch_smc_df
+    # Lazy import to avoid circular dependency
+    from routes.analysis import get_ohlcv_cached as _get_ohlcv_cached, _fetch_smc_df
+    from routes.macro import get_sensors as _get_sensors
     mode = MODE_ALIASES.get(req.mode.lower(), "swing")
 
     providers = load_providers()
