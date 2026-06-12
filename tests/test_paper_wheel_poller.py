@@ -29,8 +29,8 @@ def _wheel_with_filled_order(order_id="ord-1"):
 def test_poll_pending_fill_sets_fill_price_on_filled_order():
     wheel = _wheel_with_pending_order()
     fake_order = {"status": "filled", "filled_avg_price": 2.38, "filled_at": "2026-06-10T10:05:00"}
-    with patch("banshee_core.alpaca_options.get_order", return_value=fake_order):
-        changed = bc._poll_one_paper_wheel(wheel)
+    with patch("alpaca_options.get_order", return_value=fake_order):
+        changed = alpaca_options._poll_one_paper_wheel(wheel)
     assert changed is True
     assert wheel["events"][0]["fill_price"] == 2.38
     assert wheel["needs_attention"] is False
@@ -39,8 +39,8 @@ def test_poll_pending_fill_sets_fill_price_on_filled_order():
 def test_poll_pending_fill_sets_attention_on_expired_order():
     wheel = _wheel_with_pending_order()
     fake_order = {"status": "expired"}
-    with patch("banshee_core.alpaca_options.get_order", return_value=fake_order):
-        changed = bc._poll_one_paper_wheel(wheel)
+    with patch("alpaca_options.get_order", return_value=fake_order):
+        changed = alpaca_options._poll_one_paper_wheel(wheel)
     assert changed is True
     assert wheel["needs_attention"] is True
     assert wheel["attention_reason"] == "order_pending"
@@ -48,9 +48,9 @@ def test_poll_pending_fill_sets_attention_on_expired_order():
 
 def test_poll_pending_fill_no_change_on_alpaca_unavailable():
     wheel = _wheel_with_pending_order()
-    with patch("banshee_core.alpaca_options.get_order",
+    with patch("alpaca_options.get_order",
                side_effect=alpaca_options.AlpacaUnavailableError("timeout")):
-        changed = bc._poll_one_paper_wheel(wheel)
+        changed = alpaca_options._poll_one_paper_wheel(wheel)
     assert changed is False
     assert wheel["events"][0]["fill_price"] is None
 
@@ -59,8 +59,8 @@ def test_poll_filled_order_updates_live_dict_when_position_exists():
     wheel = _wheel_with_filled_order()
     fake_pos = {"qty": 1.0, "avg_entry_price": 2.40,
                 "unrealized_pl": -10.0, "current_price": 2.30}
-    with patch("banshee_core.alpaca_options.get_position", return_value=fake_pos):
-        changed = bc._poll_one_paper_wheel(wheel)
+    with patch("alpaca_options.get_position", return_value=fake_pos):
+        changed = alpaca_options._poll_one_paper_wheel(wheel)
     assert changed is True
     assert wheel["live"]["unrealized_pl"] == -10.0
     assert wheel["live"]["current_price"] == 2.30
@@ -69,8 +69,8 @@ def test_poll_filled_order_updates_live_dict_when_position_exists():
 
 def test_poll_filled_order_sets_expired_attention_when_position_gone():
     wheel = _wheel_with_filled_order()
-    with patch("banshee_core.alpaca_options.get_position", return_value=None):
-        changed = bc._poll_one_paper_wheel(wheel)
+    with patch("alpaca_options.get_position", return_value=None):
+        changed = alpaca_options._poll_one_paper_wheel(wheel)
     assert changed is True
     assert wheel["needs_attention"] is True
     assert wheel["attention_reason"] == "expired"
@@ -83,7 +83,7 @@ def test_poll_no_events_with_order_id_returns_false():
                     "dte": 45, "mid": 2.35}],  # no alpaca_order_id
         "needs_attention": False, "attention_reason": None, "live": None, "last_polled": None,
     }
-    changed = bc._poll_one_paper_wheel(wheel)
+    changed = alpaca_options._poll_one_paper_wheel(wheel)
     assert changed is False
 
 
@@ -92,14 +92,21 @@ def test_bg_poll_saves_when_changed():
     fake_order = {"status": "filled", "filled_avg_price": 2.38, "filled_at": "2026-06-10T10:05:00"}
     saved = {}
     def fake_save(d): saved.update(d)
-    with patch.object(bc, "_load_paper_wheels", return_value={"wheels": [wheel]}), \
-         patch.object(bc, "_save_paper_wheels", side_effect=fake_save), \
-         patch("banshee_core.alpaca_options.get_order", return_value=fake_order):
+    fake_load = MagicMock(return_value={"wheels": [wheel]})
+    fake_save_fn = MagicMock(side_effect=fake_save)
+    with patch("alpaca_options.get_order", return_value=fake_order), \
+         patch.dict("sys.modules", {"routes.options": MagicMock(
+             load_paper_wheels=fake_load,
+             save_paper_wheels=fake_save_fn,
+         )}):
         bc._bg_poll_paper_wheels()
     assert saved  # save was called
     assert saved["wheels"][0]["events"][0]["fill_price"] == 2.38
 
 
 def test_bg_poll_does_not_crash_on_exception():
-    with patch.object(bc, "_load_paper_wheels", side_effect=Exception("disk full")):
+    with patch.dict("sys.modules", {"routes.options": MagicMock(
+        load_paper_wheels=MagicMock(side_effect=Exception("disk full")),
+        save_paper_wheels=MagicMock(),
+    )}):
         bc._bg_poll_paper_wheels()  # must not raise

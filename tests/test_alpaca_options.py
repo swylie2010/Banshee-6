@@ -221,3 +221,11 @@ def test_cancel_order_returns_false_on_exception():
     with patch("alpaca_options._get_trading_client") as mock_tc:
         mock_tc.return_value.cancel_order_by_id.side_effect = Exception("already filled")
         assert ao.cancel_order("order-uuid-123") is False
+
+
+def test_poll_paper_wheels_returns_bool():
+    """poll_paper_wheels must accept a wheels data dict and return a bool."""
+    import alpaca_options
+    data = {"wheels": []}   # empty — safe to call without network
+    result = alpaca_options.poll_paper_wheels(data)
+    assert isinstance(result, bool)

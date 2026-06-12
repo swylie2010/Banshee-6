@@ -490,18 +490,13 @@ def _bg_prewarm_ohlcv():
 def _bg_poll_paper_wheels():
     """Background job: poll all paper wheels every 5 minutes."""
     try:
-        data = _load_paper_wheels()
-        wheels = data.get("wheels", [])
-        if not wheels:
-            return
-        changed_any = False
-        for wheel in wheels:
-            if _poll_one_paper_wheel(wheel):
-                changed_any = True
-        if changed_any:
-            _save_paper_wheels(data)
+        from routes.options import load_paper_wheels, save_paper_wheels
+        data = load_paper_wheels()
+        import alpaca_options
+        if alpaca_options.poll_paper_wheels(data):
+            save_paper_wheels(data)
     except Exception:
-        pass  # poller must never crash the server
+        pass
 
 
 try:
@@ -734,106 +729,6 @@ def _pending_fill(wheel: dict) -> bool:
         if ev.get("alpaca_order_id"):
             return ev.get("fill_price") is None
     return False
-
-
-def _poll_one_paper_wheel(wheel: dict) -> bool:
-    """
-    Poll Alpaca for status of a single paper wheel.
-    Returns True if anything changed (so caller knows to save).
-    """
-    from datetime import datetime as _dt, date as _date
-    changed = False
-
-    events = wheel.get("events", [])
-    # Find most recent event with an alpaca_order_id
-    open_ev = None
-    for ev in reversed(events):
-        if ev.get("alpaca_order_id"):
-            open_ev = ev
-            break
-
-    if not open_ev:
-        return False
-
-    order_id = open_ev["alpaca_order_id"]
-
-    if open_ev.get("fill_price") is None:
-        # Order pending — check order status
-        try:
-            order = alpaca_options.get_order(order_id)
-        except alpaca_options.AlpacaUnavailableError:
-            return False
-
-        status = order.get("status", "")
-        if status == "filled":
-            open_ev["fill_price"]  = order.get("filled_avg_price")
-            open_ev["fill_time"]   = order.get("filled_at")
-            wheel["needs_attention"]  = False
-            wheel["attention_reason"] = None
-            changed = True
-        elif status in ("expired", "canceled"):
-            wheel["needs_attention"]  = True
-            wheel["attention_reason"] = "order_pending"
-            changed = True
-
-    else:
-        # Order filled — check open position
-        underlying = wheel.get("underlying", "")
-        expiry     = open_ev.get("expiry", "")
-        option_type = "put" if open_ev.get("type") == "SOLD_CSP" else "call"
-        strike     = open_ev.get("strike")
-        if not (underlying and expiry and strike):
-            return False
-
-        occ = alpaca_options.build_occ_symbol(underlying, expiry, option_type, float(strike))
-        try:
-            pos = alpaca_options.get_position(occ)
-        except alpaca_options.AlpacaUnavailableError:
-            return False
-
-        if pos:
-            # Compute DTE before building live dict so it can be included
-            try:
-                from datetime import date as _d2
-                exp_date = _d2.fromisoformat(expiry)
-                live_dte = (exp_date - _d2.today()).days
-            except Exception:
-                exp_date = None
-                live_dte = None
-            wheel["live"] = {
-                "unrealized_pl":  pos.get("unrealized_pl"),
-                "current_price":  pos.get("current_price"),
-                "last_polled":    _dt.utcnow().isoformat(),
-                "dte":            live_dte,
-            }
-            changed = True
-            # DTE checks for attention prompts
-            try:
-                if exp_date is None:
-                    from datetime import date as _d2
-                    exp_date = _d2.fromisoformat(expiry)
-                dte = live_dte if live_dte is not None else (exp_date - _d2.today()).days
-                fsm_state = wheel_engine.replay(events)
-                already_held = any(e.get("type") == "CHECKPOINT_HELD" for e in events)
-                if dte <= 0 and not wheel.get("attention_reason") == "expiry_due":
-                    wheel["needs_attention"]  = True
-                    wheel["attention_reason"] = "expiry_due"
-                    changed = True
-                elif dte <= 21 and not already_held:
-                    wheel["needs_attention"]  = True
-                    wheel["attention_reason"] = "checkpoint_due"
-                    changed = True
-            except Exception:
-                pass
-        else:
-            # Position gone — likely expired or assigned
-            if not wheel.get("needs_attention"):
-                wheel["needs_attention"]  = True
-                wheel["attention_reason"] = "expired"
-                changed = True
-
-    wheel["last_polled"] = _dt.utcnow().isoformat() if changed else wheel.get("last_polled")
-    return changed
 
 
 def _paper_wheel_view(wheel: dict) -> dict:
