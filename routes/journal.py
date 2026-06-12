@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 import banshee_ai
 import predator_engine
-from core_state import _sanitize, _load_kill_switch_state, _save_kill_switch_state
+from core_state import _load_kill_switch_state, _save_kill_switch_state
 from routes.macro import get_sensors as _get_sensors
 from shared_data import load_providers
 
