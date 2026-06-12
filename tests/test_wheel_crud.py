@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 import banshee_core as bc
+import routes.options as _opts_mod
 from fastapi.testclient import TestClient
 
 
@@ -19,7 +20,9 @@ def wheels_client(tmp_path, monkeypatch):
     """TestClient with the wheel store redirected to a fresh tmp file."""
     p = tmp_path / "banshee_wheels.json"
     p.write_text('{"wheels": []}', encoding="utf-8")
+    # Patch both bc and routes.options since _load_wheels/_save_wheels live there now
     monkeypatch.setattr(bc, "_WHEELS_PATH", p)
+    monkeypatch.setattr(_opts_mod, "_WHEELS_PATH", p)
     return TestClient(bc.app)
 
 
