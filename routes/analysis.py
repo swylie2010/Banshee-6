@@ -585,9 +585,7 @@ def route_nexus(
     _validate_symbol(symbol)
     from routes.admin import _build_news_context
     mode                 = MODE_ALIASES.get(mode.lower(), "swing")
-    mac_data, news_lines = _build_news_context()
-    cached               = _load_macro_cache()
-    events               = cached.get("events", []) if cached else []
+    mac_data, news_lines, events = _build_news_context()
 
     mic_tfs = get_ohlcv_cached(symbol, mode)
     if not mic_tfs or "error" in mic_tfs:

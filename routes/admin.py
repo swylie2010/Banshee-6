@@ -59,16 +59,17 @@ def _mask(v: str) -> str:
 
 
 def _build_news_context():
-    """Returns (mac_data, news_lines) with predator injection. Used by multiple AI briefing paths."""
+    """Returns (mac_data, news_lines, events) with predator injection. Used by multiple AI briefing paths."""
     from routes.macro import get_sensors as _get_sensors
     mac_data, _ = _get_sensors()
     cached       = _load_macro_cache()
     news_lines   = cached.get("news_lines", []) if cached else []
+    events       = cached.get("events",     []) if cached else []
     predator_brief = predator_engine.load_latest_briefing()
     predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
     if predator_lines:
         news_lines = [predator_lines] + news_lines
-    return mac_data, news_lines
+    return mac_data, news_lines, events
 
 
 def _load_presets() -> list:
@@ -255,7 +256,7 @@ def route_ai_briefing(req: AIBriefingRequest):
 
     # ── Macro tab: macro-environment-only briefing, no OHLCV needed ───────────
     if req.tab == "macro":
-        mac_data, news_lines = _build_news_context()
+        mac_data, news_lines, _ = _build_news_context()
         # Build rotation context (non-blocking — fails silently)
         rotation_ctx = ""
         try:
@@ -314,7 +315,7 @@ def route_ai_briefing(req: AIBriefingRequest):
         )
 
     # ── GH + Nexus tabs: macro/micro synthesis pathway ────────────────────────
-    mac_data, news_lines = _build_news_context()
+    mac_data, news_lines, _ = _build_news_context()
 
     tfs = _get_ohlcv_cached(req.symbol, mode)
     if not tfs or "error" in tfs:
