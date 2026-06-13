@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build": "esbuild main.jsx --bundle --outfile=dist/bundle.js --format=iife --loader:.jsx=jsx",
+    "watch": "esbuild main.jsx --bundle --outfile=dist/bundle.js --format=iife --loader:.jsx=jsx --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
