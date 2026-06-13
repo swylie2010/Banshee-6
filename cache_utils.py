@@ -11,11 +11,13 @@ import time
 from functools import wraps
 
 
-def ttl_cache(ttl: int = 900):
+def ttl_cache(ttl: int = 900, skip_none: bool = False):
     """
     Drop-in replacement for @st.cache_data(ttl=..., show_spinner=False).
     Each decorated function gets its own isolated cache dict (per closure).
     Keys are built from (args, sorted kwargs) — works for all simple types.
+
+    skip_none=True: do not cache None results (retry on next call).
     """
     def decorator(func):
         _cache: dict = {}
@@ -28,11 +30,12 @@ def ttl_cache(ttl: int = 900):
             if entry is not None and now - entry[0] < ttl:
                 return entry[1]
             result = func(*args, **kwargs)
-            # evict expired entries before inserting to prevent unbounded growth
-            expired = [k for k, v in _cache.items() if now - v[0] >= ttl]
-            for k in expired:
-                del _cache[k]
-            _cache[key] = (now, result)
+            if not (skip_none and result is None):
+                # evict expired entries before inserting to prevent unbounded growth
+                expired = [k for k, v in _cache.items() if now - v[0] >= ttl]
+                for k in expired:
+                    del _cache[k]
+                _cache[key] = (now, result)
             return result
 
         return wrapper

@@ -121,7 +121,7 @@ def fetch_yf_fast_info(ticker: str) -> float | None:
             return float(hist["Close"].iloc[-1])
         return None
 
-@ttl_cache(ttl=60)
+@ttl_cache(ttl=60, skip_none=True)
 def get_last_price(symbol: str) -> float | None:
     """Last known price for a normalized symbol (e.g. 'AAPL', 'BTC-USD').
     Tries fast_info first (cheap), falls back to 5-day history close."""
