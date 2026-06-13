@@ -1001,6 +1001,7 @@ def route_smc_json(
         providers = load_providers()
         ai_cfg    = providers.get("AI_API", {})
         if ai_cfg.get("key"):
+            check_ai_budget()
             try:
                 ai_narrative = banshee_ai.smc_analysis(
                     symbol=symbol,
