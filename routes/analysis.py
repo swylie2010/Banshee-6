@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
@@ -108,6 +108,25 @@ def _norm_symbol(raw):
     """Trim/upcase and convert a display pair to yfinance form (BTC/USD -> BTC-USD)."""
     s = str(raw or "").strip().upper()
     return s.replace("/", "-") if "/" in s else s
+
+
+def _validate_symbol(sym: str) -> None:
+    """Raise HTTP 400 if the normalized symbol is too long or contains invalid characters.
+    Call this AFTER _norm_symbol so the check is against the canonical form.
+    Valid chars after normalization: A-Z, 0-9, hyphen (-), dot (.)
+    Max length: 10 characters (covers BTC-USD=7, BRK-B=5, etc.)
+    """
+    import re
+    if len(sym) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": f"Symbol '{sym}' is too long (max 10 characters after normalization)"},
+        )
+    if not re.fullmatch(r"[A-Z0-9\-\.]+", sym):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": f"Symbol '{sym}' contains invalid characters (allowed: A-Z 0-9 - .)"},
+        )
 
 
 def _suggest_symbol(raw):
@@ -281,6 +300,8 @@ def route_radar(
     mode: str = Query("swing"),
     output_mode: str = Query("human"),
 ):
+    symbol = _norm_symbol(symbol)
+    _validate_symbol(symbol)
     mode  = MODE_ALIASES.get(mode.lower(), "swing")
     _rkey = f"radar:{symbol.upper()}:{mode}"
     _entry = _RESP_CACHE.get(_rkey)
@@ -437,7 +458,11 @@ def route_scan(req: ScanRequest):
     scan_sensors = cached["mac_data"] if cached and "mac_data" in cached else None
 
     def _analyze_one(raw_sym: str):
-        sym = raw_sym.strip().upper()
+        sym = _norm_symbol(raw_sym)
+        try:
+            _validate_symbol(sym)
+        except HTTPException as exc:
+            return None, f"{sym}: {exc.detail.get('error', 'invalid symbol')}"
         try:
             tfs = micro_engine.load_and_prepare(sym, mode)
             if not tfs or "error" in tfs:
@@ -556,6 +581,8 @@ def route_nexus(
     use_ai: bool = Query(True),
     output_mode: str = Query("human"),
 ):
+    symbol = _norm_symbol(symbol)
+    _validate_symbol(symbol)
     from routes.macro import get_sensors as _get_sensors
     mode           = MODE_ALIASES.get(mode.lower(), "swing")
     mac_data, _src = _get_sensors()
@@ -880,6 +907,8 @@ def route_smc(
     htf: str = Query("1d"),
     use_ai: bool = Query(True),
 ):
+    symbol = _norm_symbol(symbol)
+    _validate_symbol(symbol)
     _rkey  = f"smc:{symbol.upper()}:{ltf}:{htf}:{use_ai}"
     _entry = _RESP_CACHE.get(_rkey)
     if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
@@ -951,6 +980,8 @@ def route_smc_json(
     use_ai: bool = Query(False),
 ):
     """Full SMC data dicts + serialised DataFrames for the Structure Map tab."""
+    symbol = _norm_symbol(symbol)
+    _validate_symbol(symbol)
     ltf_df, ltf_err = _fetch_smc_df(symbol, ltf)
     if ltf_err or ltf_df is None or (hasattr(ltf_df, "empty") and ltf_df.empty):
         return JSONResponse(content={"error": f"LTF load failed: {ltf_err or 'empty'}"})
