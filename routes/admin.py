@@ -1,8 +1,6 @@
 """routes/admin.py — settings, predator, AI briefing, presets, system."""
 
 import json
-import threading
-import os as _os
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -20,7 +18,7 @@ from core_state import (
     _log_error,
     check_ai_budget,
 )
-from shared_data import load_providers, save_providers, fetch_sector_closes
+from shared_data import load_providers, fetch_sector_closes
 
 router = APIRouter()
 
@@ -58,6 +56,19 @@ def _mask(v: str) -> str:
     if isinstance(v, str) and len(v) > 4:
         return "•••••" + v[-4:]
     return v
+
+
+def _build_news_context():
+    """Returns (mac_data, news_lines) with predator injection. Used by multiple AI briefing paths."""
+    from routes.macro import get_sensors as _get_sensors
+    mac_data, _ = _get_sensors()
+    cached       = _load_macro_cache()
+    news_lines   = cached.get("news_lines", []) if cached else []
+    predator_brief = predator_engine.load_latest_briefing()
+    predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
+    if predator_lines:
+        news_lines = [predator_lines] + news_lines
+    return mac_data, news_lines
 
 
 def _load_presets() -> list:
@@ -235,7 +246,6 @@ def route_ai_briefing(req: AIBriefingRequest):
     check_ai_budget()
     # Lazy import to avoid circular dependency
     from routes.analysis import get_ohlcv_cached as _get_ohlcv_cached, _fetch_smc_df
-    from routes.macro import get_sensors as _get_sensors
     mode = MODE_ALIASES.get(req.mode.lower(), "swing")
 
     providers = load_providers()
@@ -245,13 +255,7 @@ def route_ai_briefing(req: AIBriefingRequest):
 
     # ── Macro tab: macro-environment-only briefing, no OHLCV needed ───────────
     if req.tab == "macro":
-        mac_data, _src = _get_sensors()
-        cached         = _load_macro_cache()
-        news_lines     = cached.get("news_lines", []) if cached else []
-        predator_brief = predator_engine.load_latest_briefing()
-        predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
-        if predator_lines:
-            news_lines = [predator_lines] + news_lines
+        mac_data, news_lines = _build_news_context()
         # Build rotation context (non-blocking — fails silently)
         rotation_ctx = ""
         try:
@@ -310,14 +314,7 @@ def route_ai_briefing(req: AIBriefingRequest):
         )
 
     # ── GH + Nexus tabs: macro/micro synthesis pathway ────────────────────────
-    mac_data, _src = _get_sensors()
-    cached         = _load_macro_cache()
-    news_lines     = cached.get("news_lines", []) if cached else []
-
-    predator_brief = predator_engine.load_latest_briefing()
-    predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
-    if predator_lines:
-        news_lines = [predator_lines] + news_lines
+    mac_data, news_lines = _build_news_context()
 
     tfs = _get_ohlcv_cached(req.symbol, mode)
     if not tfs or "error" in tfs:

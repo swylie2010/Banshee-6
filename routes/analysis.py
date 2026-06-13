@@ -583,17 +583,11 @@ def route_nexus(
 ):
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
-    from routes.macro import get_sensors as _get_sensors
-    mode           = MODE_ALIASES.get(mode.lower(), "swing")
-    mac_data, _src = _get_sensors()
-    cached         = _load_macro_cache()
-    news_lines     = cached.get("news_lines", []) if cached else []
-    events         = cached.get("events",     []) if cached else []
-
-    predator_brief = predator_engine.load_latest_briefing()
-    predator_lines = predator_engine.get_briefing_for_nexus(predator_brief)
-    if predator_lines:
-        news_lines = [predator_lines] + news_lines
+    from routes.admin import _build_news_context
+    mode                 = MODE_ALIASES.get(mode.lower(), "swing")
+    mac_data, news_lines = _build_news_context()
+    cached               = _load_macro_cache()
+    events               = cached.get("events", []) if cached else []
 
     mic_tfs = get_ohlcv_cached(symbol, mode)
     if not mic_tfs or "error" in mic_tfs:
