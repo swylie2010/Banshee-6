@@ -275,6 +275,8 @@ All your saved backtest and validation runs in one filterable table. Colour-code
 
 ### ⚙️ Settings
 - **API Keys:** FRED (macro data) and AI (Claude or Gemini for Nexus narrative + Predator briefing)
+- **AI Rate Limit:** How many AI calls per hour Banshee will make on your behalf. Default is 50/hr. If you hit the limit, AI features return HTTP 429 with a "Resets at HH:MM UTC" message — not an error, just a cooldown. Raise the limit in Settings if you're doing heavy analysis sessions.
+- **DATA RECOVERY:** Toggle whether Banshee is allowed to call the AI when a column-rename rescue is needed in the micro engine. Off = strict, never uses AI to repair data. On (default) = AI rescue is allowed with column allow-list validation.
 - **MCP Snippet:** Auto-generated config block for wiring Banshee into Claude Code as an MCP tool
 - **Diagnostics:** Health board — checks all modules are importable, FRED is reachable, AI key is set
 - **Asset Profiles:** Per-symbol indicator weight tuning. Promotes Discovery Mode results into live scoring weights.
@@ -291,6 +293,8 @@ All your saved backtest and validation runs in one filterable table. Colour-code
 - **Backtest returns look terrible vs B&H:** In a strong bull market, any active strategy will underperform holding. Use Sharpe ratio and max drawdown to evaluate the strategy — not alpha vs B&H.
 - **Sniper mode backtest only covers 60 days:** yfinance limit. Add an Alpaca API key in Settings for US stocks, or use a VPN for crypto (Binance routing is built in — no code changes needed).
 - **Symbol not found:** Try alternate formats. `BTC-USD` for Bitcoin on yfinance. Some assets use `.` (e.g. `BRK.B`). Futures may not be available.
+- **"Symbol is too long" or "invalid characters" error:** Banshee validates symbols after normalization — max 10 characters, only `A-Z 0-9 - .` allowed. If you're getting a 400 error on a valid ticker, check if it resolved to a long form (e.g. full company name instead of ticker).
+- **AI features returning 429:** You've hit the hourly AI rate limit. Banshee will tell you the reset time. You can raise the limit in ⚙️ Settings → AI Rate Limit.
 
 ---
 
@@ -299,4 +303,4 @@ For interpreting backtest results specifically — trade count thresholds, which
 
 ---
 
-*Last updated: 2026-04-24. This is a living document — update it when a new foible is discovered or a new tab is added.*
+*Last updated: 2026-06-13. This is a living document — update it when a new foible is discovered or a new tab is added.*
