@@ -981,20 +981,77 @@ def save_briefing(briefing: dict):
         f.write(json.dumps(briefing) + "\n")
 
 
+_briefing_cache: dict = {}
+_briefing_mtime: float = 0.0
+
+
 def load_latest_briefing() -> Optional[dict]:
-    """Load the most recent briefing from daily_briefings.jsonl."""
+    """Load the most recent briefing from daily_briefings.jsonl.
+
+    Uses seek-from-end to avoid reading the full file. Result is cached by
+    file mtime — re-reads only when the file actually changes (once per day).
+    Falls back to full linear scan if the tail seek fails.
+    """
+    global _briefing_cache, _briefing_mtime
+
     if not os.path.exists(BRIEFINGS_PATH):
         return None
-    last = None
-    with open(BRIEFINGS_PATH, "r", encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped:
-                try:
-                    last = json.loads(stripped)
-                except Exception:
-                    pass
-    return last
+
+    try:
+        mtime = os.path.getmtime(BRIEFINGS_PATH)
+        if mtime == _briefing_mtime and _briefing_cache:
+            return _briefing_cache
+
+        # Seek from end to find the last non-empty line
+        with open(BRIEFINGS_PATH, "rb") as f:
+            f.seek(0, 2)  # seek to EOF
+            size = f.tell()
+            if size == 0:
+                return None
+
+            # Scan backwards past any trailing whitespace/newlines
+            pos = size - 1
+            while pos >= 0:
+                f.seek(pos)
+                ch = f.read(1)
+                if ch not in (b"\n", b"\r", b" "):
+                    break
+                pos -= 1
+
+            # pos now points to last byte of the last non-empty line
+            end_pos = pos + 1
+
+            # Scan backwards to find the start of this line
+            while pos > 0:
+                f.seek(pos - 1)
+                ch = f.read(1)
+                if ch == b"\n":
+                    break
+                pos -= 1
+
+            f.seek(pos)
+            line = f.read(end_pos - pos).decode("utf-8", errors="replace").strip()
+
+        result = json.loads(line)
+        _briefing_cache = result
+        _briefing_mtime = mtime
+        return result
+
+    except Exception:
+        # Fall back to full linear scan on any error
+        try:
+            last = None
+            with open(BRIEFINGS_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    stripped = line.strip()
+                    if stripped:
+                        try:
+                            last = json.loads(stripped)
+                        except Exception:
+                            pass
+            return last
+        except Exception:
+            return None
 
 
 def load_briefing_by_date(date_str: str) -> Optional[dict]:
