@@ -7,6 +7,7 @@ No side effects on import — only definitions.
 
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,6 +42,10 @@ _PRESETS_PATH      = Path(__file__).parent / "banshee_presets.json"
 _PORTFOLIO_PATH    = Path(__file__).parent / "banshee_portfolio.json"
 _WHEELS_PATH       = Path(__file__).parent / "banshee_wheels.json"
 _PAPER_WHEELS_PATH = Path(__file__).parent / "paper_wheels.json"
+
+# ── File locks (prevent concurrent write corruption) ─────────────────────────
+_MACRO_CACHE_LOCK    = threading.Lock()
+_KILL_SWITCH_LOCK    = threading.Lock()
 
 
 # ── Pure utility functions ────────────────────────────────────────────────────
@@ -116,8 +121,9 @@ def _load_macro_cache() -> dict | None:
 def _save_macro_cache(mac_data: dict, news_lines: list, events: list):
     try:
         payload = {"mac_data": mac_data, "news_lines": news_lines, "events": events}
-        with open(_MACRO_CACHE_FILE, "w") as f:
-            json.dump(payload, f)
+        with _MACRO_CACHE_LOCK:
+            with open(_MACRO_CACHE_FILE, "w") as f:
+                json.dump(payload, f)
     except Exception:
         pass
 
@@ -133,6 +139,7 @@ def _load_kill_switch_state() -> dict:
 
 def _save_kill_switch_state(state: dict):
     try:
-        _KILL_SWITCH_FILE.write_text(json.dumps(state, indent=2))
+        with _KILL_SWITCH_LOCK:
+            _KILL_SWITCH_FILE.write_text(json.dumps(state, indent=2))
     except Exception:
         pass

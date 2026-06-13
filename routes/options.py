@@ -1,6 +1,7 @@
 """routes/options.py — options analysis, simulated wheels, paper wheels."""
 import json
 import sys
+import threading
 import uuid
 from datetime import datetime
 
@@ -15,6 +16,8 @@ import alpaca_options
 import banshee_ai
 
 router = APIRouter()
+
+_PAPER_WHEELS_LOCK = threading.Lock()
 
 # ── Simulated Wheel helpers (private) ─────────────────────────────────────────
 
@@ -75,7 +78,8 @@ def load_paper_wheels() -> dict:
 
 def save_paper_wheels(data: dict) -> None:
     """PUBLIC — used by background job in banshee_core.py."""
-    _PAPER_WHEELS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    with _PAPER_WHEELS_LOCK:
+        _PAPER_WHEELS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def _paper_wheel_view(wheel: dict) -> dict:
