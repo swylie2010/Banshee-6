@@ -9,11 +9,11 @@ set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "VENV_PIP=%VENV_DIR%\Scripts\pip.exe"
 
 echo -----------------------------------------------
-echo       BANSHEE 5 - STARTUP CHECK
+echo       BANSHEE 6 - STARTUP CHECK
 echo -----------------------------------------------
 
 rem --- Step 1: Find Python 3.10+ ---
-echo [1/4] Finding Python...
+echo [1/5] Finding Python...
 set "PYTHON_CMD="
 
 where py >nul 2>&1
@@ -41,7 +41,7 @@ if not defined PYTHON_CMD (
 echo       Found: %PYTHON_CMD%
 
 rem --- Step 2: Create venv if missing ---
-echo [2/4] Checking virtual environment...
+echo [2/5] Checking virtual environment...
 if exist "%VENV_PYTHON%" goto :venv_ok
 
 echo       Creating Banshee virtual environment...
@@ -62,7 +62,7 @@ echo       OK: %VENV_DIR%
 :venv_done
 
 rem --- Step 3: Install / repair dependencies ---
-echo [3/4] Checking dependencies...
+echo [3/5] Checking dependencies...
 "%VENV_PYTHON%" -c "import numpy, pandas, fastapi, uvicorn" >nul 2>&1
 if not errorlevel 1 (
     echo       OK: all core dependencies present
@@ -89,17 +89,46 @@ echo       Dependencies installed.
 
 rem --- Step 4: Launch ---
 :launch
-echo [4/4] Starting Banshee Core (port 8765)...
+rem --- Step 4: Build React UI ---
+echo [4/5] Building React UI...
+
+if not exist "%BANSHEE_DIR%\ui\node_modules" (
+    echo       Installing UI dependencies (first run)...
+    cd /d "%BANSHEE_DIR%\ui"
+    call npm install
+    if errorlevel 1 (
+        echo.
+        echo   ERROR: npm install failed. Is Node.js installed?
+        echo.
+        pause
+        exit /b 1
+    )
+    cd /d "%BANSHEE_DIR%"
+)
+
+cd /d "%BANSHEE_DIR%\ui"
+call npm run build
+if errorlevel 1 (
+    echo.
+    echo   ERROR: UI build failed. Check ui/ for JSX errors.
+    echo.
+    pause
+    exit /b 1
+)
+cd /d "%BANSHEE_DIR%"
+echo       OK: ui/dist/bundle.js
+
+rem --- Step 5: Launch ---
+echo [5/5] Starting Banshee Core (port 8765)...
 start "Banshee Core" /MIN cmd /k "cd /d "%BANSHEE_DIR%" && "%VENV_PYTHON%" banshee_core.py"
 
 echo       Waiting for Core to boot...
 timeout /t 6 /nobreak >nul
 
-echo       Opening Banshee 5 UI...
+echo       Opening Banshee 6 UI...
 start "" "http://localhost:8765/ui/"
 
 echo.
-echo Banshee 5 is running at http://localhost:8765/ui/
-echo (Streamlit fallback: run "streamlit run app.py" manually)
+echo Banshee 6 is running at http://localhost:8765/ui/
 echo.
 pause
