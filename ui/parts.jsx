@@ -765,17 +765,20 @@ class SMCMarkersRenderer {
           const padX = 4 * hr, padY = 3 * vr;
           const bxW = metrics.width + padX * 2;
           const bxH = fSize + padY * 2;
-          const bxX = Math.min(x + 4 * hr, bw - bxW - 2 * hr);
-          const bxY = Math.max(y - bxH - 2 * vr, 2 * vr);
+          const bxX = Math.max(2 * hr, Math.min(x + 4 * hr, bw - bxW - 2 * hr));
+          const bxY = Math.max(2 * vr, Math.min(y - bxH - 2 * vr, bh - bxH - 2 * vr));
           ctx.fillStyle = base + "cc";
           ctx.fillRect(bxX, bxY, bxW, bxH);
           ctx.fillStyle = "#000000ee";
           ctx.textAlign = "left";
           ctx.fillText(lbl, bxX + padX, bxY + bxH - padY - 1 * vr);
         } else {
+          const txtW = ctx.measureText(lbl).width;
+          const txtX = Math.max(2 * hr, Math.min(x + 4 * hr, bw - txtW - 2 * hr));
+          const txtY = Math.max(fSize + 2 * vr, Math.min(y - 5 * vr, bh - 2 * vr));
           ctx.fillStyle = base + "dd";
           ctx.textAlign = "left";
-          ctx.fillText(lbl, x + 4 * hr, y - 5 * vr);
+          ctx.fillText(lbl, txtX, txtY);
         }
       }
 
@@ -3151,6 +3154,52 @@ window.PinLockScreen = function PinLockScreen({ onUnlock }) {
             {d}
           </button>
         ))}
+      </div>
+    </div>
+  );
+};
+
+/* ── Risk Disclaimer Modal ───────────────────────────────────── */
+window.DisclaimerModal = function DisclaimerModal({ onAccept }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9999,
+      background: "var(--bg-1)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{
+        maxWidth: 520, width: "90%",
+        padding: "36px 40px",
+        border: "1px solid var(--sell)",
+        background: "var(--bg-2)",
+        fontFamily: "monospace",
+      }}>
+        <div style={{
+          color: "var(--sell)", fontSize: 13, fontWeight: "bold",
+          letterSpacing: "0.1em", marginBottom: 20,
+        }}>
+          ⚠ EXPERIMENTAL SOFTWARE
+        </div>
+        <p style={{ color: "var(--ink)", fontSize: 12, lineHeight: 1.7, marginBottom: 16 }}>
+          BANSHEE PRO is experimental software intended for personal use, education,
+          and paper trading only. It is not financial advice. The authors accept no
+          responsibility for any financial losses. Past signals do not predict future results.
+        </p>
+        <p style={{ color: "var(--ink)", fontSize: 12, lineHeight: 1.7, marginBottom: 28 }}>
+          By continuing, you acknowledge this software carries no warranty and you
+          trade entirely at your own risk.
+        </p>
+        <button
+          onClick={onAccept}
+          style={{
+            background: "#FF6D00", color: "#000", border: "none",
+            padding: "10px 24px", fontSize: 12, fontFamily: "monospace",
+            fontWeight: "bold", letterSpacing: "0.08em", cursor: "pointer",
+            width: "100%",
+          }}
+        >
+          I UNDERSTAND — CONTINUE
+        </button>
       </div>
     </div>
   );

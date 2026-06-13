@@ -4341,6 +4341,9 @@ function App() {
   const [riskSeedAsset, setRiskSeedAsset] = useState(null);
   const [simulateMode,  setSimulateMode]  = useState(false);
   const [manualStories, setManualStories] = useState([]);
+  const [disclaimerAccepted, setDisclaimerAccepted] = React.useState(
+    () => localStorage.getItem('banshee_disclaimer_accepted') === 'true'
+  );
   const [pinLocked, setPinLocked] = React.useState(() =>
     localStorage.getItem('banshee_pin_enabled') === 'true' &&
     !!localStorage.getItem('banshee_pin')
@@ -4569,9 +4572,13 @@ function App() {
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {pinLocked && (
-        <window.PinLockScreen onUnlock={() => setPinLocked(false)} />
-      )}
+      {!disclaimerAccepted
+        ? <window.DisclaimerModal onAccept={() => {
+            localStorage.setItem('banshee_disclaimer_accepted', 'true');
+            setDisclaimerAccepted(true);
+          }} />
+        : pinLocked && <window.PinLockScreen onUnlock={() => setPinLocked(false)} />
+      }
       <TopBar
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         sidebarOpen={sidebarOpen}
