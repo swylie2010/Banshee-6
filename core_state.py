@@ -7,8 +7,10 @@ No side effects on import — only definitions.
 
 import json
 import os
+import time
 import threading
 import traceback
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -156,3 +158,49 @@ def _log_error(context: str, exc: Exception) -> None:
             f.write(entry)
     except Exception:
         pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI RATE LIMITER
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _AiRateLimiter:
+    def __init__(self):
+        self._timestamps: deque = deque()
+        self._lock = threading.Lock()
+
+    def check(self, max_calls: int, window_sec: int = 3600) -> tuple[bool, int, float]:
+        """Check budget and increment if allowed.
+        Returns (allowed, calls_in_window, reset_unix_ts).
+        reset_unix_ts is 0.0 when allowed."""
+        now = time.time()
+        with self._lock:
+            while self._timestamps and now - self._timestamps[0] > window_sec:
+                self._timestamps.popleft()
+            count = len(self._timestamps)
+            if count >= max_calls:
+                return False, count, self._timestamps[0] + window_sec
+            self._timestamps.append(now)
+            return True, count + 1, 0.0
+
+
+_ai_rate_limiter = _AiRateLimiter()
+
+
+def check_ai_budget() -> None:
+    """Raise HTTP 429 if the AI call budget is exhausted.
+    Call at the top of any AI-invoking route handler."""
+    from fastapi import HTTPException
+    from datetime import datetime, timezone
+    from shared_data import load_providers
+    cap = int(load_providers().get("ai_rate_limit_per_hour", 50))
+    allowed, calls, reset_ts = _ai_rate_limiter.check(max_calls=cap)
+    if not allowed:
+        reset_str = datetime.fromtimestamp(reset_ts, tz=timezone.utc).strftime("%H:%M UTC")
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"AI rate limit reached ({calls} calls in the last hour). "
+                f"Resets at {reset_str}."
+            ),
+        )

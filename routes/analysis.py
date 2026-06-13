@@ -20,6 +20,7 @@ from core_state import (
     _STRATEGIES_FILE,
     _ts, _cache_age_min, _cache_header,
     _load_macro_cache,
+    check_ai_budget,
 )
 from shared_data import load_providers, fetch_crypto_ohlcv
 import micro_engine
@@ -644,6 +645,7 @@ def route_nexus(
     providers = load_providers()
     cfg = providers.get("AI_API")
     if use_ai and cfg and cfg.get("key"):
+        check_ai_budget()
         prompt   = banshee_ai.build_banshee_prompt(
             mac_data, mic_data, news_lines, manual_stories=[], include_macro=True
         )

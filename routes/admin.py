@@ -18,6 +18,7 @@ from core_state import (
     _PRESETS_PATH,
     _load_macro_cache,
     _log_error,
+    check_ai_budget,
 )
 from shared_data import load_providers, save_providers, fetch_sector_closes
 
@@ -208,6 +209,7 @@ def route_predator_config_save(body: PredatorConfigBody):
 @router.post("/predator/run")
 def route_predator_run(req: PredatorRunRequest):
     """Trigger a Daily Predator cycle."""
+    check_ai_budget()
     providers = load_providers()
     ai_cfg    = providers.get("AI_API")
     if not ai_cfg or not ai_cfg.get("key"):
@@ -230,6 +232,7 @@ def route_predator_run(req: PredatorRunRequest):
 @router.post("/ai/briefing", response_class=PlainTextResponse)
 def route_ai_briefing(req: AIBriefingRequest):
     """Generate an AI synthesis briefing for the React UI tabs."""
+    check_ai_budget()
     # Lazy import to avoid circular dependency
     from routes.analysis import get_ohlcv_cached as _get_ohlcv_cached, _fetch_smc_df
     from routes.macro import get_sensors as _get_sensors
