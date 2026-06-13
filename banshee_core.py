@@ -14,44 +14,28 @@ JSON endpoints (/macro/sensors, /ohlcv, /smc/json, /predator/*, /ai/briefing) re
 import os
 import sys
 import json
-import time
 import uuid
 import secrets as _secrets
 from datetime import datetime, timezone
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import numpy as np
-import pandas as pd
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException, Query
-from fastapi.encoders import jsonable_encoder
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
 # ── Portability fix ───────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import macro_engine
-import banshee_ai
 import predator_engine
-import sector_rotation_engine
-# options_engine, options_data, wheel_engine, alpaca_options moved to routes/options.py
-from shared_data import load_providers, save_providers, fetch_sector_closes
+from shared_data import load_providers, save_providers
 from core_state import (
-    PORT, MODE_ALIASES,
-    _MACRO_CACHE_FILE, _CACHE_TTL,
-    _OHLCV_TTL, _OHLCV_CACHE,
-    _RESP_TTL, _RESP_CACHE,
-    _KILL_SWITCH_FILE,
-    _STRATEGIES_FILE, _PRESETS_PATH, _PORTFOLIO_PATH,
-    _WHEELS_PATH, _PAPER_WHEELS_PATH,
-    _sanitize, _df_to_records, _ts, _cache_age_min, _cache_header,
-    _load_macro_cache, _save_macro_cache,
-    _load_kill_switch_state, _save_kill_switch_state,
+    PORT, _PORTFOLIO_PATH, _WHEELS_PATH,
+    _save_macro_cache,
+    _save_kill_switch_state,
 )
 from routes.admin import router as _admin_router
 from routes.macro import router as _macro_router, get_sensors as _get_sensors
@@ -59,7 +43,6 @@ from routes.journal import router as _journal_router
 from routes.analysis import (
     router as _analysis_router,
     get_ohlcv_cached as _get_ohlcv_cached,
-    fetch_all_radar_for_syms,
     _resolve_one, _norm_symbol, _live_price,
 )
 from routes.portfolio import router as _portfolio_router
@@ -112,139 +95,9 @@ async def route_auth_token():
     return {"token": _BANSHEE_TOKEN}
 
 
-def _sanitize(obj):
-    """Recursively convert numpy/pandas/non-JSON types to Python natives so jsonable_encoder doesn't 500."""
-    if isinstance(obj, dict):
-        return {k: _sanitize(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_sanitize(v) for v in obj]
-    if isinstance(obj, pd.DataFrame):
-        return _df_to_records(obj)
-    if isinstance(obj, pd.Series):
-        return [_sanitize(v) for v in obj.tolist()]
-    if isinstance(obj, np.bool_):
-        return bool(obj)
-    if isinstance(obj, np.integer):
-        return int(obj)
-    if isinstance(obj, np.floating):
-        v = float(obj)
-        return None if (v != v) else v  # NaN != NaN is the NaN check
-    if isinstance(obj, float) and obj != obj:
-        return None  # plain Python NaN
-    if isinstance(obj, np.datetime64):
-        return str(obj)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    return obj
-
-# ── Constants ─────────────────────────────────────────────────────────────────
-PORT              = 8765
-_MACRO_CACHE_FILE = Path.home() / ".banshee_macro_cache.json"
-_CACHE_TTL        = 15 * 60   # seconds
-_STRATEGIES_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "strategies.json")
-
-MODE_ALIASES = {
-    "active":    "swing",
-    "position":  "long_term",
-    "long_term": "long_term",
-    "swing":     "swing",
-    "sniper":    "sniper",
-}
-
-_OHLCV_TTL   = 5 * 60   # 5 minutes — shared symbol cache across UI + MCP calls
-_OHLCV_CACHE: dict = {}  # (symbol_upper, mode) → {"tfs": dict, "ts": float}
-
-# Response-level cache for slow compute endpoints (radar analysis, SMC engine)
-# Key: str cache key  →  {"ts": float, "body": str}
-_RESP_TTL   = 3 * 60   # 3 minutes
-_RESP_CACHE: dict = {}
-
-_KILL_SWITCH_FILE = Path.home() / ".banshee_kill_switch.json"
-
-
-def _load_kill_switch_state() -> dict:
-    try:
-        if _KILL_SWITCH_FILE.exists():
-            return json.loads(_KILL_SWITCH_FILE.read_text())
-    except Exception:
-        pass
-    return {"fired": False, "fired_at": None, "positions_closed": [], "domino_phase": 0, "regime": ""}
-
-
-def _save_kill_switch_state(state: dict):
-    try:
-        _KILL_SWITCH_FILE.write_text(json.dumps(state, indent=2))
-    except Exception:
-        pass
-
-
-# ── Cache helpers ─────────────────────────────────────────────────────────────
-
-def _ts() -> str:
-    return datetime.now(timezone.utc).strftime("Data as of %Y-%m-%d %H:%M UTC")
-
-def _cache_age_min() -> int | None:
-    try:
-        if not _MACRO_CACHE_FILE.exists():
-            return None
-        age = datetime.now(timezone.utc).timestamp() - _MACRO_CACHE_FILE.stat().st_mtime
-        return max(0, int(age / 60))
-    except Exception:
-        return None
-
-def _cache_header(source: str) -> str:
-    if source == "cache":
-        age = _cache_age_min()
-        age_str = f"{age} min ago" if age is not None else "age unknown"
-        return f"Data as of now  [macro cached {age_str} — max 15 min delay]"
-    return _ts() + "  [live]"
-
-def _load_macro_cache() -> dict | None:
-    try:
-        if not _MACRO_CACHE_FILE.exists():
-            return None
-        age = datetime.now(timezone.utc).timestamp() - _MACRO_CACHE_FILE.stat().st_mtime
-        if age > _CACHE_TTL:
-            return None
-        with open(_MACRO_CACHE_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-def _save_macro_cache(mac_data: dict, news_lines: list, events: list):
-    try:
-        payload = {"mac_data": mac_data, "news_lines": news_lines, "events": events}
-        with open(_MACRO_CACHE_FILE, "w") as f:
-            json.dump(payload, f)
-    except Exception:
-        pass
-
-
-# _get_ohlcv_cached, _extract_raw, _fetch_smc_df, _smc_summary moved to routes/analysis.py
-# _get_ohlcv_cached imported above as alias from routes.analysis.get_ohlcv_cached
-
-
-
-
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ROUTES 4–14 moved to routes/analysis.py
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Radar, scan, nexus, execution-plan, strategies, SMC routes moved to routes/analysis.py
-
-
-
-
-
-# options/universe, options/candidate, options/grade, options/scenario, options/learn/* moved to routes/options.py
-# /wheels, /paper-wheels routes moved to routes/options.py
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # BACKGROUND SCHEDULER — macro refresh, paper trade sync, Predator daily
-# Moved here from app.py so it runs 24/7 with Core regardless of UI state.
+# Runs 24/7 with Core regardless of UI state.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _bg_refresh_macro():
@@ -369,12 +222,8 @@ except ImportError:
     pass  # APScheduler optional; heartbeats disabled if not installed
 
 
-# Symbol resolution helpers and /resolve-symbol route moved to routes/analysis.py
-# Re-exported at module level via import above for test compatibility
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# ROUTE 14 — Portfolio CRUD helpers
+# PORTFOLIO CRUD HELPERS
 # Route handlers live in routes/portfolio.py; helpers stay here so tests can
 # monkeypatch bc._PORTFOLIO_PATH and call bc._load_portfolios() etc. directly.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -441,11 +290,6 @@ def update_portfolio(portfolio_id: str, body: dict):
             _save_portfolios(data)
             return p
     return JSONResponse(status_code=404, content={"error": "Portfolio not found"})
-
-
-# Simulated wheel helpers + routes moved to routes/options.py
-# Paper wheel helpers + routes moved to routes/options.py
-# load_paper_wheels / save_paper_wheels re-exported above for background job + test compat.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
