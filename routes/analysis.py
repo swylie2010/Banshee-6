@@ -193,15 +193,10 @@ def _live_price(sym):
     s = str(sym or "").strip().upper()
     if not s:
         return None
-    try:
-        import yfinance as yf
-        h = yf.Ticker(s).history(period="5d")
-        if len(h):
-            last = float(h["Close"].iloc[-1])
-            if last > 0:
-                return last
-    except Exception:
-        pass
+    from shared_data import get_last_price as _get_last_price
+    price = _get_last_price(s)
+    if price:
+        return price
     # crypto Yahoo can't price -> radar (display form uses '/')
     if s.endswith("-USD") or "/" in s:
         pair = s.replace("-", "/")

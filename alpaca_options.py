@@ -130,11 +130,8 @@ def fetch_calls_chain(symbol: str, min_dte: int, max_dte: int, spot: float = Non
         raise AlpacaUnavailableError(str(e))
 
     if spot is None:
-        try:
-            import yfinance as yf
-            spot = float(yf.Ticker(symbol).fast_info["lastPrice"])
-        except Exception:
-            spot = 0.0
+        from shared_data import get_last_price
+        spot = get_last_price(symbol) or 0.0
 
     today   = date.today()
     exp_gte = (today + timedelta(days=min_dte)).isoformat()

@@ -7,7 +7,7 @@ Banshee context (verdict, regime, macro, ATR plan) alongside every trade.
 This is the forward signal log — the honest test of whether Banshee's full
 layered system outperforms the bare indicator backtests.
 
-Storage: ~/AntiEverything/Banshee_5/paper_trades.json
+Storage: ~/AntiEverything/Banshee_6/paper_trades.json
 """
 
 from __future__ import annotations
@@ -322,9 +322,8 @@ def _fetch_current_price(symbol: str) -> Optional[float]:
             with urllib.request.urlopen(url, timeout=8) as r:
                 return float(_json.loads(r.read())["price"])
         else:
-            import yfinance as yf
-            info = yf.Ticker(symbol).fast_info
-            return float(info["last_price"])
+            from shared_data import get_last_price
+            return get_last_price(symbol)
     except Exception:
         return None
 

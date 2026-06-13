@@ -10,11 +10,9 @@ import json
 import sys
 import yfinance as yf
 import pandas as pd
-import numpy as np
 import ccxt
 import time
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 from cache_utils import ttl_cache
 
 # TV-extracted OHLCV fallback — local JSON files written by Claude via TradingView MCP.
@@ -122,6 +120,23 @@ def fetch_yf_fast_info(ticker: str) -> float | None:
         if not hist.empty and "Close" in hist.columns:
             return float(hist["Close"].iloc[-1])
         return None
+
+@ttl_cache(ttl=60)
+def get_last_price(symbol: str) -> float | None:
+    """Last known price for a normalized symbol (e.g. 'AAPL', 'BTC-USD').
+    Tries fast_info first (cheap), falls back to 5-day history close."""
+    try:
+        info = yf.Ticker(symbol).fast_info
+        price = info.last_price  # use .last_price property, not dict key
+        if price and price > 0:
+            return float(price)
+    except Exception:
+        pass
+    # History fallback
+    hist = fetch_yf_history(symbol, period="5d", interval="1d")
+    if not hist.empty and "Close" in hist.columns:
+        return float(hist["Close"].iloc[-1])
+    return None
 
 # ─────────────────────────────────────────────────────────────────
 # 3. CRYPTO DATA FETCHERS (COINBASE/BINANCE)

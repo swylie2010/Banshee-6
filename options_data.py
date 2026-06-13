@@ -8,6 +8,7 @@ filling the same shape. See feedback_data_source_agnostic.
 """
 import math
 from datetime import date as _date
+from shared_data import get_last_price
 
 # field -> accepted source column names (by meaning, not position)
 _ALIASES = {
@@ -91,13 +92,7 @@ def fetch_chain(symbol, today=None, max_dte=55):
     import yfinance as yf
     today = today or _date.today().isoformat()
     tk = yf.Ticker(symbol)
-    spot = None
-    try:
-        spot = float(tk.fast_info["lastPrice"])
-    except Exception:
-        hist = tk.history(period="5d")
-        if len(hist):
-            spot = float(hist["Close"].iloc[-1])
+    spot = get_last_price(symbol)
     contracts = []
     for expiry in (tk.options or []):
         if _dte(expiry, today) > max_dte:
