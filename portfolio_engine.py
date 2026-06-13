@@ -14,6 +14,8 @@ import sector_rotation_engine
 import banshee_ai
 import ledger_engine
 from core_state import _load_macro_cache, _sanitize
+import yfinance as yf
+from cache_utils import ttl_cache
 
 _SECTOR_ETF_MAP = {
     "TECH":     "XLK",
@@ -260,12 +262,25 @@ def _build_rotation_note(fred_key) -> dict | None:
         return None
 
 
+@ttl_cache(ttl=3600)
+def _fetch_1y_closes(syms_key: tuple) -> pd.DataFrame:
+    """Cached 1-year price history from yfinance.
+
+    Args:
+        syms_key: tuple of sorted symbol strings (hashable for cache)
+
+    Returns:
+        DataFrame with Close prices, cached for 1 hour.
+    """
+    tickers = yf.download(list(syms_key), period="1y", progress=False, auto_adjust=True)
+    return tickers["Close"] if isinstance(tickers.columns, pd.MultiIndex) else tickers
+
+
 def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
     """Full portfolio analysis — called by routes/portfolio.py route handler.
 
     Returns the complete analysis dict (sanitized, JSON-safe).
     """
-    import yfinance as yf
 
     holdings = portfolio.get("holdings", [])
 
@@ -300,8 +315,8 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
     sector_etfs = ["XLK", "XLF", "IBIT", "XLC", "XLE", "XLV", "XLY", "XLU", "SPY"]
     all_syms = list(dict.fromkeys(list(yf_map.values()) + sector_etfs))  # dedupe, preserve order
     try:
-        tickers = yf.download(all_syms, period="1y", progress=False, auto_adjust=True)
-        closes = tickers["Close"] if isinstance(tickers.columns, pd.MultiIndex) else tickers
+        syms_key = tuple(sorted(all_syms))
+        closes = _fetch_1y_closes(syms_key)
     except Exception as e:
         return {"error": f"Price fetch failed: {e}"}
 
