@@ -21,6 +21,7 @@ import requests
 import feedparser
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from banshee_ai import _EXTERNAL_CONTENT_GUARD
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PATHS
@@ -790,6 +791,7 @@ _PASS1_SYSTEM = (
     "Think like a senior macro trader who reads between the lines. "
     "Be direct, specific, and concise. Reference actual company names and event types. "
     "No hedging. Every sentence should carry information a trader can act on."
+    + _EXTERNAL_CONTENT_GUARD
 )
 
 _PASS2_SYSTEM = (
@@ -825,7 +827,10 @@ def _format_events_for_prompt(events: list[dict], label: str, cap: int = 12) -> 
         lines.append(f"[{ev['source']}]{sig_tag} ({age_str}) {ev['title']}")
         if ev.get("summary"):
             lines.append(f"  → {ev['summary'][:150]}")
-    return "\n".join(lines)
+    if not lines or all(not l.strip() for l in lines):
+        return "\n".join(lines)
+    content = "\n".join(lines)
+    return f"<external_content>\n{content}\n</external_content>"
 
 
 def _attach_urls(items: list[dict], raw_events: list[dict]) -> None:
@@ -876,10 +881,11 @@ def run_engine(
             + yesterday_briefing.get("discovered_signals", [])[:2]
         )
         if prev_items:
-            yesterday_block = "--- YESTERDAY'S FLAGGED ITEMS (check if resolved/escalated) ---\n"
+            inner = "--- YESTERDAY'S FLAGGED ITEMS (check if resolved/escalated) ---\n"
             for item in prev_items:
                 hl = item.get("headline") or item.get("title", "")
-                yesterday_block += f"- {hl}\n"
+                inner += f"- {hl}\n"
+            yesterday_block = f"<external_content>\n{inner}</external_content>\n"
 
     constraints_block = ""
     if manual_stories:
