@@ -87,7 +87,6 @@ if errorlevel 1 (
 )
 echo       Dependencies installed.
 
-rem --- Step 4: Launch ---
 :launch
 rem --- Step 4: Build React UI ---
 echo [4/5] Building React UI...
