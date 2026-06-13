@@ -52,20 +52,41 @@ def _load_sd_tv_ohlcv(symbol: str, timeframe: str) -> pd.DataFrame:
 # This prevents them from accidentally being shared if the code is moved.
 KEYS_FILE = Path.home() / ".banshee_keys.json"
 
+_providers_cache: dict | None = None
+_providers_cache_ts: float = 0.0
+_PROVIDERS_TTL = 60.0
+
 def load_providers() -> dict:
-    """Load saved API keys from disk. Returns empty dict if none are saved."""
+    """Load saved API keys from disk. Cached for 60 s to avoid per-request disk reads."""
+    global _providers_cache, _providers_cache_ts
+    if _providers_cache is not None and time.time() - _providers_cache_ts < _PROVIDERS_TTL:
+        return _providers_cache
+    result: dict = {}
     if KEYS_FILE.exists():
         try:
             with open(KEYS_FILE, "r") as f:
-                return json.load(f)
+                result = json.load(f)
+            try:
+                KEYS_FILE.chmod(0o600)
+            except Exception:
+                pass  # no-op on Windows NTFS; active on Linux/Hermes
         except Exception:
             pass
-    return {}
+    _providers_cache = result
+    _providers_cache_ts = time.time()
+    return result
 
 def save_providers(providers: dict):
-    """Write API keys to disk. Called when the user adds/removes keys in the sidebar."""
+    """Write API keys to disk and update the in-memory cache immediately."""
+    global _providers_cache, _providers_cache_ts
     with open(KEYS_FILE, "w") as f:
         json.dump(providers, f, indent=2)
+    try:
+        KEYS_FILE.chmod(0o600)
+    except Exception:
+        pass  # no-op on Windows NTFS; active on Linux/Hermes
+    _providers_cache = providers
+    _providers_cache_ts = time.time()
 
 
 # ─────────────────────────────────────────────────────────────────
