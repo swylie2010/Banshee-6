@@ -28,6 +28,10 @@ def ttl_cache(ttl: int = 900):
             if entry is not None and now - entry[0] < ttl:
                 return entry[1]
             result = func(*args, **kwargs)
+            # evict expired entries before inserting to prevent unbounded growth
+            expired = [k for k, v in _cache.items() if now - v[0] >= ttl]
+            for k in expired:
+                del _cache[k]
             _cache[key] = (now, result)
             return result
 
