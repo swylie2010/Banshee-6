@@ -827,8 +827,6 @@ def _format_events_for_prompt(events: list[dict], label: str, cap: int = 12) -> 
         lines.append(f"[{ev['source']}]{sig_tag} ({age_str}) {ev['title']}")
         if ev.get("summary"):
             lines.append(f"  → {ev['summary'][:150]}")
-    if not lines or all(not l.strip() for l in lines):
-        return "\n".join(lines)
     content = "\n".join(lines)
     return f"<external_content>\n{content}\n</external_content>"
 

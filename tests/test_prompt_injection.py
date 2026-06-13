@@ -35,8 +35,46 @@ def test_external_content_guard_exists_and_has_rules():
 
 
 def test_call_ai_default_prompt_contains_guard():
-    from banshee_ai import _EXTERNAL_CONTENT_GUARD
-    assert len(_EXTERNAL_CONTENT_GUARD) > 50
+    """Verify that call_ai() injects _EXTERNAL_CONTENT_GUARD when no override is given.
+
+    If the '+ _EXTERNAL_CONTENT_GUARD' expression is removed from call_ai(), this test fails.
+    """
+    from banshee_ai import call_ai, _EXTERNAL_CONTENT_GUARD
+    from unittest.mock import patch, MagicMock
+
+    captured = {}
+
+    # Intercept at the openai.OpenAI layer so we don't need a real API key.
+    # We configure cfg with provider="openai" so call_ai() takes the openai branch.
+    mock_resp = MagicMock()
+    mock_resp.choices[0].message.content = "mock response"
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    def fake_openai_constructor(**kwargs):
+        return mock_client
+
+    def capturing_create(model, max_tokens, messages, **kwargs):
+        # The first message is the system prompt
+        for m in messages:
+            if m.get("role") == "system":
+                captured["system_prompt"] = m["content"]
+        return mock_resp
+
+    mock_client.chat.completions.create.side_effect = capturing_create
+
+    with patch("openai.OpenAI", return_value=mock_client):
+        result = call_ai(
+            cfg={"type": "openai", "key": "test-key", "model": "gpt-4o"},
+            prompt="test prompt",
+            # intentionally NOT passing system_prompt_override
+        )
+
+    assert "system_prompt" in captured, "call_ai() never made an AI call"
+    assert _EXTERNAL_CONTENT_GUARD in captured["system_prompt"], (
+        "call_ai() default system prompt must include _EXTERNAL_CONTENT_GUARD"
+    )
 
 
 def test_pass1_system_contains_guard():
