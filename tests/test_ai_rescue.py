@@ -137,3 +137,44 @@ def test_rescue_accepts_valid_column_names():
     assert err is None
     assert not df.empty
     assert list(df.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+
+
+def test_rescue_handles_ai_returning_no_json():
+    """If AI response contains no JSON dict, rescue fails gracefully (no crash)."""
+    import micro_engine
+    import banshee_ai
+
+    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+         patch("shared_data.load_providers", return_value={
+             "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
+         }), \
+         patch("core_state._log_error"), \
+         patch.object(banshee_ai, "call_ai", return_value="Sorry, I cannot determine the column mapping."):
+
+        df, err = micro_engine.fetch_stock("AAPL", "1d")
+
+    # No JSON found — should return error, not crash
+    assert err is not None
+    assert df.empty
+
+
+def test_rescue_handles_malformed_json():
+    """If AI response contains malformed JSON (e.g. single quotes), rescue fails gracefully."""
+    import micro_engine
+    import banshee_ai
+
+    # Python dict repr uses single quotes — json.loads rejects this
+    single_quoted = str(_good_rename_map())  # e.g. "{'WEIRD_DATE': 'timestamp', ...}"
+
+    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+         patch("shared_data.load_providers", return_value={
+             "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
+         }), \
+         patch("core_state._log_error"), \
+         patch.object(banshee_ai, "call_ai", return_value=single_quoted):
+
+        df, err = micro_engine.fetch_stock("AAPL", "1d")
+
+    # Should fail gracefully — not crash, not apply partial rename
+    assert err is not None
+    assert df.empty
