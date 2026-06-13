@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -116,7 +117,6 @@ def _validate_symbol(sym: str) -> None:
     Valid chars after normalization: A-Z, 0-9, hyphen (-), dot (.)
     Max length: 10 characters (covers BTC-USD=7, BRK-B=5, etc.)
     """
-    import re
     if len(sym) > 10:
         raise HTTPException(
             status_code=400,
