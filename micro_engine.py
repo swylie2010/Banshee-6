@@ -78,8 +78,13 @@ def fetch_stock(symbol: str, timeframe: str) -> tuple[pd.DataFrame, str | None]:
             import banshee_ai
             import json
             import re
-            
-            ai_cfg = load_providers().get("AI_API")
+            from core_state import _log_error
+
+            providers = load_providers()
+            if not providers.get("allow_ai_data_rescue", True):
+                return pd.DataFrame(), f"Data parsing failed (AI rescue disabled): {e}"
+
+            ai_cfg = providers.get("AI_API")
             if ai_cfg and ai_cfg.get("type") and ai_cfg.get("key"):
                 # Grab the raw text of the error and the first 5 rows of raw data
                 raw_data = str(df_raw.reset_index().head().to_dict(orient="records"))
@@ -88,12 +93,20 @@ def fetch_stock(symbol: str, timeframe: str) -> tuple[pd.DataFrame, str | None]:
                           f"Tell me the new column names for Date, Open, High, Low, Close, and Volume. "
                           f"Return ONLY a Python dictionary mapping the exact old names from the raw data to the new target names ('timestamp', 'open', 'high', 'low', 'close', 'volume'). "
                           f"Do not include any other text.")
+                _log_error("ai-rescue", e)
                 response = banshee_ai.call_ai(ai_cfg, prompt)
-                
+
                 match = re.search(r'\{.*\}', response, re.DOTALL)
                 if match:
                     rename_map = json.loads(match.group(0))
-                    
+
+                    _VALID_OHLCV_COLS = {"open", "high", "low", "close", "volume", "timestamp"}
+                    bad_cols = [v for v in rename_map.values() if v not in _VALID_OHLCV_COLS]
+                    if bad_cols:
+                        return pd.DataFrame(), (
+                            f"AI rescue rejected: invalid column names returned: {bad_cols}"
+                        )
+
                     # Apply dictionary to fix the dataframe and continue
                     df = df_raw.reset_index().rename(columns=rename_map)
                     

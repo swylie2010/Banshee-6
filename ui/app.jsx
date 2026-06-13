@@ -125,7 +125,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
             <span className="mono" style={{
               fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", color: "var(--ink)",
             }}>BANSHEE</span>
-            <span className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.18em" }}>v5.0</span>
+            <span className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.18em" }}>v6.0</span>
           </div>
           <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.18em" }}>
             MACRO TRADING TERMINAL
@@ -247,6 +247,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
 /* ── Sidebar ───────────────────────────────────────────────── */
 function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, onOptions, currentPage, onPresetsOpen }) {
   const [searchVal, setSearchVal] = useState("");
+  const [shutdownState, setShutdownState] = useState("idle"); // idle | confirm | done
   const wl = watchlists.find(w => w.id === watchlist);
   const symAssets = wl.syms
     .map(s => {
@@ -442,6 +443,34 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
               </button>
             );
           })}
+        </div>
+
+        {/* power-off */}
+        <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
+          {shutdownState === "idle" && (
+            <button
+              onClick={() => setShutdownState("confirm")}
+              style={{ background: "transparent", border: "1px solid var(--sell)", color: "var(--sell)", cursor: "pointer", padding: "5px 10px", fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.14em", width: "100%" }}
+            >⏻ STOP BANSHEE</button>
+          )}
+          {shutdownState === "confirm" && (
+            <div>
+              <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)", letterSpacing: "0.08em", marginBottom: 8 }}>Stop the Banshee server?</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={async () => { await window.API.shutdownBanshee(); setShutdownState("done"); }}
+                  style={{ flex: 1, background: "var(--sell)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 0", fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em" }}
+                >CONFIRM</button>
+                <button
+                  onClick={() => setShutdownState("idle")}
+                  style={{ flex: 1, background: "transparent", border: "1px solid var(--line-2)", color: "var(--ink-3)", cursor: "pointer", padding: "6px 0", fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.14em" }}
+                >CANCEL</button>
+              </div>
+            </div>
+          )}
+          {shutdownState === "done" && (
+            <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.08em", lineHeight: 1.5 }}>◇ Banshee stopped — you can close this tab.</div>
+          )}
         </div>
 
         {/* footer */}
@@ -2019,7 +2048,7 @@ const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
     "banshee-pro": {
       "command": "python",
-      "args": ["C:/Users/swyli/AntiEverything/Banshee_5/mcp_server.py"]
+      "args": ["C:/Users/swyli/AntiEverything/Banshee_6/mcp_server.py"]
     }
   }
 }`;
@@ -2238,8 +2267,10 @@ function SettingsPage({ onBack }) {
   const [aiModel, setAiModel]       = useState("");
   const [aiUrl, setAiUrl]           = useState("");
   const [aiCtxWindow, setAiCtxWindow] = useState(32768);
+  const [allowAiRescue, setAllowAiRescue]   = useState(true);
   const [apiSaveStatus, setApiSaveStatus]   = useState(null);
   const [aiSaveStatus, setAiSaveStatus]     = useState(null);
+  const [rescueSaveStatus, setRescueSaveStatus] = useState(null);
   const [testStatus, setTestStatus]         = useState(null);
   const [testing, setTesting]               = useState(false);
 
@@ -2255,6 +2286,7 @@ function SettingsPage({ onBack }) {
       setAiModel(ai.model || "");
       setAiUrl(ai.url || "");
       setAiCtxWindow(ai.context_window || 32768);
+      setAllowAiRescue(data.allow_ai_data_rescue !== false);
       setLoaded(true);
     });
   }, []);
@@ -2277,6 +2309,13 @@ function SettingsPage({ onBack }) {
     });
     setAiSaveStatus(result.status === "saved" ? "saved" : "error: " + (result.message || "?"));
     setTimeout(() => setAiSaveStatus(null), 3000);
+  }
+
+  async function saveDataRecovery() {
+    setRescueSaveStatus("saving");
+    const result = await window.API.saveSettings({ allow_ai_data_rescue: allowAiRescue });
+    setRescueSaveStatus(result.status === "saved" ? "saved" : "error: " + (result.message || "?"));
+    setTimeout(() => setRescueSaveStatus(null), 3000);
   }
 
   async function handleTest() {
@@ -2413,6 +2452,30 @@ function SettingsPage({ onBack }) {
 
             <SaveRow onSave={saveAIBrain} status={aiSaveStatus} />
           </>)}
+        </SettingsSection>
+
+        {/* DATA RECOVERY */}
+        <SettingsSection title="▸ DATA RECOVERY">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0" }}>
+            <input
+              type="checkbox"
+              id="ai-rescue-toggle"
+              checked={allowAiRescue}
+              onChange={e => setAllowAiRescue(e.target.checked)}
+              style={{ accentColor: "#FF6D00", width: 16, height: 16, cursor: "pointer" }}
+            />
+            <label
+              htmlFor="ai-rescue-toggle"
+              style={{ color: "var(--ink)", fontSize: 12, fontFamily: "monospace", cursor: "pointer" }}
+            >
+              ALLOW AI TO SELF-HEAL DATA FORMAT CHANGES
+            </label>
+          </div>
+          <div style={{ color: "var(--ink-3)", fontSize: 11, marginTop: 4 }}>
+            When yfinance returns unexpected column names, calls your AI to remap them.
+            Disable to prevent unintended AI usage during data outages.
+          </div>
+          <SaveRow onSave={saveDataRecovery} status={rescueSaveStatus} />
         </SettingsSection>
 
         {/* PIN LOCK */}
@@ -2649,16 +2712,9 @@ function LabPage({ onBack }) {
           <button onClick={onBack} style={{ background: "none", border: "none", color: "#FF6D00", cursor: "pointer", fontSize: 16, padding: 0 }}>←</button>
           <div>
             <div className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: "var(--ink)" }}>◬ SIGNAL LAB</div>
-            <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Saved backtest results · Run new tests in Strategy Lab</div>
+            <div className="mono" style={{ fontSize: 13, color: "var(--ink-4)", letterSpacing: "0.1em", marginTop: 2 }}>Saved backtest results</div>
           </div>
         </div>
-        <button
-          onClick={() => window.open("http://localhost:8501", "_blank")}
-          className="mono"
-          style={{ padding: "8px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid var(--amber)", color: "var(--amber)", cursor: "pointer", fontSize: 13, letterSpacing: "0.14em", fontWeight: 700 }}
-        >
-          OPEN STRATEGY LAB →
-        </button>
       </div>
 
       <div style={{ padding: "16px 24px", flex: 1 }}>
@@ -2666,11 +2722,7 @@ function LabPage({ onBack }) {
           <div className="mono" style={{ color: "var(--ink-4)", fontSize: 13 }}>◇ Loading…</div>
         ) : entries.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
-            <div className="mono" style={{ color: "var(--ink-4)", fontSize: 12, marginBottom: 16 }}>No saved backtest results yet.</div>
-            <button onClick={() => window.open("http://localhost:8501", "_blank")} className="mono"
-              style={{ padding: "9px 18px", background: "rgba(245,158,11,0.1)", border: "1px solid var(--amber)", color: "var(--amber)", cursor: "pointer", fontSize: 13, letterSpacing: "0.14em", fontWeight: 700 }}>
-              OPEN STRATEGY LAB →
-            </button>
+            <div className="mono" style={{ color: "var(--ink-4)", fontSize: 12 }}>No saved backtest results yet.</div>
           </div>
         ) : (
           <>
@@ -3893,7 +3945,7 @@ function NewsPage({ onBack, manualStories = [], setManualStories }) {
             <div style={{ textAlign: "center", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
               <div className="mono" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3em", color: "var(--ink)" }}>THE DAILY PREDATOR</div>
               <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 4, letterSpacing: "0.1em" }}>
-                {briefing.date} · Powered by Banshee 5
+                {briefing.date} · Powered by Banshee 6
               </div>
               <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 8 }}>
                 <span className="mono" style={{ fontSize: 11, background: toneColor, color: "#fff",
