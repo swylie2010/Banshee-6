@@ -273,7 +273,9 @@ def _fetch_1y_closes(syms_key: tuple) -> pd.DataFrame:
         DataFrame with Close prices, cached for 1 hour.
     """
     tickers = yf.download(list(syms_key), period="1y", progress=False, auto_adjust=True)
-    return tickers["Close"] if isinstance(tickers.columns, pd.MultiIndex) else tickers
+    # yf.download with a list always returns MultiIndex columns; extract Close and copy
+    # so callers cannot mutate the cached object.
+    return tickers["Close"].copy()
 
 
 def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
