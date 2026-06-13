@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 import banshee_ai
 import predator_engine
-from core_state import _load_kill_switch_state, _save_kill_switch_state
+from core_state import _load_kill_switch_state, _save_kill_switch_state, check_ai_budget
 from routes.macro import get_sensors as _get_sensors
 from shared_data import load_providers
 
@@ -342,6 +342,7 @@ Keep your response to 400 words. Be direct. Use trade IDs and regime names to ba
         "No hedging. Every sentence should inform a concrete rule improvement."
     )
 
+    check_ai_budget()
     narrative = banshee_ai.call_ai(ai_cfg, prompt, system_prompt_override=system)
 
     return JSONResponse(content={

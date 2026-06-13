@@ -946,6 +946,7 @@ def route_smc(
     providers = load_providers()
     ai_cfg    = providers.get("AI_API", {})
     if use_ai and ai_cfg and ai_cfg.get("key"):
+        check_ai_budget()
         narrative = banshee_ai.smc_analysis(
             symbol=symbol,
             htf_tf=htf, htf_df=htf_df, htf_smc=htf_data,

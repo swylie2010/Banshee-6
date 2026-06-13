@@ -3,12 +3,11 @@ import json
 import sys
 import threading
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 
-from core_state import _WHEELS_PATH, _PAPER_WHEELS_PATH, _sanitize
+from core_state import _WHEELS_PATH, _PAPER_WHEELS_PATH, _sanitize, check_ai_budget
 import options_engine
 import options_data
 import wheel_engine
@@ -216,6 +215,7 @@ def route_learn_recap(body: dict = Body(...)):
     run = body.get("run") or {}
     if not run:
         raise HTTPException(status_code=400, detail={"error": "requires run"})
+    check_ai_budget()
     try:
         providers = load_providers()
         cfg = providers.get("AI_API", {})
@@ -234,6 +234,7 @@ def route_learn_compare(body: dict = Body(...)):
     run_b = body.get("run_b") or {}
     if not run_a or not run_b:
         raise HTTPException(status_code=400, detail={"error": "requires run_a and run_b"})
+    check_ai_budget()
     try:
         providers = load_providers()
         cfg = providers.get("AI_API", {})
@@ -253,6 +254,7 @@ def route_learn_why_not(body: dict = Body(...)):
     run = body.get("run") or {}
     if not graded or not run:
         raise HTTPException(status_code=400, detail={"error": "requires graded and run"})
+    check_ai_budget()
     try:
         providers = load_providers()
         cfg = providers.get("AI_API", {})
