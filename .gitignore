@@ -53,3 +53,7 @@ Thumbs.db
 # Editor
 .vscode/
 *.swp
+
+# Node / UI build artifacts
+ui/node_modules/
+ui/dist/
