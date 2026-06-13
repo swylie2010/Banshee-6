@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse, JSONResponse
 from core_state import (
     _sanitize, _cache_header, _cache_age_min,
     _load_macro_cache, _save_macro_cache,
+    _log_error,
 )
 from shared_data import load_providers, fetch_sector_closes
 from knowledge_graph import get_regime_weights
@@ -247,5 +248,6 @@ def route_rotation():
                     "spy_roc_21": None, "macro_env": None, "timestamp": None}
         return sector_rotation_engine.run(closes, fred_key)
     except Exception as e:
-        return {"error": str(e), "sectors": [], "camd_alerts": [],
+        _log_error("rotation", e)
+        return {"error": "internal error", "sectors": [], "camd_alerts": [],
                 "spy_roc_21": None, "macro_env": None, "timestamp": None}

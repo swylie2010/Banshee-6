@@ -17,6 +17,7 @@ from core_state import (
     MODE_ALIASES,
     _PRESETS_PATH,
     _load_macro_cache,
+    _log_error,
 )
 from shared_data import load_providers, save_providers, fetch_sector_closes
 
@@ -218,7 +219,8 @@ def route_predator_run(req: PredatorRunRequest):
         )
         return JSONResponse(content=briefing or {})
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        _log_error("predator/run", e)
+        return JSONResponse(content={"error": "internal error"}, status_code=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

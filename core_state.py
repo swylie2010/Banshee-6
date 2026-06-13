@@ -8,6 +8,7 @@ No side effects on import — only definitions.
 import json
 import os
 import threading
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +38,7 @@ _RESP_TTL   = 3 * 60   # 3 minutes
 _RESP_CACHE: dict = {}
 
 _KILL_SWITCH_FILE = Path.home() / ".banshee_kill_switch.json"
+_ERROR_LOG        = Path.home() / ".banshee_errors.log"
 
 _PRESETS_PATH      = Path(__file__).parent / "banshee_presets.json"
 _PORTFOLIO_PATH    = Path(__file__).parent / "banshee_portfolio.json"
@@ -141,5 +143,16 @@ def _save_kill_switch_state(state: dict):
     try:
         with _KILL_SWITCH_LOCK:
             _KILL_SWITCH_FILE.write_text(json.dumps(state, indent=2))
+    except Exception:
+        pass
+
+
+def _log_error(context: str, exc: Exception) -> None:
+    """Append a timestamped error entry to ~/.banshee_errors.log. Never raises."""
+    try:
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        entry = f"\n[{ts}] {context}\n{traceback.format_exc()}\n"
+        with open(_ERROR_LOG, "a", encoding="utf-8") as f:
+            f.write(entry)
     except Exception:
         pass
