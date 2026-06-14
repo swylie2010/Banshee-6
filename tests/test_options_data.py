@@ -67,3 +67,22 @@ def test_dte_tolerates_time_suffix():
     df = pd.DataFrame([{"strike": 95.0, "bid": 1.1, "ask": 1.3, "impliedVolatility": 0.25, "openInterest": 4000}])
     out = od.normalize_puts(df, spot=100.0, expiry="2026-07-17T00:00:00", today="2026-06-09")
     assert out[0]["dte"] == 38
+
+
+def test_fetch_earnings_date_returns_date():
+    from unittest.mock import patch, MagicMock
+    from datetime import date
+    mock_ticker = MagicMock()
+    mock_ticker.calendar = {"Earnings Date": [date(2026, 7, 18)]}
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = od.fetch_earnings_date("AAPL")
+    assert result == date(2026, 7, 18)
+
+
+def test_fetch_earnings_date_returns_none_on_error():
+    from unittest.mock import patch, MagicMock
+    mock_ticker = MagicMock()
+    mock_ticker.calendar = None
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = od.fetch_earnings_date("AAPL")
+    assert result is None

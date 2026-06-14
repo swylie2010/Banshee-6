@@ -110,3 +110,37 @@ def fetch_closes(symbol, period="1y"):
     import yfinance as yf
     hist = yf.Ticker(symbol).history(period=period)
     return [float(x) for x in hist["Close"].tolist()] if len(hist) else []
+
+
+def fetch_earnings_date(symbol: str):
+    """Return the next earnings date for symbol as a date object, or None.
+
+    Defensive: yfinance calendar format varies by version. Returns None on
+    any error so callers can treat missing data as 'no known earnings'.
+    """
+    try:
+        import yfinance as yf
+        from datetime import date as _date
+        cal = yf.Ticker(symbol).calendar
+        if cal is None:
+            return None
+        # Dict form (newer yfinance): {"Earnings Date": [Timestamp, ...]}
+        if isinstance(cal, dict):
+            ed = cal.get("Earnings Date")
+            if ed is None:
+                return None
+            if hasattr(ed, "__iter__") and not isinstance(ed, str):
+                ed = next(iter(ed), None)
+            return ed.date() if hasattr(ed, "date") else (ed if isinstance(ed, _date) else None)
+        # DataFrame form (older yfinance)
+        if hasattr(cal, "columns") and "Earnings Date" in cal.columns:
+            raw = cal["Earnings Date"].iloc[0]
+            return raw.date() if hasattr(raw, "date") else None
+        if hasattr(cal, "index") and "Earnings Date" in cal.index:
+            raw = cal.loc["Earnings Date"]
+            if hasattr(raw, "__iter__"):
+                raw = next(iter(raw), None)
+            return raw.date() if raw is not None and hasattr(raw, "date") else None
+        return None
+    except Exception:
+        return None
