@@ -743,6 +743,7 @@ function PaperAlertStrip({ onGoToWheel }) {
 /* Paper track record + locked live-mode teaser. Reads wheels already fetched by PaperWheelList. */
 function LiveGateTeaser({ wheels, loading }) {
   const P = OPT_PALETTE;
+  const [livePanel, setLivePanel] = React.useState(false);
   if (loading || !wheels) return null;
 
   const totalCycles = wheels.reduce((s, w) => s + ((w.state?.totals?.cycles_completed) || 0), 0);
@@ -780,18 +781,41 @@ function LiveGateTeaser({ wheels, loading }) {
       tile('ACTIVE',  active,      P.ink),
     ),
     React.createElement('div', {
+      onClick: () => setLivePanel(true),
       style: {
         background: P.bg2, border: `1px solid ${P.line}`, borderRadius: 6,
-        padding: '12px 16px', opacity: 0.55,
+        padding: '12px 16px', cursor: 'pointer',
       },
     },
       React.createElement('div', {
-        style: { fontSize: 11, fontWeight: 700, color: P.ink3, marginBottom: 5,
+        style: { fontSize: 11, fontWeight: 700, color: P.ink2, marginBottom: 5,
                  letterSpacing: '0.08em', textTransform: 'uppercase' },
       }, '◈ LIVE MODE'),
       React.createElement('div', {
         style: { fontSize: 11, color: P.ink3, lineHeight: 1.6 },
-      }, 'Live execution coming in a future update. Keep building your paper track record.'),
+      }, 'Ready to trade with real capital? Tap to learn more.'),
+    ),
+    livePanel && React.createElement('div', {
+      style: {
+        marginTop: 10, background: P.bg2, border: `1px solid ${P.line}`,
+        borderRadius: 6, padding: '14px 16px',
+      },
+    },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } },
+        React.createElement('div', null,
+          React.createElement('div', {
+            style: { fontSize: 13, fontWeight: 700, color: P.ink, letterSpacing: '0.08em', marginBottom: 6 },
+          }, 'Live options trading is not enabled.'),
+          React.createElement('div', {
+            style: { fontSize: 11, color: P.ink3, letterSpacing: '0.06em', lineHeight: 1.6 },
+          }, 'This feature is intentionally disabled in this build.'),
+        ),
+        React.createElement('button', {
+          onClick: (e) => { e.stopPropagation(); setLivePanel(false); },
+          style: { background: 'none', border: 'none', color: P.ink3, cursor: 'pointer',
+                   fontSize: 16, padding: '0 0 0 12px', lineHeight: 1 },
+        }, '✕'),
+      ),
     ),
   );
 }
@@ -1480,8 +1504,114 @@ function OptGrader({ candidate }) {
   );
 }
 
+const TIER_CAPITAL = { starter: 2500, building: 27500, established: 87500, institutional: 200000 };
+const TIER_LABELS = [
+  { key: 'starter',      label: 'Under $5k',  sub: 'Getting Started' },
+  { key: 'building',     label: '$5k–$50k',   sub: 'Building'        },
+  { key: 'established',  label: '$50k–$125k', sub: 'Established'     },
+  { key: 'institutional',label: '$125k+',      sub: 'Institutional'   },
+];
+const TIER_DEFAULT_TRACK = { starter: 'spreads', building: 'spreads', established: 'wheel', institutional: 'wheel' };
+
+function CapitalTierSelector({ tier, onTier }) {
+  const P = OPT_PALETTE;
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: P.ink4, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+        YOUR CAPITAL TIER
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {TIER_LABELS.map(t => (
+          <button key={t.key} onClick={() => onTier(t.key)}
+            style={{ padding: '8px 14px', border: `1px solid ${tier === t.key ? P.mint : P.line}`,
+              background: tier === t.key ? P.mintSoft : P.card, color: tier === t.key ? P.mintDeep : P.ink3,
+              cursor: 'pointer', borderRadius: 2, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+            <div style={{ fontWeight: 600 }}>{t.label}</div>
+            <div style={{ fontSize: 10, color: tier === t.key ? P.mintDeep : P.ink4 }}>{t.sub}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InstitutionalFramingPanel({ tier }) {
+  const P = OPT_PALETTE;
+  const spyEstimate = 530;
+  const cspCollateral = spyEstimate * 100;
+  const spreadBpr = 350;
+  const ratio = Math.round(cspCollateral / spreadBpr);
+  return (
+    <div style={{ background: P.wall, border: `1px solid ${P.line}`, padding: '14px 16px', marginBottom: 20, borderRadius: 2 }}>
+      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+        TWO WAYS TO TRADE OPTIONS ON THE SAME UNDERLYING
+      </div>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 10, color: P.ink4, fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', marginBottom: 4 }}>Cash-Secured Put (The Wheel)</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: P.ink, fontFamily: 'JetBrains Mono, monospace' }}>${cspCollateral.toLocaleString()}</div>
+          <div style={{ fontSize: 11, color: P.ink3 }}>collateral per contract on SPY</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', color: P.ink4, fontSize: 18 }}>vs</div>
+        <div>
+          <div style={{ fontSize: 10, color: P.ink4, fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', marginBottom: 4 }}>Bull Put Spread (Credit Spreads)</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: P.mint, fontFamily: 'JetBrains Mono, monospace' }}>${spreadBpr}</div>
+          <div style={{ fontSize: 11, color: P.ink3 }}>BPR — same thesis, defined risk</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ background: P.mintSoft, border: `1px solid ${P.mint}`, padding: '6px 12px', borderRadius: 2 }}>
+            <div style={{ fontSize: 11, color: P.mintDeep, fontFamily: 'JetBrains Mono, monospace' }}>{ratio}× less capital tied up</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrackForkCards({ tier, activeTrack, onTrack }) {
+  const P = OPT_PALETTE;
+  const defaultTrack = TIER_DEFAULT_TRACK[tier] || 'spreads';
+  const cards = [
+    { key: 'wheel',   label: 'The Wheel',     desc: 'Conservative · Cash-secured · ETFs only · Full capital required' },
+    { key: 'spreads', label: 'Credit Spreads', desc: 'Defined-risk · Stocks + ETFs · Accessible capital' },
+  ];
+  return (
+    <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+      {cards.map(c => {
+        const highlight = activeTrack === c.key || (!activeTrack && defaultTrack === c.key);
+        return (
+          <div key={c.key} onClick={() => onTrack(c.key)}
+            style={{ flex: 1, minWidth: 180, padding: '14px 16px', cursor: 'pointer',
+              border: `2px solid ${highlight ? P.mint : P.line}`,
+              background: highlight ? P.mintSoft : P.card, borderRadius: 2 }}>
+            <div style={{ fontWeight: 700, color: highlight ? P.mintDeep : P.ink, marginBottom: 4, fontSize: 13 }}>{c.label}</div>
+            <div style={{ fontSize: 11, color: highlight ? P.mintDeep : P.ink3, lineHeight: 1.4 }}>{c.desc}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SpreadTrack({ tier }) {
+  return React.createElement('div', { style: { color: '#5C7A6D', fontSize: 12, padding: 20 } }, 'Credit Spreads — coming in next tasks');
+}
+
 function OptionsPage({ onBack }) {
   const P = OPT_PALETTE;
+  const [tier, setTier] = React.useState(
+    () => localStorage.getItem('banshee_capital_tier') || 'starter'
+  );
+  const [activeTrack, setActiveTrack] = React.useState(null);
+
+  const handleTier = (t) => {
+    setTier(t);
+    localStorage.setItem('banshee_capital_tier', t);
+    setActiveTrack(null);
+  };
+  const handleTrack = (t) => setActiveTrack(t);
+  const resolvedTrack = activeTrack || TIER_DEFAULT_TRACK[tier] || 'spreads';
+
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [acct, setAcct] = React.useState(() => localStorage.getItem('banshee_options_acct') || '');
@@ -1550,6 +1680,11 @@ function OptionsPage({ onBack }) {
 
   return shell(
     <>
+      <CapitalTierSelector tier={tier} onTier={handleTier} />
+      <InstitutionalFramingPanel tier={tier} />
+      <TrackForkCards tier={tier} activeTrack={activeTrack} onTrack={handleTrack} />
+      {resolvedTrack === 'wheel' && (
+      <div>
       <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
         fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>← BACK</button>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
@@ -1643,6 +1778,11 @@ function OptionsPage({ onBack }) {
             MY SIMULATED WHEELS →
           </button>
         </>
+      )}
+      </div>
+      )}
+      {resolvedTrack === 'spreads' && (
+        <SpreadTrack tier={tier} />
       )}
     </>
   );
