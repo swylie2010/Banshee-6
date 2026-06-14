@@ -725,52 +725,6 @@ function Stat({ k, v, c = "var(--ink)" }) {
   );
 }
 
-function MetricTile({ k, v, suffix = "", color = "var(--cyan)", bar = null, text = false }) {
-  return (
-    <div style={{
-      background: "var(--bg-2)", border: "1px solid var(--line)",
-      padding: "10px 12px",
-      display: "flex", flexDirection: "column", gap: 6,
-      position: "relative",
-    }}>
-      <window.Label>{k}</window.Label>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-        {text ? (
-          <span className="mono" style={{ fontSize: 14, color, fontWeight: 600, letterSpacing: "0.08em" }}>{v}</span>
-        ) : (
-          <>
-            <span className="num" style={{ fontSize: 18, color, fontWeight: 600, lineHeight: 1 }}>{v}</span>
-            <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.12em" }}>{suffix}</span>
-          </>
-        )}
-      </div>
-      {bar !== null && <window.MiniBar value={bar} color={color} w={140} />}
-    </div>
-  );
-}
-
-function Level({ k, v, c }) {
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "6px 10px", background: "var(--bg-1)",
-      borderLeft: `2px solid ${c}`,
-    }}>
-      <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.18em" }}>{k}</span>
-      <span className="num" style={{ fontSize: 14, color: c, fontWeight: 600 }}>{v}</span>
-    </div>
-  );
-}
-
-function KV({ k, v, c }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <window.Label>{k}</window.Label>
-      <span className="num" style={{ fontSize: 14, color: c, fontWeight: 600 }}>{v}</span>
-    </div>
-  );
-}
-
 /* ── Warning / exception logic ────────────────────────────── */
 function computeWarnings(smcData, ghData, xabcdData, asset) {
   const warnings = [];
@@ -937,44 +891,6 @@ function computeWarnings(smcData, ghData, xabcdData, asset) {
   return warnings;
 }
 
-/* ── DeepDiveCard — compact nav button on AssetHub ──────────── */
-function DeepDiveCard({ icon, title, sub, accent, onDeepDive }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <div style={{ position: "relative" }}>
-      <button onClick={onDeepDive}
-        onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
-        style={{
-          width: "100%",
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 14px",
-          background: hov ? `${accent}12` : "var(--bg-2)",
-          border: `1px solid ${hov ? accent : "var(--line)"}`,
-          cursor: "pointer", textAlign: "left",
-          transition: "all 140ms",
-          position: "relative",
-        }}>
-        <span style={{ fontSize: 15, color: accent, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
-        <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-          <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", letterSpacing: "0.1em" }}>{title}</span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.1em" }}>DEEP DIVE →</span>
-        </div>
-      </button>
-      {hov && sub && (
-        <div style={{
-          position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0, zIndex: 50,
-          background: "var(--bg-2)", border: `1px solid ${accent}40`,
-          padding: "10px 12px", pointerEvents: "none",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
-        }}>
-          <span className="mono" style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6, letterSpacing: "0.06em" }}>{sub}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ── AssetHub — standard overview (Page 2) ─────────────────── */
 function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate }) {
   const [mode, setMode] = useState("swing");
@@ -1126,11 +1042,11 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, flex: "0 0 auto" }}>
-            <MetricTile k="EDGE SCORE" v={asset.edge} suffix="/100" color={c.fg} bar={asset.edge} />
-            <MetricTile k="RSI(14)" v={asset.rsi} suffix="" color="var(--cyan)" bar={asset.rsi} />
-            <MetricTile k="ATR" v={asset.atr} suffix="" color="var(--magenta)" />
-            <MetricTile k="VOL · 24H" v={asset.vol} suffix="x" color="var(--amber)" />
-            <MetricTile k="BIAS" v={asset.bias} suffix="" color={c.fg} text />
+            <window.MetricTile k="EDGE SCORE" v={asset.edge} suffix="/100" color={c.fg} bar={asset.edge} />
+            <window.MetricTile k="RSI(14)" v={asset.rsi} suffix="" color="var(--cyan)" bar={asset.rsi} />
+            <window.MetricTile k="ATR" v={asset.atr} suffix="" color="var(--magenta)" />
+            <window.MetricTile k="VOL · 24H" v={asset.vol} suffix="x" color="var(--amber)" />
+            <window.MetricTile k="BIAS" v={asset.bias} suffix="" color={c.fg} text />
           </div>
         </div>
 
@@ -1148,16 +1064,16 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
             </div>
           </div>
           <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, borderBottom: "1px solid var(--line)", flex: "0 0 auto" }}>
-            <Level k="ENTRY" v={fmt(entry)} c="var(--cyan)" />
-            <Level k="STOP" v={fmt(stop)} c="var(--sell)" />
-            <Level k="TARGET 1" v={fmt(tp1)} c="var(--buy)" />
-            <Level k="TARGET 2" v={fmt(tp2)} c="var(--buy)" />
+            <window.Level k="ENTRY" v={fmt(entry)} c="var(--cyan)" />
+            <window.Level k="STOP" v={fmt(stop)} c="var(--sell)" />
+            <window.Level k="TARGET 1" v={fmt(tp1)} c="var(--buy)" />
+            <window.Level k="TARGET 2" v={fmt(tp2)} c="var(--buy)" />
           </div>
           <div style={{ padding: "12px 14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, borderBottom: "1px solid var(--line)", flex: "0 0 auto" }}>
-            <KV k="R:R" v={rr} c="var(--ink)" />
-            <KV k="SIZE" v={sizeR} c="var(--ink)" />
-            <KV k="CONFIDENCE" v={`${conf}%`} c={c.fg} />
-            <KV k="HOLD" v={mode === "sniper" ? "≤4h" : mode === "swing" ? "3-10d" : "1-3mo"} c="var(--ink-2)" />
+            <window.KV k="R:R" v={rr} c="var(--ink)" />
+            <window.KV k="SIZE" v={sizeR} c="var(--ink)" />
+            <window.KV k="CONFIDENCE" v={`${conf}%`} c={c.fg} />
+            <window.KV k="HOLD" v={mode === "sniper" ? "≤4h" : mode === "swing" ? "3-10d" : "1-3mo"} c="var(--ink-2)" />
           </div>
           <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1, minHeight: 0, overflowY: "auto" }}>
             <window.Label>SIGNAL CHECKLIST</window.Label>
@@ -1252,244 +1168,12 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
 
       {/* deep dive navigation cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "8px 12px 10px 12px", flex: "0 0 auto" }}>
-        <DeepDiveCard icon="◈" title="SMC STRUCTURE" sub="Order blocks · FVGs · BOS/CHoCH · Liquidity pools · HTF/LTF alignment" accent="var(--cyan)" onDeepDive={() => onDeepDive("smc")} />
-        <DeepDiveCard icon="◎" title="GEO HARMONIC" sub="Fibonacci arc intersections · XABCD patterns · PRZ zones · Fib cycles" accent="var(--magenta)" onDeepDive={() => onDeepDive("gh")} />
-        <DeepDiveCard icon="◆" title="NEXUS SYNTHESIS" sub="Full AI briefing · Cross-system confluence · Trade signal synthesis" accent="var(--amber)" onDeepDive={() => onDeepDive("nexus")} />
+        <window.DeepDiveCard icon="◈" title="SMC STRUCTURE" sub="Order blocks · FVGs · BOS/CHoCH · Liquidity pools · HTF/LTF alignment" accent="var(--cyan)" onDeepDive={() => onDeepDive("smc")} />
+        <window.DeepDiveCard icon="◎" title="GEO HARMONIC" sub="Fibonacci arc intersections · XABCD patterns · PRZ zones · Fib cycles" accent="var(--magenta)" onDeepDive={() => onDeepDive("gh")} />
+        <window.DeepDiveCard icon="◆" title="NEXUS SYNTHESIS" sub="Full AI briefing · Cross-system confluence · Trade signal synthesis" accent="var(--amber)" onDeepDive={() => onDeepDive("nexus")} />
       </div>
     </div>
   );
-}
-
-/* ── HoverContextCard — lens-aware element inspector ────────── */
-function HoverContextCard({ el, lensMode }) {
-  const LENS_NAME = ["", "ALL", "BATTLEFIELD", "FOOTPRINTS", "SNIPER"];
-  const LENS_DESC = [
-    "",
-    "Full overview — everything with dynamic weight applied.",
-    "Structure only — trend narrative, swing highs/lows, BOS/CHoCH.",
-    "X-Ray — FVGs and liquidity magnets. Where did price move too fast?",
-    "Targeting — highest-conviction OB only. Where do I enter?",
-  ];
-
-  function fmtPrice(p) {
-    if (!p && p !== 0) return "—";
-    return p < 100 ? p.toFixed(4) : p.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  }
-
-  const cardStyle = {
-    width: 220,
-    flexShrink: 0,
-    alignSelf: "flex-start",
-    background: "#0a0f18",
-    border: "1px solid #1c2433",
-    borderRadius: 4,
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 12,
-    color: "#c8d4e0",
-  };
-  const sectionStyle = { padding: "8px 10px", borderBottom: "1px solid #1c2433" };
-  const labelStyle   = { fontSize: 12, color: "#6c7889", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 };
-  const valueStyle   = { fontSize: 12, color: "#c8d4e0" };
-
-  /* Empty state */
-  if (!el) {
-    return (
-      <div style={cardStyle}>
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Active Lens</div>
-          <div style={{ ...valueStyle, fontWeight: 700, color: "#38bdf8" }}>{LENS_NAME[lensMode] || "—"}</div>
-        </div>
-        <div style={{ padding: "8px 10px" }}>
-          <div style={{ ...valueStyle, color: "#6c7889", lineHeight: 1.6 }}>
-            {LENS_DESC[lensMode] || "Hover over any chart element to inspect it."}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* Order Block */
-  if (el.elementType === "ob") {
-    const sw      = el.session_weight || 1.0;
-    const badge   = sw >= 2.0 ? "⚡ Silver Bullet ×2.0" : sw >= 1.5 ? "◈ Killzone ×1.5" : sw < 1.0 ? "Low conviction" : "Regular session";
-    const hasConf = Array.isArray(el.htf_confluence) && el.htf_confluence.length > 0;
-    const accentColor = el.kind === "bullish" ? "#42A5F5" : "#EF5350";
-    const explainByLens = {
-      1: `A ${el.kind} Order Block is a range where institutions placed a large directional order. Price tends to react when it returns here.`,
-      2: `${el.kind === "bullish" ? "Buy" : "Sell"} wall. Price broke out of this zone — expect a reaction if it comes back.`,
-      3: el.has_pending_inducement ? "Inducement-pending OB — a nearby liquidity pool hasn't been swept yet. Smart money may push through it before reversing here." : "Candidate OB — not yet confirmed by inducement sweep.",
-      4: `Prime entry zone. ${el.kind === "bullish" ? "Enter long" : "Enter short"} inside this range. Stop beyond the far edge.`,
-    };
-    return (
-      <div style={cardStyle}>
-        <div style={{ ...sectionStyle, borderLeft: `3px solid ${accentColor}` }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>
-            {el.kind === "bullish" ? "▲" : "▼"} {el.kind.toUpperCase()} ORDER BLOCK
-          </div>
-          <div style={{ marginTop: 3, color: "#FFD600", fontSize: 12 }}>
-            {badge}{hasConf ? "  ★ HTF" : ""}
-          </div>
-        </div>
-        <div style={sectionStyle}>
-          <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
-            <div><div style={labelStyle}>State</div><div style={valueStyle}>{el.status}</div></div>
-            <div><div style={labelStyle}>Zone</div><div style={valueStyle}>{fmtPrice(el.bottom)} – {fmtPrice(el.top)}</div></div>
-          </div>
-          {el.touch_count > 0 && <div><div style={labelStyle}>Touches</div><div style={valueStyle}>{el.touch_count}</div></div>}
-        </div>
-        <div style={{ ...sectionStyle, borderBottom: "none" }}>
-          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
-            {explainByLens[lensMode] || explainByLens[1]}
-          </div>
-        </div>
-        <div style={{ padding: "6px 10px", color: "#6c7889", fontSize: 12 }}>
-          Watch: {el.kind === "bullish" ? `bullish close above ${fmtPrice(el.top)}` : `bearish close below ${fmtPrice(el.bottom)}`}
-        </div>
-      </div>
-    );
-  }
-
-  /* Fair Value Gap */
-  if (el.elementType === "fvg") {
-    const accentColor = el.kind === "bullish" ? "#00BCD4" : "#F44336";
-    return (
-      <div style={cardStyle}>
-        <div style={{ ...sectionStyle, borderLeft: `3px solid ${accentColor}` }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>
-            {el.kind === "bullish" ? "▲" : "▼"} FAIR VALUE GAP
-          </div>
-          <div style={{ marginTop: 2, fontSize: 12, color: "#6c7889" }}>
-            {el.status}{el.fill_pct > 0 ? ` · ${el.fill_pct}% filled` : ""}
-          </div>
-        </div>
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Price Range</div>
-          <div style={valueStyle}>{fmtPrice(el.bottom)} – {fmtPrice(el.top)}</div>
-        </div>
-        <div style={{ padding: "8px 10px" }}>
-          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
-            Gap where price moved too fast to find two-sided auction. Unmitigated FVGs act as magnets — price tends to return to fill them before continuing.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* HTF Reference Line */
-  if (el.elementType === "htf") {
-    const typeNames  = { yearly_monthly: "Yearly / Monthly Open", market_maker: "Market Maker PD/PW Level", vwap: "VWAP Zone", elliott_wave: "Elliott Wave Pivot", other: "HTF Level" };
-    const typeColors = { yearly_monthly: "#FFD600", market_maker: "#CE93D8", vwap: "#26C6DA", elliott_wave: "#90A4AE", other: "#90A4AE" };
-    const t = el.level_type || "other";
-    return (
-      <div style={cardStyle}>
-        <div style={{ ...sectionStyle, borderLeft: `3px solid ${typeColors[t]}` }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: typeColors[t] }}>{typeNames[t]}</div>
-        </div>
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Price</div>
-          <div style={valueStyle}>{fmtPrice(el.price)}</div>
-          {el.name && <div style={{ ...labelStyle, marginTop: 4 }}>{el.name.replace(/\./g, " › ")}</div>}
-        </div>
-        <div style={{ padding: "8px 10px" }}>
-          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
-            Named institutional reference level. Confluence with an OB or FVG at this price raises conviction.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* EQH / EQL */
-  if (el.elementType === "eqh" || el.elementType === "eql") {
-    const isHigh     = el.elementType === "eqh";
-    const accentColor = isHigh ? "#FF1744" : "#00E676";
-    return (
-      <div style={cardStyle}>
-        <div style={{ ...sectionStyle, borderLeft: `3px solid ${accentColor}` }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>
-            {isHigh ? "EQH — Equal Highs" : "EQL — Equal Lows"}
-          </div>
-        </div>
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Level</div>
-          <div style={valueStyle}>{fmtPrice(el.price)}</div>
-        </div>
-        <div style={{ padding: "8px 10px" }}>
-          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
-            {isHigh
-              ? "Clustered sell stops above equal highs. A sweep here traps breakout longs and may precede a sharp reversal down."
-              : "Clustered buy stops below equal lows. A sweep here traps breakout shorts and may precede a sharp reversal up."}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* Swing marker */
-  if (el.elementType === "swing") {
-    const lbl     = el.label || (el.swing_type === "high" ? "H" : "L");
-    const isHigh  = el.swing_type === "high";
-    const accentColor = isHigh ? "#FF6D00" : "#2979FF";
-    const meanings = {
-      HH: "Higher High — trend is bullish, momentum intact.",
-      LH: "Lower High — rally failing, bearish pressure building.",
-      HL: "Higher Low — pullback held above last low, bullish structure.",
-      LL: "Lower Low — trend is bearish, no support holding.",
-    };
-    return (
-      <div style={cardStyle}>
-        <div style={{ ...sectionStyle, borderLeft: `3px solid ${accentColor}` }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>
-            {lbl} — {isHigh ? "Swing High" : "Swing Low"}
-          </div>
-        </div>
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Price</div>
-          <div style={valueStyle}>{fmtPrice(el.price)}</div>
-        </div>
-        <div style={{ padding: "8px 10px" }}>
-          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
-            {meanings[lbl] || (isHigh ? "Swing High — potential supply zone above." : "Swing Low — potential demand zone below.")}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* BOS / CHoCH */
-  if (el.elementType === "bos" || el.elementType === "choch") {
-    const isBull      = el.isBull;
-    const isBOS       = el.isBOS;
-    const accentColor = isBOS
-      ? (isBull ? "#00E676" : "#FF1744")
-      : (isBull ? "#69F0AE" : "#FF5252");
-    const label = `${isBOS ? "BOS" : "CHoCH"} ${isBull ? "▲" : "▼"}`;
-    const explainBOS   = isBull
-      ? "Bullish Break of Structure — a swing high was breached. Structure is now officially bullish. Watch for a pullback into the nearest OB before continuation."
-      : "Bearish Break of Structure — a swing low was breached. Structure is now officially bearish. Watch for a retrace into the nearest OB before continuation.";
-    const explainCHoCH = isBull
-      ? "Change of Character — first bullish break after a downtrend. Potential trend reversal. Needs follow-through above the prior swing high to confirm."
-      : "Change of Character — first bearish break after an uptrend. Potential trend reversal. Needs follow-through below the prior swing low to confirm.";
-    return (
-      <div style={cardStyle}>
-        <div style={{ ...sectionStyle, borderLeft: `3px solid ${accentColor}` }}>
-          <div style={{ fontWeight: 700, fontSize: 12, color: accentColor }}>{label}</div>
-          <div style={{ marginTop: 2, fontSize: 12, color: "#6c7889" }}>{isBOS ? "Break of Structure" : "Change of Character"}</div>
-        </div>
-        <div style={sectionStyle}>
-          <div style={labelStyle}>Break Level</div>
-          <div style={valueStyle}>{fmtPrice(el.price)}</div>
-        </div>
-        <div style={{ padding: "8px 10px" }}>
-          <div style={{ ...valueStyle, color: "#8899aa", lineHeight: 1.6 }}>
-            {isBOS ? explainBOS : explainCHoCH}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
 }
 
 /* ── AnalysisPage — deep dive with tabs (Page 3) ────────────── */
@@ -1766,7 +1450,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
                   onHover={setHoveredElement} />
               </div>
               {tab === "smc" && (
-                <HoverContextCard el={hoveredElement} lensMode={lensMode} />
+                <window.HoverContextCard el={hoveredElement} lensMode={lensMode} />
               )}
             </div>
           </div>
@@ -1868,16 +1552,16 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
                 </div>
               </div>
               <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, borderBottom: "1px solid var(--line)" }}>
-                <Level k="ENTRY"    v={fmt(entry)} c="var(--cyan)" />
-                <Level k="STOP"     v={fmt(stop)}  c="var(--sell)" />
-                <Level k="TARGET 1" v={fmt(tp1)}   c="var(--buy)" />
-                <Level k="TARGET 2" v={fmt(tp2)}   c="var(--buy)" />
+                <window.Level k="ENTRY"    v={fmt(entry)} c="var(--cyan)" />
+                <window.Level k="STOP"     v={fmt(stop)}  c="var(--sell)" />
+                <window.Level k="TARGET 1" v={fmt(tp1)}   c="var(--buy)" />
+                <window.Level k="TARGET 2" v={fmt(tp2)}   c="var(--buy)" />
               </div>
               <div style={{ padding: "10px 12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
-                <KV k="R:R"  v={rr}               c="var(--ink)" />
-                <KV k="HOLD" v={nexusHold}         c="var(--ink-2)" />
-                <KV k="BIAS" v={asset.bias}        c={c.fg} />
-                <KV k="EDGE" v={`${asset.edge}/100`} c={c.fg} />
+                <window.KV k="R:R"  v={rr}               c="var(--ink)" />
+                <window.KV k="HOLD" v={nexusHold}         c="var(--ink-2)" />
+                <window.KV k="BIAS" v={asset.bias}        c={c.fg} />
+                <window.KV k="EDGE" v={`${asset.edge}/100`} c={c.fg} />
               </div>
             </aside>
           </div>
@@ -1886,11 +1570,11 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
         {/* Nexus metrics bar */}
         {tab === "nexus" && (
           <div style={{ padding: "10px 14px 0 14px", display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-            <MetricTile k="EDGE SCORE" v={asset.edge} suffix="/100" color={c.fg} bar={asset.edge} />
-            <MetricTile k="RSI(14)" v={asset.rsi} suffix="" color="var(--cyan)" bar={asset.rsi} />
-            <MetricTile k="ATR" v={asset.atr} suffix="" color="var(--magenta)" />
-            <MetricTile k="VOL · 24H" v={asset.vol} suffix="x" color="var(--amber)" />
-            <MetricTile k="BIAS" v={asset.bias} suffix="" color={c.fg} text />
+            <window.MetricTile k="EDGE SCORE" v={asset.edge} suffix="/100" color={c.fg} bar={asset.edge} />
+            <window.MetricTile k="RSI(14)" v={asset.rsi} suffix="" color="var(--cyan)" bar={asset.rsi} />
+            <window.MetricTile k="ATR" v={asset.atr} suffix="" color="var(--magenta)" />
+            <window.MetricTile k="VOL · 24H" v={asset.vol} suffix="x" color="var(--amber)" />
+            <window.MetricTile k="BIAS" v={asset.bias} suffix="" color={c.fg} text />
           </div>
         )}
 
@@ -2800,23 +2484,6 @@ function LabPage({ onBack }) {
   );
 }
 
-// Temporary stubs — will be replaced by Tasks 5-6
-/* ── NumInput — labeled number input used by RiskDeskPage */
-function NumInput({ label, value, onChange, step = 1 }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.14em" }}>{label}</div>
-      <input
-        type="number" step={step}
-        value={value}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="mono"
-        style={{ background: "var(--bg-3)", border: "1px solid var(--line-2)", color: "var(--ink)", padding: "7px 10px", fontSize: 12, letterSpacing: "0.06em", outline: "none", width: "100%" }}
-      />
-    </div>
-  );
-}
-
 /* ── RiskDeskPage — reactive position sizing calculator (Page 6) */
 function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
   const [account,      setAccount]      = useState(10000);
@@ -2975,10 +2642,10 @@ function RiskDeskPage({ seedAsset, simulateMode, onBack }) {
         )}
         {/* inputs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
-          <NumInput label="ACCOUNT SIZE ($)" value={account} onChange={setAccount} step={100} />
-          <NumInput label="RISK PER TRADE (%)" value={riskPct} onChange={setRiskPct} step={0.1} />
-          <NumInput label="ENTRY PRICE ($)" value={entry} onChange={setEntry} step={0.01} />
-          <NumInput label="STOP-LOSS PRICE ($)" value={stop} onChange={setStop} step={0.01} />
+          <window.NumInput label="ACCOUNT SIZE ($)" value={account} onChange={setAccount} step={100} />
+          <window.NumInput label="RISK PER TRADE (%)" value={riskPct} onChange={setRiskPct} step={0.1} />
+          <window.NumInput label="ENTRY PRICE ($)" value={entry} onChange={setEntry} step={0.01} />
+          <window.NumInput label="STOP-LOSS PRICE ($)" value={stop} onChange={setStop} step={0.01} />
         </div>
 
         {/* conflicted checkbox */}
