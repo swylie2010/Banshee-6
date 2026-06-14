@@ -2050,7 +2050,233 @@ function SpreadSim({ candidate, spreadId, onBack }) {
 }
 
 function SpreadGrader({ tier }) {
-  return React.createElement('div', { style: { color: '#5C7A6D', fontSize: 12, padding: 20 } }, 'Grader — coming soon');
+  const { useState } = React;
+  const P = OPT_PALETTE;
+
+  const TIERS = ['starter', 'building', 'established', 'institutional'];
+
+  const [symbol, setSymbol] = useState('');
+  const [shortStrike, setShortStrike] = useState('');
+  const [longStrike, setLongStrike] = useState('');
+  const [netCredit, setNetCredit] = useState('');
+  const [expiration, setExpiration] = useState('');
+  const [capitalTier, setCapitalTier] = useState(tier || 'starter');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const inputStyle = {
+    background: P.bg3,
+    border: '1px solid ' + P.line,
+    color: P.ink,
+    borderRadius: 6,
+    padding: '6px 10px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    fontFamily: 'JetBrains Mono, monospace',
+    fontSize: 12,
+  };
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    color: P.ink4,
+    marginBottom: 4,
+    fontFamily: 'JetBrains Mono, monospace',
+  };
+
+  const handleGrade = async () => {
+    setError(null);
+    if (!symbol || !shortStrike || !longStrike || !netCredit || !expiration || !capitalTier) {
+      setError('All fields are required.');
+      return;
+    }
+    const ss = parseFloat(shortStrike);
+    const ls = parseFloat(longStrike);
+    if (isNaN(ss) || isNaN(ls)) {
+      setError('Strike prices must be numbers.');
+      return;
+    }
+    if (ls >= ss) {
+      setError('Long strike must be below short strike.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const resp = await fetch('/options/grade-spread', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Banshee-Token': window.__BANSHEE_TOKEN || '',
+        },
+        body: JSON.stringify({
+          symbol: symbol.toUpperCase(),
+          short_strike: ss,
+          long_strike: ls,
+          net_credit: parseFloat(netCredit),
+          expiration: expiration,
+          capital_tier: capitalTier,
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(txt || resp.statusText);
+      }
+      const data = await resp.json();
+      setResults(data);
+    } catch (e) {
+      setError(e.message || 'Request failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ background: P.bg2, border: '1px solid ' + P.line, borderRadius: 12, padding: 20 }}>
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.08em', color: P.ink4, marginBottom: 16 }}>
+        GRADE A SPREAD
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={labelStyle}>UNDERLYING</label>
+          <input
+            style={inputStyle}
+            type="text"
+            value={symbol}
+            onChange={e => setSymbol(e.target.value.toUpperCase())}
+            placeholder="e.g. NVDA"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>EXPIRATION DATE</label>
+          <input
+            style={inputStyle}
+            type="date"
+            value={expiration}
+            onChange={e => setExpiration(e.target.value)}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>SHORT PUT STRIKE</label>
+          <input
+            style={inputStyle}
+            type="number"
+            value={shortStrike}
+            onChange={e => setShortStrike(e.target.value)}
+            placeholder="e.g. 800"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>LONG PUT STRIKE (below short)</label>
+          <input
+            style={inputStyle}
+            type="number"
+            value={longStrike}
+            onChange={e => setLongStrike(e.target.value)}
+            placeholder="e.g. 795"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>NET CREDIT / SHARE ($)</label>
+          <input
+            style={inputStyle}
+            type="number"
+            step="0.01"
+            value={netCredit}
+            onChange={e => setNetCredit(e.target.value)}
+            placeholder="e.g. 1.50"
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>CAPITAL TIER</label>
+          <select
+            style={Object.assign({}, inputStyle, { cursor: 'pointer' })}
+            value={capitalTier}
+            onChange={e => setCapitalTier(e.target.value)}
+          >
+            {TIERS.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <button
+        onClick={handleGrade}
+        disabled={loading}
+        style={{
+          background: loading ? P.ink4 : P.mint,
+          border: 'none',
+          color: '#fff',
+          borderRadius: 6,
+          padding: '8px 20px',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 11,
+          letterSpacing: '0.1em',
+          cursor: loading ? 'default' : 'pointer',
+          marginBottom: 16,
+        }}
+      >
+        {loading ? 'GRADING...' : 'GRADE SPREAD'}
+      </button>
+
+      {error && (
+        <div style={{ color: '#D94A4A', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
+
+      {results && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {results.map((r, i) => (
+            <div key={i} style={{
+              background: P.card,
+              border: '1px solid ' + P.line,
+              borderRadius: 8,
+              padding: '8px 12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 13,
+                  color: r.passed ? P.mint : '#D94A4A',
+                  fontWeight: 700,
+                }}>
+                  {r.passed ? '✓' : '✗'}
+                </span>
+                <span style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 12,
+                  color: P.ink,
+                }}>
+                  {r.rule}
+                </span>
+              </div>
+              {!r.passed && r.reason && (
+                <div style={{
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: 10,
+                  color: P.ink4,
+                  marginTop: 4,
+                  paddingLeft: 21,
+                }}>
+                  {r.reason}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!results && !loading && !error && (
+        <div style={{ color: P.ink4, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>
+          Fill in the fields above and click GRADE SPREAD to see results.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SpreadTrack({ tier }) {
