@@ -544,7 +544,6 @@ def find_spread_candidate(universe_data: list, capital_tier: str = "starter") ->
                         "Approved underlying",
                         "No earnings within 14 days",
                         "IVR > 35",
-                        "Short delta 15–30",
                         "DTE 30–45",
                         "Open interest > 500 (both legs)",
                         "BPR < 5% of account",
