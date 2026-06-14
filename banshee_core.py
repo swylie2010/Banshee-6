@@ -46,7 +46,7 @@ from routes.analysis import (
     _resolve_one, _norm_symbol, _live_price,
 )
 from routes.portfolio import router as _portfolio_router
-from routes.options import router as _options_router, load_paper_wheels, save_paper_wheels
+from routes.options import router as _options_router
 
 # resolve_symbol defined here (not imported) so tests can monkeypatch bc._live_price
 def resolve_symbol(sym: str):
@@ -75,7 +75,7 @@ _BANSHEE_TOKEN: str = ""
 class _TokenGate(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
-        if path not in {"/health", "/auth/token"} and not path.startswith("/ui"):
+        if path not in {"/health", "/auth/token", "/favicon.ico"} and not path.startswith("/ui"):
             if request.headers.get("x-banshee-token") != _BANSHEE_TOKEN:
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
