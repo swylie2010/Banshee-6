@@ -648,12 +648,12 @@ def grade_spread(spec: dict, market_ctx: dict) -> list:
             "key": "size",
             "label": "BPR < 5% of Account",
             "passed": (bpr is not None and bpr <= max_bpr) if bpr is not None else None,
-            "reason": f"BPR ${bpr:.0f} vs ${max_bpr:.0f} max — one trade should never risk a meaningful slice of the account.",
+            "reason": f"BPR {'n/a' if bpr is None else f'${bpr:.0f}'} vs ${max_bpr:.0f} max — one trade should never risk a meaningful slice of the account.",
         },
         {
             "key": "width",
             "label": "Strike Width $2–$10",
-            "passed": (2.0 <= width <= 10.0) if width else None,
+            "passed": (2.0 <= width <= 10.0) if (width is not None and width > 0) else (False if width is not None else None),
             "reason": f"Width ${width:.0f} — narrower than $2 gives insufficient buffer; wider than $10 ties up excess capital for the return.",
         },
     ]
