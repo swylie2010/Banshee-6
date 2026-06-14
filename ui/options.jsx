@@ -1706,8 +1706,347 @@ function SpreadUniverseManager({ universe, onUniverse }) {
   );
 }
 
-function SpreadSim({ tier, initialCandidate }) {
-  return React.createElement('div', { style: { color: '#5C7A6D', fontSize: 12, padding: 20 } }, 'Sim — coming soon');
+function SpreadSim({ candidate, spreadId, onBack }) {
+  const { useState, useEffect } = React;
+  const P = OPT_PALETTE;
+
+  const SELL_COLOR = '#E05252';
+  const AT_RISK_COLOR = '#E07A2A';
+
+  const STATUS_COLORS = {
+    SPREAD_OPEN: P.mint,
+    AT_RISK: AT_RISK_COLOR,
+    EXPIRED: '#5B9BD5',
+    CLOSED: P.ink4,
+    IDLE: P.ink4,
+  };
+
+  function daysUntil(isoDate) {
+    if (!isoDate) return null;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var exp = new Date(isoDate); exp.setHours(0,0,0,0);
+    return Math.round((exp - today) / 86400000);
+  }
+
+  const [state, setState] = useState(null);
+  const [activeSpreadId, setActiveSpreadId] = useState(spreadId || null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [priceInput, setPriceInput] = useState('');
+  const [closeInput, setCloseInput] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState(null);
+
+  const TOKEN_HEADER = { 'X-Banshee-Token': window.__BANSHEE_TOKEN || '' };
+
+  function loadSpread(id) {
+    setLoading(true);
+    setError(null);
+    fetch('/paper-spreads/' + id, { headers: TOKEN_HEADER })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { setState(d.state); setLoading(false); })
+      .catch(function(e) { setError(e.message); setLoading(false); });
+  }
+
+  useEffect(function() {
+    if (activeSpreadId) {
+      loadSpread(activeSpreadId);
+    } else if (candidate) {
+      setLoading(true);
+      setError(null);
+      fetch('/paper-spreads', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, TOKEN_HEADER),
+        body: JSON.stringify({
+          symbol: candidate.underlying,
+          short_strike: candidate.short_strike,
+          long_strike: candidate.long_strike,
+          credit: candidate.net_credit,
+          expiration: candidate.expiration,
+        }),
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          setActiveSpreadId(d.id);
+          setState(d.state);
+          setLoading(false);
+        })
+        .catch(function(e) { setError(e.message); setLoading(false); });
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  function postEvent(eventType, data, onDone) {
+    if (!activeSpreadId) return;
+    setActionBusy(true);
+    setActionError(null);
+    fetch('/paper-spreads/' + activeSpreadId + '/event', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, TOKEN_HEADER),
+      body: JSON.stringify({ event_type: eventType, data: data }),
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        setState(d.state);
+        setActionBusy(false);
+        if (onDone) onDone();
+      })
+      .catch(function(e) { setActionError(e.message); setActionBusy(false); });
+  }
+
+  var monoFont = 'JetBrains Mono, monospace';
+  var cardStyle = { background: P.bg2, border: '1px solid ' + P.line, borderRadius: 12, padding: 20, marginBottom: 16 };
+  var labelStyle = { fontSize: 11, fontFamily: monoFont, color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 };
+
+  if (loading) return (
+    <div style={{ padding: 20, color: P.ink4, fontFamily: monoFont, fontSize: 12 }}>Opening spread...</div>
+  );
+
+  if (error) return (
+    <div style={{ padding: 20 }}>
+      {onBack && (
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          fontFamily: monoFont, fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>
+          ← BACK
+        </button>
+      )}
+      <div style={{ color: SELL_COLOR, fontSize: 12, fontFamily: monoFont }}>Error: {error}</div>
+    </div>
+  );
+
+  if (!activeSpreadId && !candidate) return (
+    <div style={{ padding: 20 }}>
+      {onBack && (
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          fontFamily: monoFont, fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>
+          ← BACK
+        </button>
+      )}
+      <div style={{ color: P.ink4, fontSize: 12, fontFamily: monoFont }}>No position selected.</div>
+    </div>
+  );
+
+  if (!state) return (
+    <div style={{ padding: 20, color: P.ink4, fontFamily: monoFont, fontSize: 12 }}>No data available.</div>
+  );
+
+  var status = state.status || 'IDLE';
+  var statusColor = STATUS_COLORS[status] || P.ink4;
+  var currentPrice = state.current_price != null ? state.current_price : null;
+  var shortStrike = state.short_strike != null ? state.short_strike : null;
+  var buffer = (currentPrice != null && shortStrike != null) ? (currentPrice - shortStrike) : null;
+  var underlying = state.symbol || (candidate ? candidate.underlying : null);
+  var expiration = state.expiration || null;
+  var dte = daysUntil(expiration);
+
+  var credit = state.credit != null ? state.credit : 0;
+  var maxProfit = credit * 100;
+  var unrealizedPnl = state.unrealized_pnl != null ? state.unrealized_pnl : null;
+  var realizedPnl = state.realized_pnl != null ? state.realized_pnl : null;
+  var isClosed = status === 'EXPIRED' || status === 'CLOSED';
+  var activePnl = isClosed ? realizedPnl : unrealizedPnl;
+  var showBar = status !== 'IDLE';
+  var pnlPositive = activePnl != null && activePnl >= 0;
+
+  var barFillPct = 0;
+  if (showBar && activePnl != null && maxProfit > 0) {
+    if (pnlPositive) {
+      barFillPct = Math.min(100, (activePnl / maxProfit) * 100);
+    } else {
+      var maxLoss = (shortStrike != null && state.long_strike != null)
+        ? (shortStrike - state.long_strike) * 100 - maxProfit
+        : maxProfit;
+      barFillPct = maxLoss > 0 ? Math.min(100, (Math.abs(activePnl) / maxLoss) * 100) : 0;
+    }
+  }
+
+  var barFillColor = pnlPositive ? P.mint : SELL_COLOR;
+
+  var pnlLabel = '';
+  if (showBar && activePnl != null) {
+    if (pnlPositive) {
+      var pct = maxProfit > 0 ? ((activePnl / maxProfit) * 100).toFixed(1) : '0.0';
+      pnlLabel = '+$' + activePnl.toFixed(2) + ' of $' + maxProfit.toFixed(2) + ' max profit (' + pct + '%)';
+    } else {
+      var maxLossAmt = (shortStrike != null && state.long_strike != null)
+        ? (shortStrike - state.long_strike) * 100 - maxProfit
+        : maxProfit;
+      var lossPct = maxLossAmt > 0 ? ((Math.abs(activePnl) / maxLossAmt) * 100).toFixed(1) : '0.0';
+      pnlLabel = '−$' + Math.abs(activePnl).toFixed(2) + ' unrealized (' + lossPct + '% of max loss)';
+    }
+  }
+
+  var isActionable = status === 'SPREAD_OPEN' || status === 'AT_RISK';
+
+  var events = state.events || [];
+  var eventsDesc = events.slice().reverse();
+
+  return (
+    <div style={{ maxWidth: 680 }}>
+      {onBack && (
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          fontFamily: monoFont, fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#FF6D00', fontWeight: 700, marginBottom: 16 }}>
+          ← BACK
+        </button>
+      )}
+
+      {/* Status + Strike Proximity */}
+      <div style={cardStyle}>
+        <div style={labelStyle}>POSITION STATUS</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+          <span style={{ background: statusColor, color: '#fff', fontFamily: monoFont, fontSize: 11,
+            fontWeight: 700, letterSpacing: '0.1em', padding: '3px 10px', borderRadius: 4 }}>
+            {status}
+          </span>
+        </div>
+        <div style={{ fontFamily: monoFont, fontSize: 12, color: P.ink, lineHeight: 1.8 }}>
+          <span>{underlying != null ? underlying : '—'}</span>
+          {' '}
+          <span style={{ fontWeight: 700 }}>{currentPrice != null ? '$' + currentPrice.toFixed(2) : '—'}</span>
+          {' — Short strike '}
+          <span style={{ fontWeight: 700 }}>{shortStrike != null ? '$' + shortStrike.toFixed(2) : '—'}</span>
+          {' — '}
+          <span style={{ color: buffer != null && buffer >= 0 ? P.mint : SELL_COLOR, fontWeight: 700 }}>
+            {buffer != null ? buffer.toFixed(2) : '—'}
+          </span>
+          {' buffer'}
+        </div>
+      </div>
+
+      {/* P&L Bar */}
+      {showBar && (
+        <div style={cardStyle}>
+          <div style={labelStyle}>P&L</div>
+          <div style={{ fontFamily: monoFont, fontSize: 12, color: pnlPositive ? P.mint : SELL_COLOR, marginBottom: 8 }}>
+            {pnlLabel || '—'}
+          </div>
+          <div style={{ background: P.bg3, borderRadius: 4, height: 12, overflow: 'hidden' }}>
+            <div style={{ width: barFillPct + '%', height: '100%', background: barFillColor, borderRadius: 4, transition: 'width 0.3s' }} />
+          </div>
+        </div>
+      )}
+
+      {/* DTE Countdown */}
+      <div style={cardStyle}>
+        <div style={labelStyle}>EXPIRATION</div>
+        {dte === 0
+          ? <div style={{ fontFamily: monoFont, fontSize: 12, color: AT_RISK_COLOR }}>Expiration today. Broker auto-close window: ~3:15 PM ET.</div>
+          : <div style={{ fontFamily: monoFont, fontSize: 12, color: P.ink }}>
+              {dte != null ? dte + ' days remaining' : '—'}
+              {expiration ? ' (' + expiration + ')' : ''}
+            </div>
+        }
+      </div>
+
+      {/* Action Buttons */}
+      {isActionable && (
+        <div style={cardStyle}>
+          <div style={labelStyle}>ACTIONS</div>
+          {actionError && (
+            <div style={{ fontFamily: monoFont, fontSize: 11, color: SELL_COLOR, marginBottom: 10 }}>
+              {'Error: ' + actionError}
+            </div>
+          )}
+
+          {/* UPDATE PRICE */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontFamily: monoFont, color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Update current price</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="number"
+                step="0.01"
+                value={priceInput}
+                onChange={function(e) { setPriceInput(e.target.value); }}
+                placeholder="e.g. 485.50"
+                style={{ fontFamily: monoFont, fontSize: 12, padding: '5px 8px', border: '1px solid ' + P.line,
+                  background: P.wall || P.bg3, color: P.ink, width: 120 }}
+              />
+              <button
+                disabled={actionBusy || !priceInput}
+                onClick={function() {
+                  var val = parseFloat(priceInput);
+                  if (isNaN(val)) return;
+                  postEvent('PRICE_UPDATE', { current_underlying_price: val }, function() { setPriceInput(''); });
+                }}
+                style={{ padding: '5px 14px', background: P.mint, color: '#fff', border: 'none', cursor: 'pointer',
+                  fontFamily: monoFont, fontSize: 11, opacity: (actionBusy || !priceInput) ? 0.5 : 1 }}>
+                UPDATE
+              </button>
+            </div>
+          </div>
+
+          {/* EXPIRE WORTHLESS */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontFamily: monoFont, color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Expired worthless</div>
+            <button
+              disabled={actionBusy}
+              onClick={function() { postEvent('EXPIRE_WORTHLESS', {}); }}
+              style={{ padding: '5px 14px', background: P.bg3, color: P.ink, border: '1px solid ' + P.line, cursor: 'pointer',
+                fontFamily: monoFont, fontSize: 11, opacity: actionBusy ? 0.5 : 1 }}>
+              EXPIRED WORTHLESS
+            </button>
+          </div>
+
+          {/* CLOSE SPREAD */}
+          <div>
+            <div style={{ fontSize: 11, fontFamily: monoFont, color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Close spread (cost to buy back)</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="number"
+                step="0.01"
+                value={closeInput}
+                onChange={function(e) { setCloseInput(e.target.value); }}
+                placeholder="e.g. 0.15"
+                style={{ fontFamily: monoFont, fontSize: 12, padding: '5px 8px', border: '1px solid ' + P.line,
+                  background: P.wall || P.bg3, color: P.ink, width: 120 }}
+              />
+              <button
+                disabled={actionBusy || !closeInput}
+                onClick={function() {
+                  var closeCost = parseFloat(closeInput);
+                  if (isNaN(closeCost)) return;
+                  postEvent('CLOSE_SPREAD', { close_cost: closeCost, realized_pnl: (credit - closeCost) * 100 }, function() { setCloseInput(''); });
+                }}
+                style={{ padding: '5px 14px', background: P.bg3, color: P.ink, border: '1px solid ' + P.line, cursor: 'pointer',
+                  fontFamily: monoFont, fontSize: 11, opacity: (actionBusy || !closeInput) ? 0.5 : 1 }}>
+                CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Log */}
+      <div style={cardStyle}>
+        <div style={labelStyle}>EVENT LOG</div>
+        {eventsDesc.length === 0
+          ? <div style={{ fontFamily: monoFont, fontSize: 12, color: P.ink4 }}>No events yet.</div>
+          : eventsDesc.map(function(ev, i) {
+              var dataStr = ev.data && Object.keys(ev.data).length > 0
+                ? Object.entries(ev.data).map(function(pair) { return pair[0] + ': ' + pair[1]; }).join(' | ')
+                : '';
+              return (
+                <div key={i} style={{ borderBottom: i < eventsDesc.length - 1 ? '1px solid ' + P.line : 'none',
+                  padding: '8px 0', display: 'flex', gap: 12 }}>
+                  <span style={{ fontFamily: monoFont, fontSize: 11, color: P.ink4, flexShrink: 0 }}>
+                    {ev.timestamp ? ev.timestamp.slice(0, 19).replace('T', ' ') : '—'}
+                  </span>
+                  <span style={{ fontFamily: monoFont, fontSize: 11, color: P.mint, fontWeight: 700, flexShrink: 0 }}>
+                    {ev.event_type}
+                  </span>
+                  {dataStr && (
+                    <span style={{ fontFamily: monoFont, fontSize: 11, color: P.ink }}>
+                      {dataStr}
+                    </span>
+                  )}
+                </div>
+              );
+            })
+        }
+      </div>
+    </div>
+  );
 }
 
 function SpreadGrader({ tier }) {
@@ -1747,7 +2086,7 @@ function SpreadTrack({ tier }) {
           <SpreadUniverseManager universe={universe} onUniverse={handleUniverse} />
         </div>
       )}
-      {view === 'sim' && <SpreadSim tier={tier} initialCandidate={simCandidate} />}
+      {view === 'sim' && <SpreadSim candidate={simCandidate} spreadId={null} onBack={() => setView('calm')} />}
       {view === 'grader' && <SpreadGrader tier={tier} />}
     </div>
   );
