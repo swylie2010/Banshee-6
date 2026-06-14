@@ -1593,8 +1593,164 @@ function TrackForkCards({ tier, activeTrack, onTrack }) {
   );
 }
 
+function SpreadCalmRoom({ tier, universe, onOpenSim }) {
+  const { useState, useEffect } = React;
+  const P = OPT_PALETTE;
+  const [candidate, setCandidate] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    const uParam = universe.length ? '&universe=' + encodeURIComponent(universe.join(',')) : '';
+    fetch(`/options/spread-candidate?tier=${tier}${uParam}`, {
+      headers: { 'X-Banshee-Token': window.__BANSHEE_TOKEN || '' }
+    })
+      .then(r => r.json())
+      .then(d => { setCandidate(d.candidate || null); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [tier, universe.join(',')]);
+
+  if (loading) return React.createElement('div', { style: { color: P.ink3, fontSize: 12, padding: 20 } }, 'Scanning universe...');
+  if (error) return React.createElement('div', { style: { color: '#ef4444', fontSize: 12, padding: 20 } }, 'Error: ' + error);
+
+  if (!candidate) return (
+    <div style={{ padding: '20px 0', color: P.ink3, fontSize: 12, lineHeight: 1.6 }}>
+      <div style={{ marginBottom: 8, fontFamily: 'JetBrains Mono, monospace', color: P.ink }}>Nothing in your universe passes all filters today.</div>
+      <div>If there is a specific asset you want to investigate, add it to your universe and take it to the Grader — it will show you exactly where it stands.</div>
+    </div>
+  );
+
+  const c = candidate;
+  const cspCollateral = c.short_strike * 100;
+  const rows = [
+    ['Strategy', 'Bull Put Spread — ' + c.underlying + ' ' + c.expiration],
+    ['Short Strike', '$' + c.short_strike.toFixed(2)],
+    ['Long Strike', '$' + c.long_strike.toFixed(2)],
+    ['Width', '$' + (c.short_strike - c.long_strike).toFixed(2)],
+    ['Net Credit', '$' + c.net_credit.toFixed(2) + ' / share ($' + (c.net_credit * 100).toFixed(0) + ' total)'],
+    ['BPR (Max Loss)', '$' + c.bpr.toFixed(0)],
+    ['ROC', (c.roc * 100).toFixed(1) + '%'],
+    ['Breakeven', '$' + c.breakeven.toFixed(2)],
+    ['DTE', c.dte + ' days'],
+    ['IVR', c.ivr.toFixed(0)],
+  ];
+
+  return (
+    <div style={{ background: P.card, border: '1px solid ' + P.line, padding: 16, borderRadius: 2 }}>
+      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>TODAY'S CANDIDATE</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', marginBottom: 16 }}>
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid ' + P.wall, padding: '4px 0' }}>
+            <span style={{ fontSize: 11, color: P.ink3, fontFamily: 'JetBrains Mono, monospace' }}>{k}</span>
+            <span style={{ fontSize: 11, color: P.ink, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{v}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ background: P.mintSoft, border: '1px solid ' + P.mint, padding: '8px 12px', fontSize: 11, color: P.mintDeep, marginBottom: 16, lineHeight: 1.5 }}>
+        This ties up <strong>${c.bpr.toFixed(0)}</strong>. A cash-secured put on {c.underlying} at the same strike would tie up <strong>${cspCollateral.toLocaleString()}</strong>.
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: P.ink4, fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', marginBottom: 6 }}>RULES PASSED</div>
+        {(c.rules_passed || []).map(r => (
+          <div key={r} style={{ fontSize: 11, color: P.mint, marginBottom: 2 }}>{'✓ ' + r}</div>
+        ))}
+      </div>
+      <button onClick={() => onOpenSim(c)}
+        style={{ padding: '8px 16px', background: P.mint, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+        OPEN IN SIM →
+      </button>
+    </div>
+  );
+}
+
+function SpreadUniverseManager({ universe, onUniverse }) {
+  const [input, setInput] = React.useState('');
+  const P = OPT_PALETTE;
+
+  const add = () => {
+    const t = input.trim().toUpperCase();
+    if (t && !universe.includes(t)) {
+      onUniverse([...universe, t]);
+    }
+    setInput('');
+  };
+
+  const remove = (t) => onUniverse(universe.filter(x => x !== t));
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: P.ink4, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+        YOUR SPREAD UNIVERSE
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+        {universe.map(t => (
+          <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 4, background: P.bg2, border: '1px solid ' + P.line, padding: '3px 8px', borderRadius: 2 }}>
+            <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: P.ink }}>{t}</span>
+            <span onClick={() => remove(t)} style={{ cursor: 'pointer', color: P.ink4, fontSize: 13, lineHeight: 1 }}>×</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input value={input} onChange={e => setInput(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder="TICKER"
+          style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, padding: '5px 8px', border: '1px solid ' + P.line, background: P.wall, color: P.ink, width: 90 }} />
+        <button onClick={add}
+          style={{ padding: '5px 12px', background: P.mint, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+          ADD
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SpreadSim({ tier, initialCandidate }) {
+  return React.createElement('div', { style: { color: '#5C7A6D', fontSize: 12, padding: 20 } }, 'Sim — coming soon');
+}
+
+function SpreadGrader({ tier }) {
+  return React.createElement('div', { style: { color: '#5C7A6D', fontSize: 12, padding: 20 } }, 'Grader — coming soon');
+}
+
 function SpreadTrack({ tier }) {
-  return React.createElement('div', { style: { color: '#5C7A6D', fontSize: 12, padding: 20 } }, 'Credit Spreads — coming in next tasks');
+  const { useState } = React;
+  const P = OPT_PALETTE;
+  const [universe, setUniverse] = useState(
+    () => JSON.parse(localStorage.getItem('banshee_spread_universe') || '[]')
+  );
+  const [simCandidate, setSimCandidate] = useState(null);
+  const [view, setView] = useState('calm');
+
+  const handleUniverse = (u) => {
+    setUniverse(u);
+    localStorage.setItem('banshee_spread_universe', JSON.stringify(u));
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, borderBottom: '1px solid ' + P.line, paddingBottom: 12 }}>
+        {[['calm', 'CALM ROOM'], ['sim', 'SIM'], ['grader', 'GRADER']].map(([k, label]) => (
+          <button key={k} onClick={() => setView(k)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: '0.08em',
+              color: view === k ? P.mint : P.ink4,
+              borderBottom: view === k ? '2px solid ' + P.mint : '2px solid transparent' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'calm' && (
+        <div>
+          <SpreadCalmRoom tier={tier} universe={universe} onOpenSim={c => { setSimCandidate(c); setView('sim'); }} />
+          <SpreadUniverseManager universe={universe} onUniverse={handleUniverse} />
+        </div>
+      )}
+      {view === 'sim' && <SpreadSim tier={tier} initialCandidate={simCandidate} />}
+      {view === 'grader' && <SpreadGrader tier={tier} />}
+    </div>
+  );
 }
 
 function OptionsPage({ onBack }) {
