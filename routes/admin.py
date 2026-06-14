@@ -1,10 +1,11 @@
 """routes/admin.py — settings, predator, AI briefing, presets, system."""
 
 import json
+from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, model_validator
 
 import banshee_ai
 import micro_engine
@@ -29,6 +30,23 @@ router = APIRouter()
 
 class SettingsBody(BaseModel):
     settings: dict
+
+
+class SettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def mask_sensitive(cls, data: dict) -> dict:
+        def _mask_val(key: str, val: Any) -> Any:
+            if isinstance(val, str) and any(t in key.lower() for t in ("key", "secret", "token")):
+                return ("•••••" + val[-4:]) if len(val) > 4 else "•••••"
+            return val
+        return {
+            section: {k: _mask_val(k, v) for k, v in fields.items()}
+            if isinstance(fields, dict) else fields
+            for section, fields in data.items()
+        }
 
 
 class PredatorConfigBody(BaseModel):
@@ -102,19 +120,9 @@ def health():
 # SETTINGS — read/write ~/.banshee_keys.json
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/settings")
+@router.get("/settings", response_model=SettingsResponse)
 def route_settings_get():
-    providers = load_providers()
-    masked = {}
-    for section, val in providers.items():
-        if isinstance(val, dict):
-            masked[section] = {
-                k: (_mask(v) if k in ("key", "secret") else v)
-                for k, v in val.items()
-            }
-        else:
-            masked[section] = val
-    return JSONResponse(content=masked)
+    return load_providers()
 
 
 @router.post("/settings")
