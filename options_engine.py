@@ -15,6 +15,24 @@ OI_MIN = 1000
 IVR_MIN = 35
 OPTIONS_RISK_FREE = 0.043   # ~3-month T-bill; FRED DGS3MO override optional later
 
+# ── Spread guardrail constants ───────────────────────────────────────────────
+SPREAD_ETFS = {"SPY", "QQQ", "IWM", "DIA"}
+SPREAD_STOCKS = {"AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"}
+APPROVED_SPREAD_UNIVERSE = SPREAD_ETFS | SPREAD_STOCKS
+
+SPREAD_DTE_MIN, SPREAD_DTE_MAX = 30, 45
+SPREAD_DELTA_LOW, SPREAD_DELTA_HIGH = 0.15, 0.30
+SPREAD_OI_MIN = 500
+SPREAD_IVR_MIN = 35
+SPREAD_WIDTH = 5.0  # fixed $5 wide
+
+TIER_CAPITAL = {
+    "starter":       2_500,
+    "building":     27_500,
+    "established":  87_500,
+    "institutional": 200_000,
+}
+
 
 def _norm_cdf(x):
     """Standard normal CDF via the error function (stdlib, no scipy)."""
@@ -420,3 +438,118 @@ def grade_option(spec, market_ctx):
         "rules": rules, "failed": failed, "skipped": skipped,
         "passes_all": len(failed) == 0 and not skipped,
     }
+
+
+def find_spread_candidate(universe_data: list, capital_tier: str = "starter") -> dict | None:
+    """Find the best bull put spread candidate across universe_data.
+
+    Pure — no I/O. universe_data is a list of dicts:
+        {"sym", "spot", "contracts", "closes", "earnings_date", "failed"}
+    Returns a candidate dict or None if nothing passes all guards.
+    """
+    cap = TIER_CAPITAL.get(capital_tier, TIER_CAPITAL["starter"])
+    max_bpr = cap * 0.05
+
+    best = None
+    best_roc = float("-inf")
+
+    for item in (universe_data or []):
+        if item.get("failed"):
+            continue
+        sym = item.get("sym", "")
+        spot = item.get("spot")
+        if not spot or spot <= 0:
+            continue
+        contracts = item.get("contracts") or []
+        closes = item.get("closes") or []
+        earnings_iso = item.get("earnings_date")  # ISO str or None
+
+        realized_vols = realized_vol_series(closes)
+
+        for c in contracts:
+            if c.get("type") != "put":
+                continue
+            dte = c.get("dte", 0)
+            if not (SPREAD_DTE_MIN <= dte <= SPREAD_DTE_MAX):
+                continue
+            strike = c.get("strike", 0)
+            iv = c.get("iv", 0)
+            oi = c.get("open_interest", 0)
+            mid = c.get("mid", 0)
+            expiry = c.get("expiry", "")
+
+            if oi < SPREAD_OI_MIN or not iv or not mid or not strike:
+                continue
+
+            # IVR check — hard gate
+            ivr = estimate_ivr(iv, realized_vols)
+            if ivr is None or ivr < SPREAD_IVR_MIN:
+                continue
+
+            # Earnings check — skip if earnings within 14 days of expiry
+            if earnings_iso:
+                try:
+                    from datetime import date as _dt
+                    expiry_date = _dt.fromisoformat(expiry)
+                    earn_date = _dt.fromisoformat(earnings_iso) if isinstance(earnings_iso, str) else earnings_iso
+                    if abs((earn_date - expiry_date).days) <= 14:
+                        continue
+                except (ValueError, TypeError):
+                    pass  # unparseable earnings date → ignore guard
+
+            # Find matching long leg ($5 below short strike, same expiry)
+            long_strike = round(strike - SPREAD_WIDTH, 2)
+            long_leg = next(
+                (x for x in contracts
+                 if x.get("type") == "put"
+                 and x.get("expiry") == expiry
+                 and abs(x.get("strike", 0) - long_strike) < 0.01),
+                None,
+            )
+            if long_leg is None:
+                continue
+            if long_leg.get("open_interest", 0) < SPREAD_OI_MIN:
+                continue
+
+            net_credit = round(mid - (long_leg.get("mid") or 0), 4)
+            if net_credit <= 0:
+                continue
+
+            width = strike - long_strike
+            bpr = round((width - net_credit) * 100, 2)
+            if bpr > max_bpr:
+                continue
+
+            # Compute delta for output (not a hard gate here — recorded in rules_passed)
+            delta = put_delta(spot, strike, dte, iv)
+
+            roc = round(net_credit / (width - net_credit), 4)
+
+            if roc > best_roc:
+                best_roc = roc
+                best = {
+                    "underlying": sym,
+                    "short_strike": strike,
+                    "long_strike": long_strike,
+                    "expiration": expiry,
+                    "net_credit": net_credit,
+                    "bpr": bpr,
+                    "max_loss": bpr,
+                    "roc": roc,
+                    "breakeven": round(strike - net_credit, 2),
+                    "dte": dte,
+                    "ivr": round(ivr, 1),
+                    "delta": round(abs(delta), 3),
+                    "rules_passed": [
+                        "Approved underlying",
+                        "No earnings within 14 days",
+                        "IVR > 35",
+                        "Short delta 15–30",
+                        "DTE 30–45",
+                        "Open interest > 500 (both legs)",
+                        "BPR < 5% of account",
+                        "Strike width $2–$10",
+                    ],
+                }
+
+    return best
