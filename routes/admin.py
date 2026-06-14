@@ -70,12 +70,6 @@ class AIBriefingRequest(BaseModel):
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _mask(v: str) -> str:
-    if isinstance(v, str) and len(v) > 4:
-        return "•••••" + v[-4:]
-    return v
-
-
 def _build_news_context():
     """Returns (mac_data, news_lines, events) with predator injection. Used by multiple AI briefing paths."""
     from routes.macro import get_sensors as _get_sensors

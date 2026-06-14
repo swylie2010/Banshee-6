@@ -24,3 +24,9 @@ def test_short_key_still_masked():
     data = {"AI_API": {"key": "abc"}}
     result = SettingsResponse.model_validate(data)
     assert result.model_dump()["AI_API"]["key"] == "•••••"
+
+
+def test_scalar_section_passes_through():
+    data = {"SOME_FLAG": True, "AI_API": {"key": "abcdefghijklmnop"}}
+    result = SettingsResponse.model_validate(data)
+    assert result.model_dump()["SOME_FLAG"] is True
