@@ -108,3 +108,62 @@ def test_approved_spread_universe_contains_etfs_and_stocks():
     assert "SPY" in APPROVED_SPREAD_UNIVERSE
     assert "NVDA" in APPROVED_SPREAD_UNIVERSE
     assert "FAKE" not in APPROVED_SPREAD_UNIVERSE
+
+
+# ── grade_spread tests ────────────────────────────────────────────────────────
+
+from options_engine import grade_spread
+
+def _spec(underlying="SPY", short_strike=500.0, long_strike=495.0,
+          net_credit=1.50, dte=38, tier="building"):
+    expiration = (date.today() + timedelta(days=dte)).isoformat()
+    return {"underlying": underlying, "short_strike": short_strike,
+            "long_strike": long_strike, "net_credit": net_credit,
+            "expiration": expiration, "tier": tier}
+
+def _ctx(spot=510.0, ivr=45.0, short_delta=0.25, short_oi=800,
+         long_oi=700, earnings_date=None):
+    return {"spot": spot, "ivr": ivr, "short_delta": short_delta,
+            "short_oi": short_oi, "long_oi": long_oi,
+            "earnings_date": earnings_date}
+
+def test_grade_spread_returns_8_rules():
+    rules = grade_spread(_spec(), _ctx())
+    assert len(rules) == 8
+
+def test_grade_spread_all_pass_on_clean_input():
+    rules = grade_spread(_spec(), _ctx())
+    assert all(r["passed"] for r in rules)
+
+def test_grade_spread_fails_unapproved_underlying():
+    rules = grade_spread(_spec(underlying="FAKE"), _ctx())
+    underlying_rule = next(r for r in rules if r["key"] == "underlying")
+    assert underlying_rule["passed"] is False
+
+def test_grade_spread_fails_earnings_within_14_days():
+    expiry = (date.today() + timedelta(days=38)).isoformat()
+    earn = (date.today() + timedelta(days=30)).isoformat()
+    spec = _spec()
+    spec["expiration"] = expiry
+    rules = grade_spread(spec, _ctx(earnings_date=earn))
+    earn_rule = next(r for r in rules if r["key"] == "earnings")
+    assert earn_rule["passed"] is False
+
+def test_grade_spread_fails_bpr_exceeds_5pct():
+    # building tier = $27,500 → max BPR = $1,375
+    # $50 wide, $0.10 credit → BPR = (50 - 0.10) * 100 = $4,990 > $1,375
+    # Force by using tiny credit on $50-wide spread
+    spec = _spec(short_strike=550.0, long_strike=500.0, net_credit=0.10, tier="starter")
+    # starter = $2,500 → max BPR = $125
+    # BPR = (50 - 0.10) * 100 = $4,990 > $125
+    rules = grade_spread(spec, _ctx())
+    size_rule = next(r for r in rules if r["key"] == "size")
+    assert size_rule["passed"] is False
+
+def test_grade_spread_rule_structure():
+    rules = grade_spread(_spec(), _ctx())
+    for r in rules:
+        assert "key" in r
+        assert "label" in r
+        assert "passed" in r
+        assert "reason" in r

@@ -554,3 +554,108 @@ def find_spread_candidate(universe_data: list, capital_tier: str = "starter") ->
                 }
 
     return best
+
+
+def grade_spread(spec: dict, market_ctx: dict) -> list:
+    """Grade a user-proposed bull put spread against 8 rules.
+
+    spec keys: underlying, short_strike, long_strike, net_credit,
+               expiration (ISO str), tier
+    market_ctx keys: spot, ivr, short_delta, short_oi, long_oi,
+                     earnings_date (ISO str or None)
+
+    Returns list of 8 rule dicts:
+        {"key", "label", "passed" (bool | None), "reason"}
+    passed=None means the rule could not be evaluated (missing data).
+    """
+    from datetime import date as _dt
+
+    underlying = (spec.get("underlying") or "").upper()
+    short_strike = spec.get("short_strike") or 0
+    long_strike = spec.get("long_strike") or 0
+    net_credit = spec.get("net_credit") or 0
+    expiration_iso = spec.get("expiration") or ""
+    tier = spec.get("tier") or "starter"
+
+    ivr = market_ctx.get("ivr")
+    short_delta = market_ctx.get("short_delta")
+    short_oi = market_ctx.get("short_oi")
+    long_oi = market_ctx.get("long_oi")
+    earnings_iso = market_ctx.get("earnings_date")
+
+    # Compute derived values
+    width = round(short_strike - long_strike, 2)
+    bpr = round((width - net_credit) * 100, 2) if width > net_credit else None
+    cap = TIER_CAPITAL.get(tier, TIER_CAPITAL["starter"])
+    max_bpr = cap * 0.05
+
+    try:
+        expiry_date = _dt.fromisoformat(expiration_iso)
+        dte = (expiry_date - _dt.today()).days
+    except (ValueError, TypeError):
+        expiry_date = None
+        dte = None
+
+    # Earnings proximity
+    earnings_too_close = None
+    if earnings_iso and expiry_date:
+        try:
+            earn_date = _dt.fromisoformat(earnings_iso) if isinstance(earnings_iso, str) else earnings_iso
+            earnings_too_close = abs((earn_date - expiry_date).days) <= 14
+        except (ValueError, TypeError):
+            pass
+
+    rules = [
+        {
+            "key": "underlying",
+            "label": "Approved Underlying",
+            "passed": underlying in APPROVED_SPREAD_UNIVERSE,
+            "reason": "Illiquid chains have wide bid-ask spreads that erode your collected credit.",
+        },
+        {
+            "key": "earnings",
+            "label": "No Earnings Within 14 Days",
+            "passed": (not earnings_too_close) if earnings_too_close is not None else True,
+            "reason": "Earnings gaps can breach both strikes simultaneously — max loss becomes unavoidable.",
+        },
+        {
+            "key": "ivr",
+            "label": "IVR (Implied Volatility Rank) > 35",
+            "passed": (ivr >= SPREAD_IVR_MIN) if ivr is not None else None,
+            "reason": f"IVR {round(ivr, 1) if ivr else 'n/a'} — low IVR means cheap premium. You collect less for the same defined risk.",
+        },
+        {
+            "key": "delta",
+            "label": "Short Delta 15–30",
+            "passed": (SPREAD_DELTA_LOW <= abs(short_delta) <= SPREAD_DELTA_HIGH) if short_delta is not None else None,
+            "reason": "Above 30: too much directional exposure. Below 15: premium too thin to justify the trade.",
+        },
+        {
+            "key": "dte",
+            "label": "DTE (Days to Expiration) 30–45",
+            "passed": (SPREAD_DTE_MIN <= dte <= SPREAD_DTE_MAX) if dte is not None else None,
+            "reason": f"DTE {dte if dte is not None else 'n/a'} — theta decay works optimally in this window. Outside it, the spread's structural advantage erodes.",
+        },
+        {
+            "key": "oi",
+            "label": "Open Interest > 500 (Both Legs)",
+            "passed": (
+                (short_oi or 0) >= SPREAD_OI_MIN and (long_oi or 0) >= SPREAD_OI_MIN
+            ) if (short_oi is not None and long_oi is not None) else None,
+            "reason": "Low OI means wide bid-ask spreads at close — you give back profit on the exit.",
+        },
+        {
+            "key": "size",
+            "label": "BPR < 5% of Account",
+            "passed": (bpr is not None and bpr <= max_bpr) if bpr is not None else None,
+            "reason": f"BPR ${bpr:.0f} vs ${max_bpr:.0f} max — one trade should never risk a meaningful slice of the account.",
+        },
+        {
+            "key": "width",
+            "label": "Strike Width $2–$10",
+            "passed": (2.0 <= width <= 10.0) if width else None,
+            "reason": f"Width ${width:.0f} — narrower than $2 gives insufficient buffer; wider than $10 ties up excess capital for the return.",
+        },
+    ]
+
+    return rules
