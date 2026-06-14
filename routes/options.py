@@ -18,6 +18,7 @@ import banshee_ai
 router = APIRouter()
 
 _PAPER_WHEELS_LOCK = threading.Lock()
+_PAPER_SPREADS_LOCK = threading.Lock()
 
 # ── Simulated Wheel helpers (private) ─────────────────────────────────────────
 
@@ -99,6 +100,36 @@ def _paper_wheel_view(wheel: dict) -> dict:
         "live":               wheel.get("live"),
         "last_polled":        wheel.get("last_polled"),
     })
+
+
+# ── Paper Spreads helpers ─────────────────────────────────────────────────────
+
+def _load_paper_spreads() -> dict:
+    if _PAPER_SPREADS_PATH.exists():
+        try:
+            return json.loads(_PAPER_SPREADS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"spreads": []}
+
+
+def _save_paper_spreads(data: dict) -> None:
+    with _PAPER_SPREADS_LOCK:
+        _PAPER_SPREADS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _spread_view(spread: dict) -> dict:
+    """A spread plus its replayed FSM state."""
+    state = spread_sim_engine.replay(spread.get("events", []))
+    return {
+        "id": spread["id"],
+        "name": spread.get("name", ""),
+        "underlying": spread.get("underlying", ""),
+        "created": spread.get("created", ""),
+        "candidate_snapshot": spread.get("candidate_snapshot"),
+        "events": spread.get("events", []),
+        "state": state,
+    }
 
 
 # ── Options routes (7) ────────────────────────────────────────────────────────
@@ -608,3 +639,58 @@ def route_grade_spread(body: dict = Body(...)):
             "expiration": expiration, "tier": tier}
     rules = options_engine.grade_spread(spec, market_ctx)
     return _sanitize({"rules": rules, "passes_all": all(r["passed"] for r in rules if r["passed"] is not None)})
+
+
+# ── Paper Spreads CRUD ────────────────────────────────────────────────────────
+
+@router.get("/paper-spreads")
+def route_paper_spreads_list():
+    """List all simulated spread positions with current FSM state."""
+    data = _load_paper_spreads()
+    return _sanitize({"spreads": [_spread_view(s) for s in data.get("spreads", [])]})
+
+
+@router.post("/paper-spreads")
+def route_paper_spreads_create(body: dict = Body(...)):
+    """Create a new simulated spread position."""
+    from datetime import datetime, timezone
+    data = _load_paper_spreads()
+    spread = {
+        "id": str(uuid.uuid4()),
+        "name": body.get("name") or (body.get("underlying", "") + " Spread Sim"),
+        "underlying": body.get("underlying", ""),
+        "created": datetime.now(timezone.utc).isoformat(),
+        "candidate_snapshot": body.get("candidate_snapshot"),
+        "events": [],
+    }
+    data["spreads"].append(spread)
+    _save_paper_spreads(data)
+    return _sanitize({"spread": _spread_view(spread)})
+
+
+@router.post("/paper-spreads/{spread_id}/event")
+def route_paper_spreads_event(spread_id: str, body: dict = Body(...)):
+    """Append an event to a simulated spread and return new state."""
+    from datetime import datetime, timezone
+    data = _load_paper_spreads()
+    spread = next((s for s in data.get("spreads", []) if s["id"] == spread_id), None)
+    if not spread:
+        raise HTTPException(status_code=404, detail="Spread not found")
+    event = {
+        "event_type": body.get("event_type", ""),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": body.get("data", {}),
+    }
+    spread["events"].append(event)
+    _save_paper_spreads(data)
+    return _sanitize({"spread": _spread_view(spread)})
+
+
+@router.get("/paper-spreads/{spread_id}")
+def route_paper_spreads_get(spread_id: str):
+    """Get current state for a single spread position."""
+    data = _load_paper_spreads()
+    spread = next((s for s in data.get("spreads", []) if s["id"] == spread_id), None)
+    if not spread:
+        raise HTTPException(status_code=404, detail="Spread not found")
+    return _sanitize({"spread": _spread_view(spread)})
