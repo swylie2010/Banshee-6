@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Optional
 
 import banshee_ai
 import predator_engine
@@ -67,6 +68,50 @@ class JournalUpdateLevelsRequest(BaseModel):
     trade_id: int
     stop_price: float | None = None
     target_price: float | None = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Response models for wire protocol
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TradeRecord(BaseModel):
+    id: int
+    timestamp: str
+    symbol: str
+    direction: str
+    entry_price: float
+    stop_price: float
+    target_price: float
+    rr: float
+    position_usd: float
+    qty: float
+    verdict: Optional[str] = None
+    regime: Optional[str] = None
+    macro_regime: Optional[str] = None
+    edge: Optional[str] = None
+    mode: Optional[str] = None
+    risk_score: Optional[float] = None
+    alpaca_error: Optional[str] = None
+    status: str
+    order_type: str
+    exit_price: Optional[float] = None
+    exit_time: Optional[str] = None
+    pnl_pct: Optional[float] = None
+    outcome: Optional[str] = None
+    notes: str = ""
+    exit_reason: Optional[str] = None
+    signal_correct: Optional[Any] = None  # bool | "partial" | None
+    annotations: list = Field(default_factory=list)
+    # alpaca_symbol and alpaca_order_id intentionally excluded
+
+
+class TradeStats(BaseModel):
+    model_config = ConfigDict(extra="allow")  # stats shape varies (empty → {"total": 0} only)
+
+
+class JournalTradesResponse(BaseModel):
+    trades: list[TradeRecord]
+    stats: TradeStats
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -357,7 +402,7 @@ Keep your response to 400 words. Be direct. Use trade IDs and regime names to ba
 # ROUTE — Journal trades (React Trade Journal)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/journal/trades")
+@router.get("/journal/trades", response_model=JournalTradesResponse)
 def route_journal_trades():
     """Return all trades + stats for the React Trade Journal page."""
     return {
