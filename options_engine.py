@@ -457,6 +457,8 @@ def find_spread_candidate(universe_data: list, capital_tier: str = "starter") ->
         if item.get("failed"):
             continue
         sym = item.get("sym", "")
+        if sym not in APPROVED_SPREAD_UNIVERSE:
+            continue
         spot = item.get("spot")
         if not spot or spot <= 0:
             continue
@@ -517,7 +519,7 @@ def find_spread_candidate(universe_data: list, capital_tier: str = "starter") ->
 
             width = strike - long_strike
             bpr = round((width - net_credit) * 100, 2)
-            if bpr > max_bpr:
+            if bpr <= 0 or bpr > max_bpr:
                 continue
 
             # Compute delta for output (not a hard gate here — recorded in rules_passed)
@@ -539,7 +541,7 @@ def find_spread_candidate(universe_data: list, capital_tier: str = "starter") ->
                     "breakeven": round(strike - net_credit, 2),
                     "dte": dte,
                     "ivr": round(ivr, 1),
-                    "delta": round(abs(delta), 3),
+                    "delta": round(abs(delta), 3) if delta is not None else None,
                     "rules_passed": [
                         "Approved underlying",
                         "No earnings within 14 days",
