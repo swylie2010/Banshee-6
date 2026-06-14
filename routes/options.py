@@ -7,9 +7,10 @@ import uuid
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 
-from core_state import _WHEELS_PATH, _PAPER_WHEELS_PATH, _sanitize, check_ai_budget
+from core_state import _WHEELS_PATH, _PAPER_WHEELS_PATH, _PAPER_SPREADS_PATH, _sanitize, check_ai_budget
 import options_engine
 import options_data
+import spread_sim_engine
 import wheel_engine
 import alpaca_options
 import banshee_ai
@@ -508,3 +509,102 @@ def route_paper_wheels_event(wheel_id: str, body: dict = Body(...)):
             save_paper_wheels(data)
             return _paper_wheel_view(w)
     return JSONResponse(status_code=404, content={"error": "Paper wheel not found"})
+
+
+# ── Spread Calm Room route ────────────────────────────────────────────────────
+
+_SPREAD_CURATED = ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA",
+                   "AMZN", "GOOGL", "META", "TSLA"]
+
+@router.get("/options/spread-candidate")
+def route_spread_candidate(tier: str = "starter", universe: str = ""):
+    """Find the best bull put spread candidate across curated + user universe."""
+    user_tickers = [t.strip().upper() for t in universe.split(",") if t.strip()]
+    all_tickers = list(dict.fromkeys(_SPREAD_CURATED + user_tickers))
+
+    universe_data = []
+    for sym in all_tickers:
+        try:
+            contracts, meta = options_data.fetch_chain(sym)
+            closes = options_data.fetch_closes(sym)
+            earnings_raw = options_data.fetch_earnings_date(sym)
+            earnings_iso = earnings_raw.isoformat() if earnings_raw else None
+            universe_data.append({
+                "sym": sym,
+                "spot": meta.get("spot"),
+                "contracts": contracts,
+                "closes": closes,
+                "earnings_date": earnings_iso,
+                "failed": False,
+            })
+        except Exception as e:
+            print(f"[spread-candidate] fetch failed for {sym}: {e}", file=sys.stderr)
+            universe_data.append({"sym": sym, "spot": None, "contracts": [],
+                                   "closes": [], "earnings_date": None, "failed": True})
+
+    candidate = options_engine.find_spread_candidate(universe_data, tier)
+    return _sanitize({"candidate": candidate})
+
+
+# ── Spread Grader route ───────────────────────────────────────────────────────
+
+@router.post("/options/grade-spread")
+def route_grade_spread(body: dict = Body(...)):
+    """Grade a user-proposed bull put spread. Returns 8 rule results."""
+    underlying = (body.get("underlying") or "").upper()
+    short_strike = float(body.get("short_strike") or 0)
+    long_strike = float(body.get("long_strike") or 0)
+    net_credit = float(body.get("net_credit") or 0)
+    expiration = body.get("expiration") or ""
+    tier = body.get("tier") or "starter"
+
+    # Fetch market context for this underlying
+    market_ctx: dict = {"spot": None, "ivr": None, "short_delta": None,
+                        "short_oi": None, "long_oi": None, "earnings_date": None}
+    try:
+        contracts, meta = options_data.fetch_chain(underlying)
+        closes = options_data.fetch_closes(underlying)
+        spot = meta.get("spot")
+        market_ctx["spot"] = spot
+
+        realized_vols = options_engine.realized_vol_series(closes)
+
+        # Find matching short leg contract
+        short_leg = next(
+            (c for c in contracts
+             if c.get("type") == "put"
+             and abs(c.get("strike", 0) - short_strike) < 0.01
+             and c.get("expiry") == expiration),
+            None,
+        )
+        if short_leg and spot:
+            iv = short_leg.get("iv")
+            market_ctx["short_oi"] = short_leg.get("open_interest")
+            if iv:
+                market_ctx["ivr"] = options_engine.estimate_ivr(iv, realized_vols)
+                dte_val = short_leg.get("dte", 0)
+                delta = options_engine.put_delta(spot, short_strike, dte_val, iv)
+                market_ctx["short_delta"] = abs(delta) if delta is not None else None
+
+        # Long leg OI
+        long_leg = next(
+            (c for c in contracts
+             if c.get("type") == "put"
+             and abs(c.get("strike", 0) - long_strike) < 0.01
+             and c.get("expiry") == expiration),
+            None,
+        )
+        if long_leg:
+            market_ctx["long_oi"] = long_leg.get("open_interest")
+
+        earnings_raw = options_data.fetch_earnings_date(underlying)
+        market_ctx["earnings_date"] = earnings_raw.isoformat() if earnings_raw else None
+
+    except Exception as e:
+        print(f"[grade-spread] market ctx fetch failed for {underlying}: {e}", file=sys.stderr)
+
+    spec = {"underlying": underlying, "short_strike": short_strike,
+            "long_strike": long_strike, "net_credit": net_credit,
+            "expiration": expiration, "tier": tier}
+    rules = options_engine.grade_spread(spec, market_ctx)
+    return _sanitize({"rules": rules, "passes_all": all(r["passed"] for r in rules if r["passed"] is not None)})
