@@ -138,3 +138,74 @@ def test_latency_recorded_on_spot_success():
         data_providers.get_spot_price(test_sym)
     assert len(data_providers._latency["yfinance"]) == 1
     data_providers._latency["yfinance"].clear()
+
+
+# ── OHLCV chain tests ─────────────────────────────────────────────────────────
+# Same pattern as spot: use patch.dict on _OHLCV_FNS, not patch.object.
+
+import pandas as pd
+
+def _fake_ohlcv(n=10) -> pd.DataFrame:
+    """Helper: returns a minimal valid OHLCV DataFrame."""
+    return pd.DataFrame({
+        "timestamp": pd.date_range("2025-01-01", periods=n),
+        "open":  [100.0] * n,
+        "high":  [110.0] * n,
+        "low":   [90.0]  * n,
+        "close": [105.0] * n,
+        "volume":[1000.0]* n,
+    })
+
+def test_ohlcv_returns_normalized_columns():
+    """fetch_ohlcv always returns the canonical 6-column shape."""
+    import data_providers
+    with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
+        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV1", "1d", 10)
+    assert list(df.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+
+def test_ohlcv_no_timezone():
+    """Timestamps must be timezone-naive."""
+    import data_providers
+    with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
+        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV2", "1d", 10)
+    assert df["timestamp"].dt.tz is None
+
+def test_ohlcv_falls_through_on_empty():
+    """If first provider returns empty, the next is tried."""
+    import data_providers
+    with patch.dict(data_providers._OHLCV_FNS, {
+        "coinbase":  lambda *a: pd.DataFrame(),
+        "yfinance":  lambda *a: _fake_ohlcv(),
+    }):
+        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV3", "1d", 10)
+    assert not df.empty
+
+def test_ohlcv_equity_skips_coinbase():
+    """Equity OHLCV chain does not call Coinbase."""
+    import data_providers
+    coinbase_called = []
+    with patch.dict(data_providers._OHLCV_FNS, {
+        "coinbase": lambda *a: coinbase_called.append(a) or pd.DataFrame(),
+        "alpaca":   lambda *a: _fake_ohlcv(),
+    }):
+        data_providers.fetch_ohlcv("AAPL-OHLCV4", "1d", 30)
+    assert len(coinbase_called) == 0
+
+def test_ohlcv_total_failure_returns_empty_df():
+    """If all providers fail, returns empty DataFrame (never raises)."""
+    import data_providers
+    with patch.dict(data_providers._OHLCV_FNS, {
+        "coinbase":  lambda *a: pd.DataFrame(),
+        "yfinance":  lambda *a: pd.DataFrame(),
+    }):
+        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV5", "1d", 10)
+    assert df.empty
+
+def test_ohlcv_latency_recorded_on_success():
+    """Successful OHLCV fetch records latency for the winning provider."""
+    import data_providers
+    data_providers._latency["coinbase"].clear()
+    with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
+        data_providers.fetch_ohlcv("BTC/USD-OHLCV6", "1d", 10)
+    assert len(data_providers._latency["coinbase"]) == 1
+    data_providers._latency["coinbase"].clear()

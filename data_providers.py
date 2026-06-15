@@ -212,10 +212,151 @@ def get_spot_price(symbol: str) -> float | None:
     return None
 
 
-# ── OHLCV stub (replaced in Task 3) ──────────────────────────────────────────
+# ── OHLCV adapters ─────────────────────────────────────────────────────────────
+
+def _coinbase_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    """Crypto OHLCV from Coinbase via ccxt. Resamples 4H and 1W from shorter bars."""
+    try:
+        import ccxt
+        resample_map = {"4h": ("2h", 2, "4h"), "1wk": ("1d", 7, "1W")}
+        if timeframe in resample_map:
+            fetch_tf, mult, resample_rule = resample_map[timeframe]
+            fetch_limit = (limit + 50) * mult
+        else:
+            fetch_tf, fetch_limit, resample_rule = timeframe, limit + 50, None
+        ex = ccxt.coinbase({"enableRateLimit": True})
+        ohlcv = ex.fetch_ohlcv(symbol, fetch_tf, limit=fetch_limit)
+        if not ohlcv:
+            return pd.DataFrame()
+        df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df = df.sort_values("timestamp").drop_duplicates("timestamp").reset_index(drop=True)
+        if resample_rule:
+            df = (
+                df.set_index("timestamp")
+                .resample(resample_rule)
+                .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                .dropna()
+                .reset_index()
+            )
+        for col in ("open", "high", "low", "close", "volume"):
+            df[col] = df[col].astype(float)
+        return df[["timestamp", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+def _alpaca_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    """Equity OHLCV from Alpaca Markets REST API."""
+    try:
+        import requests
+        from datetime import datetime, timedelta
+        keys = _load_keys()
+        ak = keys.get("ALPACA_KEY", {}).get("key", "")
+        sk = keys.get("ALPACA_SECRET", {}).get("key", "")
+        if not ak or not sk:
+            return pd.DataFrame()
+        tf_map = {"1h": "1Hour", "4h": "4Hour", "1d": "1Day", "1wk": "1Week"}
+        alpaca_tf = tf_map.get(timeframe)
+        if not alpaca_tf:
+            return pd.DataFrame()
+        start = (datetime.utcnow() - timedelta(days=limit + 60)).strftime("%Y-%m-%d")
+        r = requests.get(
+            f"https://data.alpaca.markets/v2/stocks/{symbol}/bars",
+            headers={"APCA-API-KEY-ID": ak, "APCA-API-SECRET-KEY": sk},
+            params={"timeframe": alpaca_tf, "start": start, "limit": limit, "adjustment": "raw"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        bars = r.json().get("bars", [])
+        if not bars:
+            return pd.DataFrame()
+        df = pd.DataFrame(bars).rename(
+            columns={"t": "timestamp", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}
+        )
+        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_localize(None)
+        for col in ("open", "high", "low", "close", "volume"):
+            df[col] = df[col].astype(float)
+        return df[["timestamp", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+def _yfinance_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    """Universal OHLCV fallback via yfinance."""
+    try:
+        import yfinance as yf
+        yf_intervals = {
+            "1wk": ("1wk", "10y"), "1d": ("1d", "2y"),
+            "4h":  ("1h",  "730d"), "1h": ("1h", "60d"), "15m": ("15m", "60d"),
+        }
+        if timeframe not in yf_intervals:
+            return pd.DataFrame()
+        interval, period = yf_intervals[timeframe]
+        hist = yf.Ticker(symbol).history(period=period, interval=interval)
+        if hist.empty:
+            return pd.DataFrame()
+        hist = hist.reset_index()
+        hist.columns = [c.lower() for c in hist.columns]
+        ts_col = "date" if "date" in hist.columns else "datetime"
+        hist = hist.rename(columns={ts_col: "timestamp"})
+        hist["timestamp"] = pd.to_datetime(hist["timestamp"]).dt.tz_localize(None)
+        hist = hist[["timestamp", "open", "high", "low", "close", "volume"]]
+        if timeframe == "4h":
+            hist = (
+                hist.set_index("timestamp")
+                .resample("4h")
+                .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                .dropna()
+                .reset_index()
+            )
+        for col in ("open", "high", "low", "close", "volume"):
+            hist[col] = hist[col].astype(float)
+        return hist[["timestamp", "open", "high", "low", "close", "volume"]].tail(limit).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+_OHLCV_FNS: dict = {
+    "coinbase": _coinbase_ohlcv,
+    "alpaca":   _alpaca_ohlcv,
+    "yfinance": _yfinance_ohlcv,
+}
+_OHLCV_CRYPTO = ["coinbase", "yfinance"]
+_OHLCV_EQUITY = ["alpaca", "yfinance"]
+
+
+def _fetch_ohlcv_impl(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    """Shared implementation — routes through provider chain."""
+    chain = _OHLCV_CRYPTO if _asset_class(symbol) == "crypto" else _OHLCV_EQUITY
+    for name in _by_speed(chain):
+        fn = _OHLCV_FNS[name]
+        try:
+            t0 = time.monotonic()
+            df = fn(symbol, timeframe, limit)
+            if df is not None and not df.empty:
+                _record_latency(name, (time.monotonic() - t0) * 1000)
+                return df
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+
+@ttl_cache(ttl=14400)
+def _fetch_ohlcv_daily(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    return _fetch_ohlcv_impl(symbol, timeframe, limit)
+
+
+@ttl_cache(ttl=900)
+def _fetch_ohlcv_intraday(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    return _fetch_ohlcv_impl(symbol, timeframe, limit)
+
 
 def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> pd.DataFrame:
-    return pd.DataFrame()  # replaced in Task 3
+    """OHLCV via fastest available provider. Daily/weekly: 4h cache. Intraday: 15m cache."""
+    if timeframe in ("1d", "1wk"):
+        return _fetch_ohlcv_daily(symbol, timeframe, limit)
+    return _fetch_ohlcv_intraday(symbol, timeframe, limit)
 
 
 def get_speed_report() -> dict:
