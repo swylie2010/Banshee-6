@@ -289,6 +289,268 @@ function GbRiskPanel({ risk }) {
   );
 }
 
+/* ── Deploy button ─────────────────────────────────────────────────────────── */
+function GbDeployButton({ deployParams, onDeployed }) {
+  const [loading,   setLoading]   = React.useState(false);
+  const [error,     setError]     = React.useState(null);
+  const [deployed,  setDeployed]  = React.useState(false);
+
+  const deploy = async () => {
+    if (!deployParams) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await window.API.deployPaperGridbot(
+        deployParams.sym, deployParams.capital,
+        deployParams.gridCount, deployParams.feePct
+      );
+      setDeployed(true);
+      if (onDeployed) onDeployed();
+    } catch (e) {
+      setError((e && (e.error || e.detail || e.message)) || "Deploy failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (deployed) {
+    return (
+      <div className="mono" style={{ fontSize: 11, color: "var(--buy)", letterSpacing: "0.1em" }}>
+        ◆ GRID DEPLOYED — see tracker below
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        onClick={deploy} disabled={loading || !deployParams}
+        style={{
+          background: loading ? "var(--bg-4)" : "rgba(56,189,248,0.15)",
+          border: "1px solid var(--cyan)", color: "var(--cyan)",
+          cursor: loading ? "default" : "pointer", borderRadius: 4,
+          padding: "8px 24px", fontFamily: "inherit", fontSize: 12,
+          letterSpacing: "0.12em", fontWeight: 700,
+        }}
+      >{loading ? "DEPLOYING..." : "DEPLOY AS PAPER GRID ▶"}</button>
+      {error && <div style={{ color: "var(--sell)", fontSize: 11, marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
+/* ── Slot ladder table ─────────────────────────────────────────────────────── */
+function GbSlotLadder({ slots, currentPrice }) {
+  if (!slots || slots.length === 0) return null;
+  const sorted = [...slots].reverse();
+
+  return (
+    <div style={{ overflowY: "auto", maxHeight: 260, marginTop: 8 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: "1px solid var(--line)" }}>
+            {["#", "BUY AT", "SELL AT", "STATUS", "CAPITAL", "UNITS"].map(h => (
+              <th key={h} className="mono" style={{
+                textAlign: "left", padding: "4px 8px",
+                color: "var(--ink-4)", fontSize: 10, letterSpacing: "0.12em", fontWeight: 400,
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(slot => {
+            const holding = slot.status === "holding";
+            const statusColor = holding ? "var(--buy)" : "var(--ink-4)";
+            const statusLabel = holding ? "◆ HOLDING" : "○ EMPTY";
+            return (
+              <tr key={slot.index} style={{ borderBottom: "1px solid var(--bg-3)" }}>
+                <td className="num" style={{ padding: "5px 8px", color: "var(--ink-4)", fontSize: 11 }}>
+                  {slot.index}
+                </td>
+                <td className="num" style={{ padding: "5px 8px", color: "var(--buy)" }}>
+                  {gbFmtPrice(slot.buy_price)}
+                </td>
+                <td className="num" style={{ padding: "5px 8px", color: "var(--wait)" }}>
+                  {gbFmtPrice(slot.sell_price)}
+                </td>
+                <td style={{ padding: "5px 8px" }}>
+                  <span className="mono" style={{ fontSize: 10, color: statusColor, letterSpacing: "0.1em" }}>
+                    {statusLabel}
+                  </span>
+                </td>
+                <td className="num" style={{ padding: "5px 8px", color: "var(--ink-3)" }}>
+                  {gbFmtDollar(slot.capital_allocated)}
+                </td>
+                <td className="num" style={{ padding: "5px 8px", color: "var(--ink-4)", fontSize: 11 }}>
+                  {holding ? slot.units.toFixed(6) : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ── Paper grid tracker section ────────────────────────────────────────────── */
+function GbPaperSection({ deployParams, deployKey }) {
+  const [data,      setData]      = React.useState(undefined);
+  const [stopping,  setStopping]  = React.useState(false);
+  const [error,     setError]     = React.useState(null);
+
+  const load = async () => {
+    try {
+      const r = await window.API.getPaperGridbot();
+      setData(r);
+    } catch (_) {
+      setData(null);
+    }
+  };
+
+  React.useEffect(() => { load(); }, [deployKey]);
+
+  const stop = async () => {
+    setStopping(true);
+    setError(null);
+    try {
+      await window.API.stopPaperGridbot();
+      await load();
+    } catch (e) {
+      setError((e && (e.error || e.detail || e.message)) || "Stop failed.");
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const minAgo = (isoStr) => {
+    if (!isoStr) return "unknown";
+    const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 60000);
+    if (diff < 1) return "just now";
+    return `${diff} min ago`;
+  };
+
+  const sectionHeader = (
+    <div className="mono" style={{
+      fontSize: 10, letterSpacing: "0.18em", color: "var(--ink-3)",
+      marginBottom: 12, paddingBottom: 6, borderBottom: "1px solid var(--line)",
+    }}>
+      PAPER GRID
+    </div>
+  );
+
+  if (data === undefined) {
+    return (
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "14px 16px" }}>
+        {sectionHeader}
+        <div style={{ color: "var(--ink-4)", fontSize: 12 }}>Loading...</div>
+      </div>
+    );
+  }
+
+  const grid  = data?.grid;
+  const state = data?.state;
+  const status = state?.status;
+
+  if (!grid) {
+    return (
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "14px 16px" }}>
+        {sectionHeader}
+        <div style={{ fontSize: 12, color: "var(--ink-4)", lineHeight: 1.7 }}>
+          No active paper grid.{" "}
+          {deployParams
+            ? "Click DEPLOY AS PAPER GRID above to start one."
+            : "Run the calculator above first."}
+        </div>
+      </div>
+    );
+  }
+
+  const isActive = status === "active";
+  const isStopped = status === "stopped_out" || status === "stopped_by_user";
+  const statusColor = isActive ? "var(--buy)" : status === "stopped_out" ? "var(--sell)" : "var(--ink-4)";
+  const statusLabel = isActive ? "ACTIVE" : status === "stopped_out" ? "STOPPED OUT" : "STOPPED";
+  const cp = data?.current_price;
+
+  return (
+    <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "14px 16px" }}>
+      {sectionHeader}
+
+      {error && (
+        <div style={{ color: "var(--sell)", fontSize: 12, marginBottom: 10 }}>{error}</div>
+      )}
+
+      {isActive && (
+        <div style={{
+          background: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.25)",
+          borderRadius: 4, padding: "8px 12px", marginBottom: 12,
+          fontSize: 11, color: "var(--amber)", lineHeight: 1.55,
+        }}>
+          ⚠ CORE MUST BE RUNNING — fills are only detected while Banshee is active.
+          {" "}Last checked: {minAgo(grid.last_tick_at)}.
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <span className="num" style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
+          {grid.sym}
+        </span>
+        <span className="mono" style={{
+          fontSize: 10, letterSpacing: "0.1em", padding: "2px 7px", borderRadius: 3,
+          background: isActive ? "rgba(94,234,212,0.1)" : "rgba(239,68,68,0.08)",
+          color: statusColor,
+        }}>● {statusLabel}</span>
+        {cp && (
+          <span className="num" style={{ fontSize: 12, color: "var(--ink-3)" }}>
+            ${gbFmtPrice(cp)}
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        {isActive && (
+          <button
+            onClick={stop} disabled={stopping}
+            style={{
+              background: "transparent", border: "1px solid var(--sell)",
+              color: "var(--sell)", cursor: stopping ? "default" : "pointer",
+              borderRadius: 4, padding: "4px 12px",
+              fontFamily: "inherit", fontSize: 11, letterSpacing: "0.1em",
+            }}
+          >{stopping ? "STOPPING..." : "STOP GRID"}</button>
+        )}
+        <button
+          onClick={load}
+          style={{
+            background: "transparent", border: "1px solid var(--line-2)",
+            color: "var(--ink-4)", cursor: "pointer", borderRadius: 4,
+            padding: "4px 10px", fontFamily: "inherit", fontSize: 11,
+          }}
+        >↻</button>
+      </div>
+
+      <div style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 10 }}>
+        Deployed: {(grid.deployed_at || "").slice(0, 10)}
+        {isStopped && " · " + statusLabel.toLowerCase()}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 14 }}>
+        <GbStat label="CYCLES"       value={state.cycle_count} />
+        <GbStat label="REALIZED P&L" value={gbFmtDollar(state.realized_pnl)}
+          color={state.realized_pnl >= 0 ? "var(--buy)" : "var(--sell)"} />
+        <GbStat label="UNREALIZED"   value={gbFmtDollar(state.unrealized_pnl)}
+          color={state.unrealized_pnl >= 0 ? "var(--ink-2)" : "var(--sell)"} />
+        <GbStat label="DEPLOYED"     value={gbFmtDollar(grid.config?.capital_plan?.total)} />
+      </div>
+
+      <GbSlotLadder slots={state.slots} currentPrice={cp} />
+
+      {isStopped && deployParams && (
+        <div style={{ marginTop: 10, fontSize: 11, color: "var(--ink-4)" }}>
+          ↑ Adjust the calculator above and deploy a new grid when ready.
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main GridbotPage ──────────────────────────────────────────────────────── */
 function GridbotPage({ onBack }) {
   const [sym,       setSym]       = React.useState("BTC");
@@ -298,6 +560,8 @@ function GridbotPage({ onBack }) {
   const [loading,   setLoading]   = React.useState(false);
   const [result,    setResult]    = React.useState(null);
   const [error,     setError]     = React.useState(null);
+  const [deployParams, setDeployParams] = React.useState(null);
+  const [deployKey,    setDeployKey]    = React.useState(0);
 
   const analyze = async () => {
     const cap = parseFloat(capital);
@@ -307,9 +571,10 @@ function GridbotPage({ onBack }) {
     setError(null);
     try {
       const r = await window.API.analyzeGridbot(sym.trim().toUpperCase(), cap, gridCount, fee);
-      if (r && r.error) { setError(r.error); setResult(null); }
-      else { setResult(r); }
+      if (r && r.error) { setError(r.error); setResult(null); setDeployParams(null); }
+      else { setResult(r); setDeployParams({ sym: sym.trim().toUpperCase(), capital: cap, gridCount, feePct: fee }); }
     } catch (e) {
+      setDeployParams(null);
       setError((e && (e.detail || e.error || e.message)) || "Analysis failed — check the backend is running.");
     } finally {
       setLoading(false);
@@ -492,6 +757,11 @@ function GridbotPage({ onBack }) {
               <GbRiskPanel    risk={result.risk} />
             </div>
 
+            {/* Deploy button */}
+            <div style={{ display: "flex", justifyContent: "center", margin: "16px 0" }}>
+              <GbDeployButton deployParams={deployParams} onDeployed={() => setDeployKey(k => k + 1)} />
+            </div>
+
             {/* Footer note */}
             <div style={{
               background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6,
@@ -516,6 +786,9 @@ function GridbotPage({ onBack }) {
             Enter an asset and click ANALYZE to see your gridbot blueprint.
           </div>
         )}
+
+        {/* Paper grid tracker */}
+        <GbPaperSection deployParams={deployParams} deployKey={deployKey} />
 
       </div>
     </div>
