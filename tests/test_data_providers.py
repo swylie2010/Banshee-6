@@ -1,4 +1,5 @@
 """tests/test_data_providers.py — unit tests for data_providers.py"""
+import uuid
 import pytest
 from unittest.mock import patch
 
@@ -159,53 +160,78 @@ def _fake_ohlcv(n=10) -> pd.DataFrame:
 def test_ohlcv_returns_normalized_columns():
     """fetch_ohlcv always returns the canonical 6-column shape."""
     import data_providers
+    sym = f"BTC/USD-NORM-{uuid.uuid4().hex}"
     with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
-        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV1", "1d", 10)
+        df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert list(df.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
 
 def test_ohlcv_no_timezone():
     """Timestamps must be timezone-naive."""
     import data_providers
+    sym = f"BTC/USD-NOTZ-{uuid.uuid4().hex}"
     with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
-        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV2", "1d", 10)
+        df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert df["timestamp"].dt.tz is None
 
 def test_ohlcv_falls_through_on_empty():
     """If first provider returns empty, the next is tried."""
     import data_providers
+    sym = f"BTC/USD-FALL-{uuid.uuid4().hex}"
     with patch.dict(data_providers._OHLCV_FNS, {
         "coinbase":  lambda *a: pd.DataFrame(),
         "yfinance":  lambda *a: _fake_ohlcv(),
     }):
-        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV3", "1d", 10)
+        df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert not df.empty
 
 def test_ohlcv_equity_skips_coinbase():
     """Equity OHLCV chain does not call Coinbase."""
     import data_providers
+    sym = f"AAPL-EQ-{uuid.uuid4().hex}"
     coinbase_called = []
     with patch.dict(data_providers._OHLCV_FNS, {
         "coinbase": lambda *a: coinbase_called.append(a) or pd.DataFrame(),
         "alpaca":   lambda *a: _fake_ohlcv(),
     }):
-        data_providers.fetch_ohlcv("AAPL-OHLCV4", "1d", 30)
+        data_providers.fetch_ohlcv(sym, "1d", 30)
     assert len(coinbase_called) == 0
 
 def test_ohlcv_total_failure_returns_empty_df():
     """If all providers fail, returns empty DataFrame (never raises)."""
     import data_providers
+    sym = f"BTC/USD-FAIL-{uuid.uuid4().hex}"
     with patch.dict(data_providers._OHLCV_FNS, {
         "coinbase":  lambda *a: pd.DataFrame(),
         "yfinance":  lambda *a: pd.DataFrame(),
     }):
-        df = data_providers.fetch_ohlcv("BTC/USD-OHLCV5", "1d", 10)
+        df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert df.empty
 
 def test_ohlcv_latency_recorded_on_success():
     """Successful OHLCV fetch records latency for the winning provider."""
     import data_providers
+    sym = f"BTC/USD-LAT-{uuid.uuid4().hex}"
     data_providers._latency["coinbase"].clear()
     with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
-        data_providers.fetch_ohlcv("BTC/USD-OHLCV6", "1d", 10)
+        data_providers.fetch_ohlcv(sym, "1d", 10)
     assert len(data_providers._latency["coinbase"]) == 1
     data_providers._latency["coinbase"].clear()
+
+
+def test_ohlcv_weekly_routes_to_daily_cache():
+    """'1wk' timeframe uses the daily (4h TTL) cache, not the intraday (15m) cache."""
+    import data_providers
+    sym = f"BTC/USD-1WK-{uuid.uuid4().hex}"
+    daily_calls = []
+    intraday_calls = []
+    orig_daily = data_providers._fetch_ohlcv_daily
+    orig_intraday = data_providers._fetch_ohlcv_intraday
+    try:
+        data_providers._fetch_ohlcv_daily = lambda s, tf, lim: daily_calls.append(tf) or pd.DataFrame()
+        data_providers._fetch_ohlcv_intraday = lambda s, tf, lim: intraday_calls.append(tf) or pd.DataFrame()
+        data_providers.fetch_ohlcv(sym, "1wk", 10)
+    finally:
+        data_providers._fetch_ohlcv_daily = orig_daily
+        data_providers._fetch_ohlcv_intraday = orig_intraday
+    assert len(daily_calls) == 1
+    assert len(intraday_calls) == 0

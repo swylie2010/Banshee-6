@@ -241,7 +241,7 @@ def _coinbase_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
             )
         for col in ("open", "high", "low", "close", "volume"):
             df[col] = df[col].astype(float)
-        return df[["timestamp", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
+        return df[["timestamp", "open", "high", "low", "close", "volume"]].tail(limit).reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
 
@@ -274,7 +274,7 @@ def _alpaca_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
         df = pd.DataFrame(bars).rename(
             columns={"t": "timestamp", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}
         )
-        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_localize(None)
+        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_convert("UTC").dt.tz_localize(None)
         for col in ("open", "high", "low", "close", "volume"):
             df[col] = df[col].astype(float)
         return df[["timestamp", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
@@ -355,8 +355,8 @@ def _fetch_ohlcv_intraday(symbol: str, timeframe: str, limit: int) -> pd.DataFra
 def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> pd.DataFrame:
     """OHLCV via fastest available provider. Daily/weekly: 4h cache. Intraday: 15m cache."""
     if timeframe in ("1d", "1wk"):
-        return _fetch_ohlcv_daily(symbol, timeframe, limit)
-    return _fetch_ohlcv_intraday(symbol, timeframe, limit)
+        return _fetch_ohlcv_daily(symbol, timeframe, limit).copy()
+    return _fetch_ohlcv_intraday(symbol, timeframe, limit).copy()
 
 
 def get_speed_report() -> dict:
