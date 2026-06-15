@@ -53,6 +53,8 @@ Get one free at [fred.stlouisfed.org/docs/api/api_key.html](https://fred.stlouis
 
 **Alpaca** (optional) — only needed if you want to use the paper options trading feature. Get a free paper trading account at [alpaca.markets](https://alpaca.markets). Banshee only ever uses the paper (fake money) endpoint.
 
+**CoinGecko** (optional) — a free demo key raises rate limits for crypto price lookups. Get one at [coingecko.com/api](https://www.coingecko.com/en/api). In Settings → DATA SOURCES, enter the key and leave the selector on **demo**.
+
 All keys are stored in a file on your computer called `~/.banshee_keys.json` — they never leave your machine.
 
 ---

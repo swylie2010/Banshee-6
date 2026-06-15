@@ -361,7 +361,7 @@ def get_correlation_matrix() -> pd.DataFrame | None:
         try:
             hist = fetch_yf_history(ticker, period="3mo", interval="1d")
             try: hist.index = hist.index.tz_convert(None)
-            except: pass
+            except Exception: pass
             prices[name] = hist["Close"]
         except Exception: pass
     df = pd.DataFrame(prices).ffill().dropna()
