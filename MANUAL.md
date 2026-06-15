@@ -1,5 +1,11 @@
 # Banshee Pro — User Manual
 
+> **⚠ Not financial advice. Not a trading bot. Not a recommendation to buy or sell anything.**
+> Banshee is an educational analysis tool. All outputs are for informational purposes only.
+> Trading involves substantial risk of loss. Past performance of any signal, score, or indicator
+> does not guarantee future results. Never risk money you cannot afford to lose.
+> **The author is not a licensed financial advisor. Use this software entirely at your own risk.**
+
 **What is Banshee Pro?**
 A top-down trading command center. It reads the macro environment, analyzes a specific asset technically, maps its market structure, synthesizes everything with AI, and tells you whether there's a trade worth taking — and if so, exactly how to size it.
 
