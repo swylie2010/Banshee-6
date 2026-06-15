@@ -194,6 +194,46 @@ def _bg_poll_paper_wheels():
         pass
 
 
+def _bg_tick_paper_gridbot():
+    """Background job: poll price and detect grid fills every 5 minutes."""
+    try:
+        from routes.gridbot import load_paper_gridbot, save_paper_gridbot
+        import gridbot_sim
+        import gridbot_engine
+        from shared_data import get_last_price
+        from datetime import datetime, timezone
+
+        grid = load_paper_gridbot()
+        if not grid:
+            return
+
+        state = gridbot_sim.replay(grid["events"], grid["config"])
+        if state["status"] != "active":
+            return  # already stopped — nothing to do
+
+        yf_sym = gridbot_engine._to_yf_sym(grid["sym"])
+        current_price = get_last_price(yf_sym)
+        if not current_price:
+            return  # can't fetch price — skip this tick silently
+
+        disaster_stop = grid["config"]["risk"]["disaster_stop"]
+        new_events = gridbot_sim.tick(
+            state["slots"],
+            last_price=grid["last_price"],
+            current_price=current_price,
+            disaster_stop=disaster_stop,
+            fee_pct=grid.get("fee_pct", 0.1),
+        )
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        grid["events"].extend(new_events)
+        grid["last_price"] = current_price
+        grid["last_tick_at"] = now
+        save_paper_gridbot(grid)
+    except Exception:
+        pass
+
+
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger as _CronTrigger
@@ -209,6 +249,13 @@ try:
         "interval",
         minutes=5,
         id="paper_wheel_poller",
+        replace_existing=True,
+    )
+    _bg_scheduler.add_job(
+        _bg_tick_paper_gridbot,
+        "interval",
+        minutes=5,
+        id="paper_gridbot_poller",
         replace_existing=True,
     )
 
