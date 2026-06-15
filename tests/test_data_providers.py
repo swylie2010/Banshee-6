@@ -1,5 +1,6 @@
 """tests/test_data_providers.py — unit tests for data_providers.py"""
 import pytest
+from unittest.mock import patch
 
 
 def test_asset_class_crypto_slash():
@@ -57,3 +58,80 @@ def test_tier_slow():
 def test_tier_untested():
     import data_providers
     assert data_providers._tier(float("inf")) == "UNTESTED"
+
+
+# ── Spot price chain tests ────────────────────────────────────────────────────
+# IMPORTANT: get_spot_price reads _SPOT_FNS[name] at call time (dict lookup).
+# patch.object on the module attribute does NOT affect what the dict holds.
+# Always use patch.dict on _SPOT_FNS / _OHLCV_FNS to mock provider adapters.
+
+def _exc(*a, **kw):
+    raise Exception("mocked failure")
+
+def test_spot_price_crypto_success_first_provider():
+    """If the first provider returns a price, it's returned immediately."""
+    import data_providers
+    with patch.dict(data_providers._SPOT_FNS, {"coinbase": lambda s: 50000.0}):
+        result = data_providers.get_spot_price("BTC-USD-TEST1")
+    assert result == 50000.0
+
+def test_spot_price_crypto_falls_through_to_second():
+    """If Coinbase raises, CoinGecko is tried next."""
+    import data_providers
+    with patch.dict(data_providers._SPOT_FNS, {
+        "coinbase":  _exc,
+        "coingecko": lambda s: 50001.0,
+        "yfinance":  lambda s: 0.0,
+    }):
+        result = data_providers.get_spot_price("BTC-USD-TEST2")
+    assert result == 50001.0
+
+def test_spot_price_crypto_total_failure_returns_none():
+    """If all providers fail, None is returned (never raises)."""
+    import data_providers
+    with patch.dict(data_providers._SPOT_FNS, {
+        "coinbase":  _exc,
+        "coingecko": _exc,
+        "yfinance":  lambda s: None,
+    }):
+        result = data_providers.get_spot_price("BTC-USD-TEST3")
+    assert result is None
+
+def test_spot_price_equity_skips_coinbase_and_coingecko():
+    """Equity symbols only try Alpaca and yfinance — Coinbase/CoinGecko never called."""
+    import data_providers
+    coinbase_called = []
+    coingecko_called = []
+    with patch.dict(data_providers._SPOT_FNS, {
+        "coinbase":  lambda s: coinbase_called.append(s) or None,
+        "coingecko": lambda s: coingecko_called.append(s) or None,
+        "alpaca":    lambda s: 150.0,
+    }):
+        result = data_providers.get_spot_price("AAPL-TEST4")
+    assert result == 150.0
+    assert len(coinbase_called) == 0
+    assert len(coingecko_called) == 0
+
+def test_coingecko_skipped_for_unknown_crypto_symbol():
+    """CoinGecko returns None if symbol not in _CG_IDS; chain continues to yfinance."""
+    import data_providers
+    with patch.dict(data_providers._SPOT_FNS, {
+        "coinbase":  _exc,
+        "yfinance":  lambda s: 999.0,
+    }):
+        # UNKNOWNCOIN-USD not in _CG_IDS — real _coingecko_spot returns None, falls through
+        result = data_providers.get_spot_price("UNKNOWNCOIN-USD-TEST5")
+    assert result == 999.0
+
+def test_latency_recorded_on_spot_success():
+    """Successful spot fetch records latency for the winning provider."""
+    import data_providers
+    data_providers._latency["yfinance"].clear()
+    with patch.dict(data_providers._SPOT_FNS, {
+        "coinbase":  _exc,
+        "coingecko": _exc,
+        "yfinance":  lambda s: 42.0,
+    }):
+        data_providers.get_spot_price("ETH-USD-TEST6")
+    assert len(data_providers._latency["yfinance"]) == 1
+    data_providers._latency["yfinance"].clear()
