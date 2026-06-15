@@ -465,6 +465,15 @@ function GbPaperSection({ deployParams, deployKey }) {
     );
   }
 
+  if (!state) {
+    return (
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "14px 16px" }}>
+        {sectionHeader}
+        <div style={{ color: "var(--ink-4)", fontSize: 12 }}>{grid.sym} — state unavailable, try refreshing.</div>
+      </div>
+    );
+  }
+
   const isActive = status === "active";
   const isStopped = status === "stopped_out" || status === "stopped_by_user";
   const statusColor = isActive ? "var(--buy)" : status === "stopped_out" ? "var(--sell)" : "var(--ink-4)";
