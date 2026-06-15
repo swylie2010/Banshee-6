@@ -27,8 +27,6 @@ from datetime import datetime, timezone
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_FEE_SIDES = 2  # buy fee + sell fee both deducted from profit
-
 
 # ── Slot model ─────────────────────────────────────────────────────────────────
 
@@ -102,9 +100,9 @@ def tick(slots: list, last_price: float, current_price: float,
         for slot in slots:
             if (slot["status"] == "holding"
                     and last_price < slot["sell_price"] <= current_price):
-                fee_cost = (fee_pct / 100) * _FEE_SIDES * (
+                fee_cost = (fee_pct / 100) * (
                     slot["capital_allocated"] + slot["units"] * slot["sell_price"]
-                ) / 2
+                )
                 profit = round(
                     (slot["units"] * slot["sell_price"])
                     - slot["capital_allocated"]
@@ -171,7 +169,7 @@ def replay(events: list, config: dict, current_price: float = None) -> dict:
             status = "stopped_by_user"
 
     unrealized_pnl = 0.0
-    if current_price:
+    if current_price is not None:
         unrealized_pnl = sum(
             (current_price - s["buy_price"]) * s["units"]
             for s in slots if s["status"] == "holding"
