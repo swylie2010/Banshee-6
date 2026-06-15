@@ -119,7 +119,7 @@ echo       OK: ui/dist/bundle.js
 
 rem --- Step 5: Launch ---
 echo [5/5] Starting Banshee Core (port 8765)...
-start "Banshee Core" /MIN cmd /k "cd /d "%BANSHEE_DIR%" && "%VENV_PYTHON%" banshee_core.py"
+start "Banshee Core" /MIN cmd /c "cd /d "%BANSHEE_DIR%" && "%VENV_PYTHON%" banshee_core.py"
 
 echo       Waiting for Core to boot...
 timeout /t 6 /nobreak >nul
