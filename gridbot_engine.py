@@ -83,13 +83,18 @@ def _bollinger(close: pd.Series, period: int = 20, mult: float = 2.0):
 
 def analyze_gridbot(sym: str, capital: float, grid_count: int, fee_pct: float) -> dict:
     """Run the 4-phase Banshee gridbot analysis. Returns a dict."""
-    import yfinance as yf
-
+    import data_providers
     yf_sym = _to_yf_sym(sym)
-    hist = yf.Ticker(yf_sym).history(period="6mo", interval="1d")
+    raw = data_providers.fetch_ohlcv(yf_sym, "1d", limit=180)
 
-    if hist is None or hist.empty or len(hist) < 20:
+    if raw is None or raw.empty or len(raw) < 20:
         return {"error": f"No price data found for '{sym}'. Check the ticker symbol (e.g. BTC, ETH, SPY, QQQ)."}
+
+    # Rename to capitalized columns — rest of engine uses hist["Close"], hist["High"], hist["Low"]
+    hist = raw.rename(columns={
+        "open": "Open", "high": "High", "low": "Low",
+        "close": "Close", "volume": "Volume",
+    }).set_index("timestamp")
 
     close   = hist["Close"]
     current = float(close.iloc[-1])

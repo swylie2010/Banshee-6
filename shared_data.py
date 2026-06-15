@@ -121,22 +121,10 @@ def fetch_yf_fast_info(ticker: str) -> float | None:
             return float(hist["Close"].iloc[-1])
         return None
 
-@ttl_cache(ttl=60, skip_none=True)
 def get_last_price(symbol: str) -> float | None:
-    """Last known price for a normalized symbol (e.g. 'AAPL', 'BTC-USD').
-    Tries fast_info first (cheap), falls back to 5-day history close."""
-    try:
-        info = yf.Ticker(symbol).fast_info
-        price = info.last_price  # use .last_price property, not dict key
-        if price and price > 0:
-            return float(price)
-    except Exception:
-        pass
-    # History fallback
-    hist = fetch_yf_history(symbol, period="5d", interval="1d")
-    if not hist.empty and "Close" in hist.columns:
-        return float(hist["Close"].iloc[-1])
-    return None
+    """Last known price via pluggable provider chain in data_providers. 60s cache lives there."""
+    import data_providers  # lazy import breaks potential circular dep
+    return data_providers.get_spot_price(symbol)
 
 # ─────────────────────────────────────────────────────────────────
 # 3. CRYPTO DATA FETCHERS (COINBASE/BINANCE)
@@ -149,77 +137,20 @@ def _get_coinbase():
 def _get_binance_futures():
     return ccxt.binanceusdm({"enableRateLimit": True})
 
-@ttl_cache(ttl=900)
 def fetch_crypto_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> tuple[pd.DataFrame, str | None]:
     """
-    Fetch Crypto OHLCV (Open, High, Low, Close, Volume) data from Coinbase.
-    Returns the dataframe and an optional error message (if it falls back).
-    Timeframes supported by our system: "1h", "4h", "1d", "1wk".
+    Fetch OHLCV via pluggable provider chain. TV local files are a last-resort fallback
+    kept here (not in data_providers) to avoid a circular import.
     """
-    # Map our timeframes to ccxt's native ones or fetch a smaller one to resample 
-    resample_map = {"4h": ("2h", 2, "4h"), "1wk": ("1d", 7, "1W")}
-    if timeframe in resample_map:
-        fetch_tf, mult, resample_rule = resample_map[timeframe]
-        fetch_limit = (limit + 50) * mult
-    else:
-        fetch_tf, fetch_limit, resample_rule = timeframe, limit + 50, None
-        
-    coinbase_error = None
-    try:
-        exchange = _get_coinbase()
-        ohlcv = exchange.fetch_ohlcv(symbol, fetch_tf, limit=fetch_limit)
-        time.sleep(0.2) # Polite rate sleep
-        
-        if ohlcv:
-            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            df = df.sort_values("timestamp").drop_duplicates("timestamp").reset_index(drop=True)
-
-            if resample_rule:
-                # Combine shorter bars into the requested timeframe (e.g. 2h into 4h)
-                df = (
-                    df.set_index("timestamp")
-                    .resample(resample_rule)
-                    .agg({"open": "first", "high": "max", "low": "min",
-                          "close": "last", "volume": "sum"})
-                    .dropna()
-                    .reset_index()
-                )
-            return df.reset_index(drop=True), None
-    except Exception as e:
-        coinbase_error = str(e)
-        
-    # SILENT FALLBACK to Yahoo Finance if Coinbase is down
-    print(f"Coinbase failed for {symbol}: {coinbase_error}. Trying YF...", file=sys.stderr)
-    yf_symbol = symbol.split("/")[0] + "-USD"
-    yf_intervals = {"1wk": ("1wk","10y"), "1d": ("1d","2y"), "4h": ("1h","730d"), "1h": ("1h", "60d"), "15m": ("15m", "60d")}
-    if timeframe in yf_intervals:
-        interval, period = yf_intervals[timeframe]
-        hist = fetch_yf_history(yf_symbol, period, interval)
-        if not hist.empty:
-            # Reformat to match the Coinbase columns
-            hist = hist.reset_index()
-            hist.columns = [c.lower() for c in hist.columns]
-            ts_col = "date" if "date" in hist.columns else "datetime"
-            hist = hist.rename(columns={ts_col: "timestamp"})
-            hist["timestamp"] = pd.to_datetime(hist["timestamp"]).dt.tz_localize(None)
-            hist = hist[["timestamp", "open", "high", "low", "close", "volume"]]
-            
-            # Resample 1H to 4H manually
-            if timeframe == "4h":
-                hist = (hist.set_index("timestamp").resample("4h")
-                        .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
-                        .dropna().reset_index())
-                
-            return hist, "Coinbase failed, using Yahoo Finance fallback."
-            
-    # LAST RESORT: TV extracted local JSON files (offline fallback; useful for pairs like ETH/BTC with no YF equivalent)
-    print(f"YF also failed for {symbol}. Trying TV local files...", file=sys.stderr)
+    import data_providers
+    df = data_providers.fetch_ohlcv(symbol, timeframe, limit)
+    if not df.empty:
+        return df, None
+    # Last resort: locally extracted TV JSON files (offline; useful for ETH/BTC etc.)
     tv_df = _load_sd_tv_ohlcv(symbol, timeframe)
     if not tv_df.empty:
-        return tv_df.tail(limit).reset_index(drop=True), "Coinbase + YF failed; using TV extracted data (may be stale)."
-
-    return pd.DataFrame(), "Coinbase, Yahoo Finance, and TV local files all failed."
+        return tv_df.tail(limit).reset_index(drop=True), "Using TV extracted data (may be stale)."
+    return pd.DataFrame(), "All data providers failed."
 
 @ttl_cache(ttl=900)
 def fetch_funding_rate(symbol: str) -> float | None:
