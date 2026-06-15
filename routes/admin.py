@@ -197,6 +197,24 @@ def route_settings_test(body: SettingsBody):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DATA SOURCES — speed gauge + CoinGecko probe
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/settings/data-sources/speed")
+def route_data_sources_speed():
+    """Return latency summary for all providers. Used by the Settings DATA SOURCES speed gauge."""
+    import data_providers
+    return data_providers.get_speed_report()
+
+
+@router.post("/settings/data-sources/test-coingecko")
+def route_data_sources_test_coingecko():
+    """Fire a timed CoinGecko BTC fetch to populate latency, then return speed report."""
+    import data_providers
+    return data_providers.probe_coingecko_latency()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # PREDATOR
 # ─────────────────────────────────────────────────────────────────────────────
 
