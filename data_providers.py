@@ -82,7 +82,7 @@ def _record_latency(name: str, ms: float) -> None:
 
 
 def _mean_latency(name: str) -> float:
-    """Mean of recorded latencies, or inf if no samples (UNTESTED)."""
+    """Mean of recorded latencies, or inf if no samples."""
     d = _latency.get(name)
     if not d:
         return float("inf")
@@ -107,13 +107,20 @@ def _by_speed(names: list[str]) -> list[str]:
 # ── Spot price adapters ────────────────────────────────────────────────────────
 
 def _to_ccxt_sym(symbol: str) -> str:
-    """Convert yfinance-style symbol ('BTC-USD') to ccxt pair ('BTC/USD')."""
+    """Convert yfinance-style ('BTC-USD') or bare crypto ticker ('BTC') to ccxt pair ('BTC/USD')."""
     s = symbol.upper()
-    # "BTC-USD" → "BTC/USD", "BTC-USDT" → "BTC/USDT"
+    # Already ccxt format
+    if "/" in s:
+        return s
+    # Dash-style: "BTC-USD" → "BTC/USD", "BTC-USDT" → "BTC/USDT"
     for quote in ("-USDT", "-USD"):
         if s.endswith(quote):
             return s[:-len(quote)] + "/" + quote[1:]
-    # "BTC/USD" already in ccxt format — pass through
+    # Bare known crypto ticker: "BTC" → "BTC/USD"
+    base = s.split("-")[0]
+    if base in _CRYPTO_TICKERS:
+        return base + "/USD"
+    # Equity or unknown — return as-is
     return s
 
 
