@@ -134,7 +134,7 @@ function speedPct(avg_ms) {
   return Math.max(5, 35 - (avg_ms - 2000) / 300);
 }
 
-function DataSourceRow({ name, speed, cgKey, onCgKeyChange, onTest, testStatus }) {
+function DataSourceRow({ name, speed, cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange, onTest, testStatus }) {
   const meta = PROVIDER_META[name];
   const tier = speed?.tier || "UNTESTED";
   const avg  = speed?.avg_ms;
@@ -155,12 +155,22 @@ function DataSourceRow({ name, speed, cgKey, onCgKeyChange, onTest, testStatus }
         <div style={{ width: `${pct}%`, height: "100%", background: TIER_COLOR[tier], transition: "width 0.4s" }} />
       </div>
       {meta.hasKey ? (
-        <input
-          value={cgKey}
-          onChange={e => onCgKeyChange(e.target.value)}
-          placeholder="API key (optional)"
-          style={{ ...INPUT_STYLE, width: 200, fontSize: 12 }}
-        />
+        <>
+          <input
+            value={cgKey}
+            onChange={e => onCgKeyChange(e.target.value)}
+            placeholder="API key (optional)"
+            style={{ ...INPUT_STYLE, width: 180, fontSize: 12 }}
+          />
+          <select
+            value={cgKeyType}
+            onChange={e => onCgKeyTypeChange(e.target.value)}
+            style={{ ...INPUT_STYLE, width: 68, fontSize: 11, padding: "4px 6px", cursor: "pointer" }}
+          >
+            <option value="demo">demo</option>
+            <option value="pro">pro</option>
+          </select>
+        </>
       ) : (
         <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.08em" }}>
           {meta.note}
@@ -187,7 +197,7 @@ function DataSourceRow({ name, speed, cgKey, onCgKeyChange, onTest, testStatus }
   );
 }
 
-function DataSourcesSection({ cgKey, onCgKeyChange, onSaveCgKey, saveStatus }) {
+function DataSourcesSection({ cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange, onSaveCgKey, saveStatus }) {
   const [speed, setSpeed] = React.useState({});
   const [testStatus, setTestStatus] = React.useState(null);
 
@@ -216,6 +226,8 @@ function DataSourcesSection({ cgKey, onCgKeyChange, onSaveCgKey, saveStatus }) {
           speed={speed[name]}
           cgKey={name === "coingecko" ? cgKey : ""}
           onCgKeyChange={onCgKeyChange}
+          cgKeyType={cgKeyType}
+          onCgKeyTypeChange={onCgKeyTypeChange}
           onTest={handleTest}
           testStatus={name === "coingecko" ? testStatus : null}
         />
@@ -342,6 +354,7 @@ function SettingsPage({ onBack }) {
   const [alpacaKey, setAlpacaKey]   = useState("");
   const [alpacaSec, setAlpacaSec]   = useState("");
   const [cgKey, setCgKey]           = useState("");
+  const [cgKeyType, setCgKeyType]   = useState("demo");
   const [cgSaveStatus, setCgSaveStatus] = useState(null);
   const [aiType, setAiType]         = useState("Gemini");
   const [aiKey, setAiKey]           = useState("");
@@ -362,6 +375,7 @@ function SettingsPage({ onBack }) {
       setAlpacaKey(data.ALPACA_KEY?.key || "");
       setAlpacaSec(data.ALPACA_SECRET?.key || "");
       setCgKey(data.COINGECKO?.key || "");
+      setCgKeyType(data.COINGECKO?.key_type || "demo");
       const ai = data.AI_API || {};
       setAiType(ai.type || "Gemini");
       setAiKey(ai.key || "");
@@ -394,7 +408,7 @@ function SettingsPage({ onBack }) {
   }
 
   async function saveCgKey() {
-    const result = await window.API.saveSettings({ COINGECKO: { key: cgKey } });
+    const result = await window.API.saveSettings({ COINGECKO: { key: cgKey, key_type: cgKeyType } });
     setCgSaveStatus(result?.status === "saved" ? "✓ SAVED" : "✗ save failed");
     setTimeout(() => setCgSaveStatus(null), 2000);
   }
@@ -444,6 +458,8 @@ function SettingsPage({ onBack }) {
           <DataSourcesSection
             cgKey={cgKey}
             onCgKeyChange={setCgKey}
+            cgKeyType={cgKeyType}
+            onCgKeyTypeChange={setCgKeyType}
             onSaveCgKey={saveCgKey}
             saveStatus={cgSaveStatus}
           />

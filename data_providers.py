@@ -144,9 +144,17 @@ def _coingecko_spot(symbol: str) -> float | None:
         if not cg_id:
             return None
         keys = _load_keys()
-        api_key = keys.get("COINGECKO", {}).get("key", "")
-        base_url = "https://api.coingecko.com/api/v3"
-        headers = {"x-cg-demo-api-key": api_key} if api_key else {}
+        cg = keys.get("COINGECKO", {})
+        api_key = cg.get("key", "")
+        if api_key and cg.get("key_type") == "pro":
+            base_url = "https://pro-api.coingecko.com/api/v3"
+            headers = {"x-cg-pro-api-key": api_key}
+        elif api_key:
+            base_url = "https://api.coingecko.com/api/v3"
+            headers = {"x-cg-demo-api-key": api_key}
+        else:
+            base_url = "https://api.coingecko.com/api/v3"
+            headers = {}
         r = requests.get(
             f"{base_url}/simple/price",
             params={"ids": cg_id, "vs_currencies": "usd"},
