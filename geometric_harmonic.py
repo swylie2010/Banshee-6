@@ -15,7 +15,7 @@ Phase 2 additions:
   - arithmetic_mid: toggle to use (ATH+ATL)/2 instead of √(ATH×ATL) as radius endpoint
   - multi_window: run all 3 ZigZag windows; hot zones require 2+ distinct source confluence
 
-Design spec: ~/AntiEverything/Banshee_5/ACTIVE_TASK.md (Geometric Harmonic section)
+Design spec: ~/AntiEverything/Banshee_6/ACTIVE_TASK.md (Geometric Harmonic section)
 """
 
 import numpy as np

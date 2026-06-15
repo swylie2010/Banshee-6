@@ -24,16 +24,23 @@ banshee_keys.json
 # Operational / personal data (machine-specific, changes constantly)
 daily_briefings.jsonl
 paper_trades.json
+paper_wheels.json
+paper_gridbot.json
 banshee_presets.json
-watchlist_presets.json
 banshee_portfolio.json
 banshee_wheels.json
-paper_wheels.json
+banshee_profiles.json
+watchlist_presets.json
 strategies.json
+htf_levels.json
+predator_config.json
 
 # Research & private design work — informs the app, but isn't part of it
 Research and Resources/
 Appearance ideas/
+
+# Proprietary AI system prompts (trading logic — never public)
+prompts/
 
 # Our planning, specs, and project memory (development process, not the product)
 docs/
@@ -57,3 +64,4 @@ Thumbs.db
 # Node / UI build artifacts
 ui/node_modules/
 ui/dist/
+dist/

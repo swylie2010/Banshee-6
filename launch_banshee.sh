@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# launch_banshee.sh — Self-healing Banshee 5 launcher (Linux / macOS)
+# launch_banshee.sh — Self-healing Banshee 6 launcher (Linux / macOS)
 # Finds Python, creates .venv, installs deps, launches Core.
 # Re-run any time to repair a broken environment.
 # Usage: bash launch_banshee.sh [--no-ui]

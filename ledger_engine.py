@@ -1,5 +1,5 @@
 """
-ledger_engine.py — Banshee 5 Portfolio Transaction Ledger
+ledger_engine.py — Banshee 6 Portfolio Transaction Ledger
 
 Pure functions. No I/O, no network (adapter pattern — the caller fetches data
 and current prices; this engine only computes). Average-cost basis. The single

@@ -1,4 +1,4 @@
-# stop_banshee.ps1 — Stop all Banshee 5 Core processes on Windows.
+# stop_banshee.ps1 — Stop all Banshee 6 Core processes on Windows.
 #
 # Why this exists: stop_banshee.sh uses `pkill`, which does NOT see native
 # Windows python.exe processes from Git Bash, so a "restart" silently leaves the

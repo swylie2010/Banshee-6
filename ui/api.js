@@ -24,7 +24,7 @@ const TF_CORE_KEY = {
 function coreSymbol(sym) {
   const CRYPTO = ["BTC","ETH","SOL","AVAX","HYPE","HBAR","TAO","XLM","NEAR","BNB","ADA","DOT","LINK","MATIC","UNI","AAVE","CRV"];
   const COMMOD  = ["GOLD","SILV","OIL","NGAS"];
-  const COMMOD_PAIR = { GOLD:"XAU/USD", SILV:"XAG/USD", OIL:"WTI", NGAS:"NG" };
+  const COMMOD_PAIR = { GOLD:"XAU/USD", SILV:"SLV", OIL:"WTI", NGAS:"NG" };
   if (COMMOD_PAIR[sym]) return COMMOD_PAIR[sym];
   if (CRYPTO.includes(sym)) return sym + "/USD";
   return sym; // equities & indices pass through unchanged
@@ -52,13 +52,32 @@ function toIndicatorSeries(records, field) {
     .sort((a, b) => a.time - b.time);
 }
 
+let _token = null;
+const _ready = (async function _bootstrap() {
+  try {
+    const r = await fetch(`${API_BASE}/auth/token`);
+    const d = await r.json();
+    _token = d.token;
+  } catch (_) {}
+})();
+
+function _headers(extra = {}) {
+  return { "Content-Type": "application/json", "X-Banshee-Token": _token, ...extra };
+}
+
+async function _fetch(url, opts = {}) {
+  await _ready;
+  const h = { "X-Banshee-Token": _token, ...(opts.headers || {}) };
+  return fetch(url, { ...opts, headers: h });
+}
+
 /* fetch OHLCV for a symbol+tf from Core; returns LW-formatted candles */
 async function fetchOHLCV(sym, tf) {
   const mode    = TF_TO_MODE[tf] || "swing";
   const coreKey = TF_CORE_KEY[tf] || tf.toLowerCase();
   const pair    = coreSymbol(sym);
   try {
-    const res  = await fetch(`${API_BASE}/ohlcv?symbol=${encodeURIComponent(pair)}&mode=${mode}`);
+    const res  = await _fetch(`${API_BASE}/ohlcv?symbol=${encodeURIComponent(pair)}&mode=${mode}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -94,7 +113,7 @@ async function fetchOHLCV(sym, tf) {
 async function fetchRadar(sym, mode = "swing") {
   const pair = coreSymbol(sym);
   try {
-    const res  = await fetch(`${API_BASE}/radar?symbol=${encodeURIComponent(pair)}&mode=${mode}&output_mode=full`);
+    const res  = await _fetch(`${API_BASE}/radar?symbol=${encodeURIComponent(pair)}&mode=${mode}&output_mode=full`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -106,7 +125,7 @@ async function fetchRadar(sym, mode = "swing") {
 /* fetch macro sensors (TopBar flags) */
 async function fetchMacro() {
   try {
-    const res = await fetch(`${API_BASE}/macro/sensors`);
+    const res = await _fetch(`${API_BASE}/macro/sensors`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -120,7 +139,7 @@ async function fetchSMC(sym, tf = "4H") {
   const pair = coreSymbol(sym);
   const ltf  = TF_CORE_KEY[tf] || tf.toLowerCase();
   try {
-    const res  = await fetch(`${API_BASE}/smc/json?symbol=${encodeURIComponent(pair)}&ltf=${ltf}`);
+    const res  = await _fetch(`${API_BASE}/smc/json?symbol=${encodeURIComponent(pair)}&ltf=${ltf}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -132,7 +151,7 @@ async function fetchSMC(sym, tf = "4H") {
 /* fetch presets array from Core */
 async function fetchPresets() {
   try {
-    const res = await fetch(`${API_BASE}/presets`);
+    const res = await _fetch(`${API_BASE}/presets`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return data.presets ?? [];
@@ -144,7 +163,7 @@ async function fetchPresets() {
 
 async function savePresets(presets) {
   try {
-    await fetch(`${API_BASE}/presets`, {
+    await _fetch(`${API_BASE}/presets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ presets }),
@@ -158,7 +177,7 @@ async function savePresets(presets) {
 async function fetchXABCD(sym) {
   const pair = coreSymbol(sym);
   try {
-    const res = await fetch(`${API_BASE}/xabcd?symbol=${encodeURIComponent(pair)}`);
+    const res = await _fetch(`${API_BASE}/xabcd?symbol=${encodeURIComponent(pair)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -171,7 +190,7 @@ async function fetchXABCD(sym) {
 async function fetchGH(sym) {
   const pair = coreSymbol(sym);
   try {
-    const res = await fetch(`${API_BASE}/geo-harmonic?symbol=${encodeURIComponent(pair)}&multi_window=true`);
+    const res = await _fetch(`${API_BASE}/geo-harmonic?symbol=${encodeURIComponent(pair)}&multi_window=true`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -184,7 +203,7 @@ async function fetchGH(sym) {
 async function fetchGHPine(sym) {
   const pair = coreSymbol(sym);
   try {
-    const res = await fetch(`${API_BASE}/geo-harmonic/pine?symbol=${encodeURIComponent(pair)}&multi_window=true`);
+    const res = await _fetch(`${API_BASE}/geo-harmonic/pine?symbol=${encodeURIComponent(pair)}&multi_window=true`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -200,7 +219,7 @@ async function fetchGHPine(sym) {
 async function fetchAIBriefing(sym, mode = "swing", tab = "nexus", signal = null, manualStories = []) {
   const pair = coreSymbol(sym);
   try {
-    const res = await fetch(`${API_BASE}/ai/briefing`, {
+    const res = await _fetch(`${API_BASE}/ai/briefing`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol: pair, mode, manual_stories: manualStories, tab }),
@@ -218,7 +237,7 @@ async function fetchAIBriefing(sym, mode = "swing", tab = "nexus", signal = null
 /* fetch current settings (keys masked) */
 async function fetchSettings() {
   try {
-    const res = await fetch(`${API_BASE}/settings`);
+    const res = await _fetch(`${API_BASE}/settings`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -230,7 +249,7 @@ async function fetchSettings() {
 /* save settings — masked values (starting with •••••) are preserved server-side */
 async function saveSettings(settings) {
   try {
-    const res = await fetch(`${API_BASE}/settings`, {
+    const res = await _fetch(`${API_BASE}/settings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ settings }),
@@ -246,7 +265,7 @@ async function saveSettings(settings) {
 /* test AI connection with current form values */
 async function testAIConnection(aiConfig) {
   try {
-    const res = await fetch(`${API_BASE}/settings/test`, {
+    const res = await _fetch(`${API_BASE}/settings/test`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ settings: { AI_API: aiConfig } }),
@@ -262,7 +281,7 @@ async function testAIConnection(aiConfig) {
 /* fetch saved backtest strategies for Signal Lab */
 async function fetchStrategies() {
   try {
-    const res = await fetch(`${API_BASE}/strategies/data`);
+    const res = await _fetch(`${API_BASE}/strategies/data`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -274,7 +293,7 @@ async function fetchStrategies() {
 /* POST to /execution-plan for Risk Desk — always uses JSON output mode */
 async function fetchExecutionPlan({ account_size, risk_percent, entry_price, stop_loss, smc_conflicted = false }) {
   try {
-    const res = await fetch(`${API_BASE}/execution-plan`, {
+    const res = await _fetch(`${API_BASE}/execution-plan`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ account_size, risk_percent, entry_price, stop_loss, smc_conflicted, output_mode: "json" }),
@@ -290,7 +309,7 @@ async function fetchExecutionPlan({ account_size, risk_percent, entry_price, sto
 /* fetch all trades + stats for Trade Journal */
 async function fetchTrades() {
   try {
-    const res = await fetch(`${API_BASE}/journal/trades`);
+    const res = await _fetch(`${API_BASE}/journal/trades`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -302,7 +321,7 @@ async function fetchTrades() {
 /* close an open trade */
 async function closeTrade({ trade_id, exit_price, exit_reason = null, notes = "" }) {
   try {
-    const res = await fetch(`${API_BASE}/journal/close`, {
+    const res = await _fetch(`${API_BASE}/journal/close`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trade_id, exit_price, notes, exit_reason }),
@@ -318,7 +337,7 @@ async function closeTrade({ trade_id, exit_price, exit_reason = null, notes = ""
 /* update stop/target levels on an open trade */
 async function updateLevels({ trade_id, stop_price, target_price }) {
   try {
-    const res = await fetch(`${API_BASE}/journal/update-levels`, {
+    const res = await _fetch(`${API_BASE}/journal/update-levels`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trade_id, stop_price, target_price }),
@@ -334,7 +353,7 @@ async function updateLevels({ trade_id, stop_price, target_price }) {
 /* set outcome quality fields on a trade */
 async function updateOutcome({ trade_id, signal_correct = null, exit_reason = null, note = "" }) {
   try {
-    const res = await fetch(`${API_BASE}/journal/update-outcome`, {
+    const res = await _fetch(`${API_BASE}/journal/update-outcome`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ trade_id, signal_correct, exit_reason, note }),
@@ -350,7 +369,7 @@ async function updateOutcome({ trade_id, signal_correct = null, exit_reason = nu
 /* trigger Alpaca sync */
 async function syncAlpaca() {
   try {
-    const res = await fetch(`${API_BASE}/journal/sync-alpaca`, { method: "POST" });
+    const res = await _fetch(`${API_BASE}/journal/sync-alpaca`, { method: "POST" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -362,7 +381,7 @@ async function syncAlpaca() {
 /* fetch feedback synthesis for journal analysis */
 async function fetchFeedbackSynthesis() {
   try {
-    const res = await fetch(`${API_BASE}/journal/feedback-synthesis`);
+    const res = await _fetch(`${API_BASE}/journal/feedback-synthesis`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) { return { error: err.message }; }
@@ -371,7 +390,7 @@ async function fetchFeedbackSynthesis() {
 /* fetch the latest Predator briefing */
 async function fetchPredatorBriefing() {
   try {
-    const res = await fetch(`${API_BASE}/predator/briefing`);
+    const res = await _fetch(`${API_BASE}/predator/briefing`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -383,7 +402,7 @@ async function fetchPredatorBriefing() {
 /* trigger the Daily Predator pipeline; resolves when complete (2-3 min) */
 async function runPredator(force = true, manualStories = []) {
   try {
-    const res = await fetch(`${API_BASE}/predator/run`, {
+    const res = await _fetch(`${API_BASE}/predator/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ watchlist: [], force, manual_stories: manualStories }),
@@ -401,7 +420,7 @@ async function journalOpen({ symbol, direction, entry_price, stop_price,
   target_price, position_usd = 1000, verdict = "", edge = "", mode = "swing", notes = "" }) {
   const pair = coreSymbol(symbol);
   try {
-    const res = await fetch(`${API_BASE}/journal/open`, {
+    const res = await _fetch(`${API_BASE}/journal/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol: pair, direction, entry_price, stop_price,
@@ -417,7 +436,7 @@ async function journalOpen({ symbol, direction, entry_price, stop_price,
 
 async function fetchRotation() {
   try {
-    const res = await fetch(`${API_BASE}/rotation`);
+    const res = await _fetch(`${API_BASE}/rotation`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -429,7 +448,7 @@ async function fetchRotation() {
 /* fetch all portfolios */
 async function fetchPortfolios() {
   try {
-    const res = await fetch(`${API_BASE}/portfolios`);
+    const res = await _fetch(`${API_BASE}/portfolios`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -441,7 +460,7 @@ async function fetchPortfolios() {
 /* create a new portfolio */
 async function createPortfolio(portfolio) {
   try {
-    const res = await fetch(`${API_BASE}/portfolios`, {
+    const res = await _fetch(`${API_BASE}/portfolios`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(portfolio),
@@ -457,7 +476,7 @@ async function createPortfolio(portfolio) {
 /* update a portfolio by id */
 async function updatePortfolio(id, updates) {
   try {
-    const res = await fetch(`${API_BASE}/portfolios/${id}`, {
+    const res = await _fetch(`${API_BASE}/portfolios/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(updates),
@@ -473,7 +492,7 @@ async function updatePortfolio(id, updates) {
 /* fetch analysis for a portfolio by id */
 async function fetchPortfolioAnalysis(id) {
   try {
-    const res = await fetch(`${API_BASE}/portfolios/${id}/analysis`);
+    const res = await _fetch(`${API_BASE}/portfolios/${id}/analysis`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -486,7 +505,7 @@ async function fetchPortfolioAnalysis(id) {
    returns resolved:true so a blip never shows a false "unknown symbol". */
 async function resolveSymbol(sym) {
   try {
-    const res = await fetch(`${API_BASE}/resolve-symbol?sym=${encodeURIComponent(sym)}`);
+    const res = await _fetch(`${API_BASE}/resolve-symbol?sym=${encodeURIComponent(sym)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -498,7 +517,7 @@ async function resolveSymbol(sym) {
 /* fetch the curated Wheel options universe list */
 async function fetchOptionsUniverse() {
   try {
-    const r = await fetch(`${API_BASE}/options/universe`);
+    const r = await _fetch(`${API_BASE}/options/universe`);
     if (!r.ok) return { universe: [] };
     return await r.json();
   } catch (e) { console.warn("[api] fetchOptionsUniverse:", e.message); return { universe: [] }; }
@@ -508,7 +527,7 @@ async function fetchOptionsUniverse() {
 async function fetchOptionsCandidate(accountSize) {
   try {
     const q = accountSize ? `?account_size=${encodeURIComponent(accountSize)}` : "";
-    const r = await fetch(`${API_BASE}/options/candidate${q}`);
+    const r = await _fetch(`${API_BASE}/options/candidate${q}`);
     if (!r.ok) return { candidate: null, error_note: "Options scan unavailable." };
     return await r.json();
   } catch (e) { console.warn("[api] fetchOptionsCandidate:", e.message); return { candidate: null, error_note: "Options scan unavailable." }; }
@@ -517,7 +536,7 @@ async function fetchOptionsCandidate(accountSize) {
 /* grade a user-composed option against Banshee's rules (inverse of the candidate search) */
 async function gradeOption(spec) {
   try {
-    const r = await fetch(`${API_BASE}/options/grade`, {
+    const r = await _fetch(`${API_BASE}/options/grade`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(spec),
@@ -535,7 +554,7 @@ async function gradeOption(spec) {
 
 async function runScenario(spec, terminalPrice) {
   try {
-    const r = await fetch(`${API_BASE}/options/scenario`, {
+    const r = await _fetch(`${API_BASE}/options/scenario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ spec, terminal_price: terminalPrice }),
@@ -546,7 +565,7 @@ async function runScenario(spec, terminalPrice) {
 
 async function learnRecap(run) {
   try {
-    const r = await fetch(`${API_BASE}/options/learn/recap`, {
+    const r = await _fetch(`${API_BASE}/options/learn/recap`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ run }),
@@ -557,7 +576,7 @@ async function learnRecap(run) {
 
 async function learnCompare(runA, runB) {
   try {
-    const r = await fetch(`${API_BASE}/options/learn/compare`, {
+    const r = await _fetch(`${API_BASE}/options/learn/compare`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ run_a: runA, run_b: runB }),
@@ -568,7 +587,7 @@ async function learnCompare(runA, runB) {
 
 async function learnWhyNot(graded, run) {
   try {
-    const r = await fetch(`${API_BASE}/options/learn/why-not`, {
+    const r = await _fetch(`${API_BASE}/options/learn/why-not`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ graded, run }),
@@ -582,7 +601,7 @@ async function learnWhyNot(graded, run) {
 /* list all active wheel positions */
 async function listWheels() {
   try {
-    const res = await fetch(`${API_BASE}/wheels`);
+    const res = await _fetch(`${API_BASE}/wheels`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -594,7 +613,7 @@ async function listWheels() {
 /* create a new wheel position */
 async function createWheel(body) {
   try {
-    const res = await fetch(`${API_BASE}/wheels`, {
+    const res = await _fetch(`${API_BASE}/wheels`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -613,7 +632,7 @@ async function createWheel(body) {
 /* get a single wheel position by id */
 async function getWheel(id) {
   try {
-    const res = await fetch(`${API_BASE}/wheels/${id}`);
+    const res = await _fetch(`${API_BASE}/wheels/${id}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -625,7 +644,7 @@ async function getWheel(id) {
 /* post a state-machine event to a wheel position */
 async function postWheelEvent(id, event) {
   try {
-    const res = await fetch(`${API_BASE}/wheels/${id}/event`, {
+    const res = await _fetch(`${API_BASE}/wheels/${id}/event`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event }),
@@ -644,7 +663,7 @@ async function postWheelEvent(id, event) {
 /* delete a wheel position by id */
 async function deleteWheel(id) {
   try {
-    const res = await fetch(`${API_BASE}/wheels/${id}`, { method: "DELETE" });
+    const res = await _fetch(`${API_BASE}/wheels/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -657,21 +676,21 @@ async function deleteWheel(id) {
 
 /* list all paper wheel positions */
 async function listPaperWheels() {
-  const r = await fetch(`${API_BASE}/paper-wheels`);
+  const r = await _fetch(`${API_BASE}/paper-wheels`);
   if (!r.ok) throw await r.json();
   return r.json();
 }
 
 /* get a single paper wheel by id */
 async function getPaperWheel(id) {
-  const r = await fetch(`${API_BASE}/paper-wheels/${id}`);
+  const r = await _fetch(`${API_BASE}/paper-wheels/${id}`);
   if (!r.ok) throw await r.json();
   return r.json();
 }
 
 /* create a new paper wheel position */
 async function createPaperWheel(body) {
-  const r = await fetch(`${API_BASE}/paper-wheels`, {
+  const r = await _fetch(`${API_BASE}/paper-wheels`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -682,7 +701,7 @@ async function createPaperWheel(body) {
 
 /* submit a covered call order on a paper wheel */
 async function submitPaperCC(wheelId, body) {
-  const r = await fetch(`${API_BASE}/paper-wheels/${wheelId}/submit-cc`, {
+  const r = await _fetch(`${API_BASE}/paper-wheels/${wheelId}/submit-cc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -693,28 +712,28 @@ async function submitPaperCC(wheelId, body) {
 
 /* fetch the calls chain for a paper wheel (used when state===SHARES) */
 async function getPaperWheelCalls(wheelId) {
-  const r = await fetch(`${API_BASE}/paper-wheels/${wheelId}/calls`);
+  const r = await _fetch(`${API_BASE}/paper-wheels/${wheelId}/calls`);
   if (!r.ok) throw await r.json();
   return r.json();
 }
 
 /* delete a paper wheel by id */
 async function deletePaperWheel(id) {
-  const r = await fetch(`${API_BASE}/paper-wheels/${id}`, { method: "DELETE" });
+  const r = await _fetch(`${API_BASE}/paper-wheels/${id}`, { method: "DELETE" });
   if (!r.ok) throw await r.json();
   return r.json();
 }
 
 /* fetch wheels that need attention (alert strip) */
 async function getPaperWheelAlerts() {
-  const r = await fetch(`${API_BASE}/paper-wheels/alerts`);
+  const r = await _fetch(`${API_BASE}/paper-wheels/alerts`);
   if (!r.ok) throw await r.json();
   return r.json();
 }
 
 /* post a manual FSM event to a paper wheel */
 async function postPaperWheelEvent(wheelId, event) {
-  const r = await fetch(`${API_BASE}/paper-wheels/${wheelId}/event`, {
+  const r = await _fetch(`${API_BASE}/paper-wheels/${wheelId}/event`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event }),
@@ -723,4 +742,21 @@ async function postPaperWheelEvent(wheelId, event) {
   return r.json();
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent };
+async function analyzeGridbot(sym, capital, gridCount, feePct) {
+  const r = await _fetch(`${API_BASE}/gridbot/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sym, capital, grid_count: gridCount, fee_pct: feePct }),
+  });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+async function shutdownBanshee() {
+  try {
+    await _fetch(`${API_BASE}/shutdown`, { method: "POST" });
+  } catch (_) { /* server dies mid-response — expected */ }
+  return { ok: true };
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, shutdownBanshee };

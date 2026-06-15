@@ -562,7 +562,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
   if (error) return (
     <PaletteCtx.Provider value={pm}>
       <div style={{ ...overlayStyle(pm), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
-        <button onClick={onBack} style={{ position: 'absolute', top: 20, left: 24, background: 'transparent', border: 'none', color: pm.ink3, cursor: 'pointer', fontSize: 12, letterSpacing: 1, padding: 0 }}>← BACK</button>
+        <button onClick={onBack} style={{ position: 'absolute', top: 20, left: 24, background: 'transparent', border: 'none', color: '#FF6D00', cursor: 'pointer', fontSize: 12, letterSpacing: 1, padding: 0 }}>← BACK</button>
         <div style={{ fontSize: 13, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>COULDN'T LOAD THIS PORTFOLIO</div>
         <div style={{ fontSize: 11, color: pm.ink3, maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
           {/HTTP 4|no holdings|value is zero/i.test(error)
@@ -608,7 +608,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 14 }}>
-        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: pm.ink3, cursor: 'pointer', fontSize: 12, letterSpacing: 1, padding: 0 }}>← BACK</button>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: '#FF6D00', cursor: 'pointer', fontSize: 12, letterSpacing: 1, padding: 0 }}>← BACK</button>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
           <GradeCircle grade={grade} score={score} />
           <span style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, whiteSpace: 'nowrap' }}>BASKET HEALTH</span>

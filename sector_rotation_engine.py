@@ -1,5 +1,5 @@
 """
-sector_rotation_engine.py — Banshee 5 Sector Rotation Engine
+sector_rotation_engine.py — Banshee 6 Sector Rotation Engine
 
 Tracks institutional capital flows across the 10 S&P 500 sector SPDRs
 using Comparative Relative Strength (CRS) and Rate of Change (ROC) math.

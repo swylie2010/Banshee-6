@@ -61,11 +61,11 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
   const syms = wl.syms;
   const assets = syms
     .map(s => {
-      const key    = canonSym(s);                 // "BTC/USD" → "BTC"; "TAO/USD" → "TAO/USD"
+      const key    = window.canonSym(s);           // "BTC/USD" → "BTC"; "TAO/USD" → "TAO/USD"
       const cached = snapshot[key];
-      const base   = resolveBaseAsset(key, snapshot);
+      const base   = window.resolveBaseAsset(key, snapshot);
       const _dataState = radarData[key] ? "LIVE" : cached ? "CACHED" : "INIT";
-      return { ...mergeRadar(base, radarData[key]), sym: key, _origSym: s,
+      return { ...window.mergeRadar(base, radarData[key]), sym: key, _origSym: s,
                _loading: radarLoading.has(key), _dataState };
     })
     .filter(Boolean);

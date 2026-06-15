@@ -273,6 +273,62 @@ All your saved backtest and validation runs in one filterable table. Colour-code
 
 ---
 
+### ◆ Options — The Wheel & Bull Put Spreads
+**What it is:** A beginner-first teaching tool for two conservative options income strategies — selling cash-secured puts as part of *The Wheel*, and selling Bull Put Spreads (credit spreads). Its job is to explain what an option is and help you make a good decision you understand — not to execute trades.
+
+**The core idea:** When you sell an option, someone pays you cash up front (the premium) in exchange for an obligation you take on. The Wheel sells puts against ETFs you'd be happy to own anyway. Bull Put Spreads sell a put and simultaneously buy a cheaper one as a defined-risk cap — less premium, but you can never lose more than the width of the spread.
+
+**The two tracks:**
+- **The Wheel** — income-generating strategy using cash-secured puts → shares → covered calls in a cycle. Better suited to larger accounts. Requires full cash collateral.
+- **Bull Put Spreads** — defined-risk credit spreads. Lower capital requirement. Better for smaller accounts or those who want a strict cap on maximum loss.
+
+**The safety ladder:**
+1. **Read** — Banshee finds the one candidate that passes every rule. You study it, nothing more.
+2. **Grade** — You compose your own option idea; Banshee grades it rule-by-rule (the inverse of the search).
+3. **Simulate** — Walk a chosen position through a full Wheel cycle, no money involved.
+4. **Learn** — AI recap loop: try different numbers, compare scenarios, ask "why not?" on any graded position. The four danger levers (naked / high-delta / single-stock / oversize) are shown running calm vs crash months.
+
+**Key guardrails Banshee enforces for The Wheel:**
+- Cash-secured only (never margin) · 20–30 delta · 5% of account max per trade
+- Open interest > 1,000 · IVR > 35 · 35–45 DTE · Broad ETFs only (SPY/QQQ/IWM/DIA)
+
+**Foibles:**
+- Options require an options chain data source. Banshee estimates IVR and delta from price/time math — flagged as "est." — until a real options feed is wired in. Treat estimates as directional, not precise.
+- The account-size gate is real: below ~$20,000 the smallest qualifying position may exceed 5% of account. Banshee will tell you honestly if your account isn't there yet.
+- No orders are placed. This is a read-and-learn tool.
+
+---
+
+### ⊞ Gridbot Calculator
+**What it is:** A free educational calculator that shows how to configure a grid trading bot for any asset. Grid trading bots place a ladder of buy and sell orders across a price range, automatically buying dips and selling bounces to earn small repeated profits from oscillation.
+
+**The most important thing to understand:** Gridbots thrive in sideways (ranging) markets and get hurt badly by strong trends. A bot deployed during a breakdown will buy all the way down. That's why the first thing the calculator checks is whether your asset is actually ranging right now — before showing you anything else.
+
+**What the calculator shows:**
+
+| Section | What it tells you |
+|---------|------------------|
+| **Regime Check** | Is this asset currently eligible for a gridbot? Shows MA120 slope, RSI-14, and a plain-English verdict. |
+| **Grid Blueprint** | Arithmetic (equal dollar spacing) vs Geometric (equal % spacing) — auto-selected based on range size. Shows upper/lower bounds, spacing, and level count. |
+| **Grid Levels** | Every individual limit order — price, type (BUY/SELL), capital allocated, and profit per completed oscillation. |
+| **Capital Plan** | How your investment is split: 50% anchors at the current price; 50% spreads across levels using Soft Martingale scaling (outer levels get 3× more than inner ones — for cost-averaging without blowing up). |
+| **Risk Guardrails** | Disaster stop price (where to switch to DCA mode), estimated max drawdown, and a fee churn check (warns if your grid spacing is too tight to profit after exchange fees). |
+
+**How to use it:**
+1. Enter the asset ticker (BTC, SPY, ETH, NVDA — anything yfinance supports)
+2. Enter your capital amount
+3. Set the number of grid levels (3–50) with the slider
+4. Enter your exchange's trading fee %
+5. Click ANALYZE — results appear in ~2–4 seconds
+
+**Foibles:**
+- Data comes from yfinance (6 months of daily bars). The fetch takes 2–4 seconds.
+- Profit per cycle assumes price oscillates cleanly across the full range. Real grids fill unevenly.
+- ELIGIBLE / NOT ELIGIBLE is a flag — Banshee calculates, you decide whether to act.
+- No orders are placed. This is a read-and-learn tool.
+
+---
+
 ### ⚙️ Settings
 - **API Keys:** FRED (macro data) and AI (Claude or Gemini for Nexus narrative + Predator briefing)
 - **AI Rate Limit:** How many AI calls per hour Banshee will make on your behalf. Default is 50/hr. If you hit the limit, AI features return HTTP 429 with a "Resets at HH:MM UTC" message — not an error, just a cooldown. Raise the limit in Settings if you're doing heavy analysis sessions.
@@ -303,4 +359,4 @@ For interpreting backtest results specifically — trade count thresholds, which
 
 ---
 
-*Last updated: 2026-06-13. This is a living document — update it when a new foible is discovered or a new tab is added.*
+*Last updated: 2026-06-14. This is a living document — update it when a new foible is discovered or a new tab is added.*

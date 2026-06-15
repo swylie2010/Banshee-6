@@ -3,7 +3,7 @@ import os
 import sys
 
 # Add the directory to sys.path so we can import everything correctly
-script_dir = r"C:\Users\swyli\AntiEverything\Banshee_5"
+script_dir = r"C:\Users\swyli\AntiEverything\Banshee_6"
 sys.path.insert(0, script_dir)
 
 # Import the mcp_server modules to access the tool functions

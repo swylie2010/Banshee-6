@@ -28,7 +28,9 @@ Tools exposed:
   open_paper_wheel       — create a paper Wheel + place Alpaca paper CSP order
 """
 
+import json
 import os
+import pathlib
 import sys
 
 import requests
@@ -48,11 +50,21 @@ _OFFLINE_MSG = (
     "The Core must be running before MCP tools will respond."
 )
 
+_KEYS_FILE = pathlib.Path.home() / ".banshee_keys.json"
+
+
+def _banshee_token() -> str:
+    try:
+        return json.loads(_KEYS_FILE.read_text()).get("banshee_token", "")
+    except Exception:
+        return ""
+
 
 def _get(path: str, **params) -> str:
     try:
         clean = {k: v for k, v in params.items() if v is not None}
-        r = requests.get(f"{CORE_URL}{path}", params=clean, timeout=_TIMEOUT)
+        r = requests.get(f"{CORE_URL}{path}", params=clean, timeout=_TIMEOUT,
+                         headers={"X-Banshee-Token": _banshee_token()})
         return r.text
     except requests.ConnectionError:
         return _OFFLINE_MSG
@@ -62,7 +74,8 @@ def _get(path: str, **params) -> str:
 
 def _post(path: str, body: dict) -> str:
     try:
-        r = requests.post(f"{CORE_URL}{path}", json=body, timeout=_TIMEOUT)
+        r = requests.post(f"{CORE_URL}{path}", json=body, timeout=_TIMEOUT,
+                          headers={"X-Banshee-Token": _banshee_token()})
         return r.text
     except requests.ConnectionError:
         return _OFFLINE_MSG

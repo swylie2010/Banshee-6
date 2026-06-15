@@ -21,8 +21,13 @@ echo [INFO] MCP config target : %MCP_FILE%
 echo.
 
 :: ── Step 1: Install Python dependencies ──────────────────────────
-echo [1/3] Installing Python dependencies from requirements.txt...
-pip install -r "%BANSHEE_DIR%\requirements.txt"
+if exist "%BANSHEE_DIR%\requirements-lock.txt" (
+    echo [1/3] Installing from requirements-lock.txt ^(pinned^)...
+    pip install -r "%BANSHEE_DIR%\requirements-lock.txt"
+) else (
+    echo [1/3] Installing Python dependencies from requirements.txt...
+    pip install -r "%BANSHEE_DIR%\requirements.txt"
+)
 if %ERRORLEVEL% NEQ 0 (
     echo [WARN] pip install returned errors -- check output above.
 ) else (

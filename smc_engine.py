@@ -1001,7 +1001,7 @@ def run(df: pd.DataFrame) -> dict:
 # ─── HTF LEVEL CONFLUENCE ──────────────────────────────────────────────────────
 
 def load_htf_levels() -> dict:
-    """Load htf_levels.json from the Banshee 5 directory."""
+    """Load htf_levels.json from the Banshee 6 directory."""
     import json, os
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "htf_levels.json")
     if not os.path.exists(path):
