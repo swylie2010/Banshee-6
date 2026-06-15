@@ -107,57 +107,64 @@ def _by_speed(names: list[str]) -> list[str]:
 # ── Spot price adapters ────────────────────────────────────────────────────────
 
 def _coinbase_spot(symbol: str) -> float | None:
-    import ccxt
-    ex = ccxt.coinbase({"enableRateLimit": True})
-    ticker = ex.fetch_ticker(symbol)
-    time.sleep(0.1)
-    last = ticker.get("last")
-    return float(last) if last else None
+    try:
+        import ccxt
+        ex = ccxt.coinbase({"enableRateLimit": True})
+        ticker = ex.fetch_ticker(symbol)
+        last = ticker.get("last")
+        return float(last) if last else None
+    except Exception:
+        return None
 
 
 def _coingecko_spot(symbol: str) -> float | None:
-    import requests
-    # Normalise: "BTC/USD" → "BTC", "BTC-USD" → "BTC"
-    base = symbol.upper().split("/")[0].split("-")[0]
-    cg_id = _CG_IDS.get(base)
-    if not cg_id:
-        return None  # symbol not in map — skip silently
-    keys = _load_keys()
-    api_key = keys.get("COINGECKO", {}).get("key", "")
-    if api_key:
-        base_url = "https://pro-api.coingecko.com/api/v3"
-        headers = {"x-cg-pro-api-key": api_key}
-    else:
-        base_url = "https://api.coingecko.com/api/v3"
-        headers = {}
-    r = requests.get(
-        f"{base_url}/simple/price",
-        params={"ids": cg_id, "vs_currencies": "usd"},
-        headers=headers,
-        timeout=5,
-    )
-    r.raise_for_status()
-    return float(r.json()[cg_id]["usd"])
+    try:
+        import requests
+        base = symbol.upper().split("/")[0].split("-")[0]
+        cg_id = _CG_IDS.get(base)
+        if not cg_id:
+            return None
+        keys = _load_keys()
+        api_key = keys.get("COINGECKO", {}).get("key", "")
+        if api_key:
+            base_url = "https://pro-api.coingecko.com/api/v3"
+            headers = {"x-cg-pro-api-key": api_key}
+        else:
+            base_url = "https://api.coingecko.com/api/v3"
+            headers = {}
+        r = requests.get(
+            f"{base_url}/simple/price",
+            params={"ids": cg_id, "vs_currencies": "usd"},
+            headers=headers,
+            timeout=5,
+        )
+        r.raise_for_status()
+        return float(r.json()[cg_id]["usd"])
+    except Exception:
+        return None
 
 
 def _alpaca_spot(symbol: str) -> float | None:
-    import requests
-    keys = _load_keys()
-    ak = keys.get("ALPACA_KEY", {}).get("key", "")
-    sk = keys.get("ALPACA_SECRET", {}).get("key", "")
-    if not ak or not sk:
+    try:
+        import requests
+        keys = _load_keys()
+        ak = keys.get("ALPACA_KEY", {}).get("key", "")
+        sk = keys.get("ALPACA_SECRET", {}).get("key", "")
+        if not ak or not sk:
+            return None
+        r = requests.get(
+            f"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest",
+            headers={"APCA-API-KEY-ID": ak, "APCA-API-SECRET-KEY": sk},
+            timeout=5,
+        )
+        r.raise_for_status()
+        q = r.json().get("quote", {})
+        bid, ask = q.get("bp", 0), q.get("ap", 0)
+        if bid and ask:
+            return float((bid + ask) / 2)
         return None
-    r = requests.get(
-        f"https://data.alpaca.markets/v2/stocks/{symbol}/quotes/latest",
-        headers={"APCA-API-KEY-ID": ak, "APCA-API-SECRET-KEY": sk},
-        timeout=5,
-    )
-    r.raise_for_status()
-    q = r.json().get("quote", {})
-    bid, ask = q.get("bp", 0), q.get("ap", 0)
-    if bid and ask:
-        return float((bid + ask) / 2)
-    return None
+    except Exception:
+        return None
 
 
 def _yfinance_spot(symbol: str) -> float | None:

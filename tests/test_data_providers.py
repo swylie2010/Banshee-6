@@ -117,21 +117,24 @@ def test_coingecko_skipped_for_unknown_crypto_symbol():
     import data_providers
     with patch.dict(data_providers._SPOT_FNS, {
         "coinbase":  _exc,
+        "coingecko": lambda s: None,   # explicit mock — symbol not in _CG_IDS
         "yfinance":  lambda s: 999.0,
     }):
-        # UNKNOWNCOIN-USD not in _CG_IDS — real _coingecko_spot returns None, falls through
         result = data_providers.get_spot_price("UNKNOWNCOIN-USD-TEST5")
     assert result == 999.0
 
 def test_latency_recorded_on_spot_success():
     """Successful spot fetch records latency for the winning provider."""
+    import uuid
     import data_providers
     data_providers._latency["yfinance"].clear()
+    # Use a unique symbol each run so ttl_cache never serves a stale hit
+    test_sym = f"ETH-USD-LATENCY-{uuid.uuid4().hex}"
     with patch.dict(data_providers._SPOT_FNS, {
         "coinbase":  _exc,
         "coingecko": _exc,
         "yfinance":  lambda s: 42.0,
     }):
-        data_providers.get_spot_price("ETH-USD-TEST6")
+        data_providers.get_spot_price(test_sym)
     assert len(data_providers._latency["yfinance"]) == 1
     data_providers._latency["yfinance"].clear()
