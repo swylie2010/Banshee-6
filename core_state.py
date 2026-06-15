@@ -47,6 +47,7 @@ _PORTFOLIO_PATH    = Path(__file__).parent / "banshee_portfolio.json"
 _WHEELS_PATH       = Path(__file__).parent / "banshee_wheels.json"
 _PAPER_WHEELS_PATH = Path(__file__).parent / "paper_wheels.json"
 _PAPER_SPREADS_PATH = Path(__file__).parent / "paper_spreads.json"
+_PAPER_GRIDBOT_PATH = Path(__file__).parent / "paper_gridbot.json"
 
 # ── File locks (prevent concurrent write corruption) ─────────────────────────
 _MACRO_CACHE_LOCK    = threading.Lock()
