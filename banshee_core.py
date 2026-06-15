@@ -207,9 +207,17 @@ def _bg_tick_paper_gridbot():
         if not grid:
             return
 
+        # Quick check on stored events before running the full replay
+        last_event_type = next(
+            (e.get("type") for e in reversed(grid.get("events", []))),
+            None,
+        )
+        if last_event_type in ("DISASTER_STOP", "MANUAL_STOP"):
+            return  # already stopped — skip replay entirely
+
         state = gridbot_sim.replay(grid["events"], grid["config"])
         if state["status"] != "active":
-            return  # already stopped — nothing to do
+            return  # defense-in-depth: replay confirms it's not active
 
         yf_sym = gridbot_engine._to_yf_sym(grid["sym"])
         current_price = get_last_price(yf_sym)
