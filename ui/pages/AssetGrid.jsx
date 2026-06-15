@@ -1,18 +1,31 @@
 /* AssetGrid — watchlist grid + ticker tape */
 
 /* ── Ticker tape ──────────────────────────────────────────── */
-function Ticker({ radarData = {} }) {
+function Ticker({ radarData = {}, snapshot = {} }) {
   const liveAssets = window.ASSETS.map(a => {
-    const r = radarData[a.sym];
+    const r    = radarData[a.sym];
+    const snap = snapshot[a.sym];
+    const live   = !!(r && typeof r.price === "number");
+    const cached = !live && !!(snap && typeof snap.price === "number");
     return {
       sym:   a.sym,
-      price: (r && typeof r.price   === "number") ? r.price   : a.price,
-      chg:   (r && typeof r.chg_pct === "number") ? r.chg_pct : a.chg,
-      live:  !!(r && typeof r.price === "number"),
+      price: r?.price   ?? snap?.price ?? a.price,
+      chg:   r?.chg_pct ?? snap?.chg   ?? a.chg,
+      live,
+      cached,
     };
   });
-  const items = [...liveAssets, ...liveAssets];
-  const anyLive = liveAssets.some(a => a.live);
+  const items     = [...liveAssets, ...liveAssets];
+  const anyLive   = liveAssets.some(a => a.live);
+  const anyCached = !anyLive && liveAssets.some(a => a.cached);
+
+  const badgeLabel = anyLive   ? "◆ TAPE · LIVE"
+                   : anyCached ? "◈ TAPE · CACHED"
+                   : "◇ TAPE · MOCK";
+  const badgeBg    = anyLive   ? "var(--cyan)"
+                   : anyCached ? "var(--amber)"
+                   : "var(--bg-3)";
+  const badgeColor = (anyLive || anyCached) ? "var(--bg-0)" : "var(--ink-3)";
 
   return (
     <div style={{
@@ -25,13 +38,13 @@ function Ticker({ radarData = {} }) {
       <div style={{
         padding: "0 12px", height: "100%",
         display: "flex", alignItems: "center",
-        background: anyLive ? "var(--cyan)" : "var(--bg-3)", color: "var(--bg-0)",
+        background: badgeBg, color: badgeColor,
         flex: "0 0 auto",
         clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 100%, 0 100%)",
         paddingRight: 22,
       }}>
-        <span className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: anyLive ? "var(--bg-0)" : "var(--ink-3)" }}>
-          {anyLive ? "◆ TAPE · LIVE" : "◇ TAPE · MOCK"}
+        <span className="mono" style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.18em", color: badgeColor }}>
+          {badgeLabel}
         </span>
       </div>
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
@@ -40,7 +53,7 @@ function Ticker({ radarData = {} }) {
         }}>
           {items.map((a, i) => (
             <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="mono" style={{ fontSize: 13, color: a.live ? "var(--ink)" : "var(--ink-4)", letterSpacing: "0.1em" }}>{a.sym}</span>
+              <span className="mono" style={{ fontSize: 13, color: (a.live || a.cached) ? "var(--ink)" : "var(--ink-4)", letterSpacing: "0.1em" }}>{a.sym}</span>
               <span className="num" style={{ fontSize: 13, color: "var(--ink)" }}>
                 {a.price < 100 ? a.price.toFixed(2) : a.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
@@ -136,7 +149,7 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
         ))}
       </div>
 
-      <Ticker radarData={radarData} />
+      <Ticker radarData={radarData} snapshot={snapshot} />
     </div>
   );
 }
