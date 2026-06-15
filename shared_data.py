@@ -147,9 +147,12 @@ def fetch_crypto_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> tuple[p
     if not df.empty:
         return df, None
     # Last resort: locally extracted TV JSON files (offline; useful for ETH/BTC etc.)
-    tv_df = _load_sd_tv_ohlcv(symbol, timeframe)
-    if not tv_df.empty:
-        return tv_df.tail(limit).reset_index(drop=True), "Using TV extracted data (may be stale)."
+    try:
+        tv_df = _load_sd_tv_ohlcv(symbol, timeframe)
+        if not tv_df.empty:
+            return tv_df.tail(limit).reset_index(drop=True), "Using TV extracted data (may be stale)."
+    except Exception:
+        pass
     return pd.DataFrame(), "All data providers failed."
 
 @ttl_cache(ttl=900)

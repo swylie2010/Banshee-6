@@ -106,11 +106,23 @@ def _by_speed(names: list[str]) -> list[str]:
 
 # ── Spot price adapters ────────────────────────────────────────────────────────
 
+def _to_ccxt_sym(symbol: str) -> str:
+    """Convert yfinance-style symbol ('BTC-USD') to ccxt pair ('BTC/USD')."""
+    s = symbol.upper()
+    # "BTC-USD" → "BTC/USD", "BTC-USDT" → "BTC/USDT"
+    for quote in ("-USDT", "-USD"):
+        if s.endswith(quote):
+            return s[:-len(quote)] + "/" + quote[1:]
+    # "BTC/USD" already in ccxt format — pass through
+    return s
+
+
 def _coinbase_spot(symbol: str) -> float | None:
     try:
         import ccxt
+        ccxt_sym = _to_ccxt_sym(symbol)
         ex = ccxt.coinbase({"enableRateLimit": True})
-        ticker = ex.fetch_ticker(symbol)
+        ticker = ex.fetch_ticker(ccxt_sym)
         last = ticker.get("last")
         return float(last) if last else None
     except Exception:
@@ -218,6 +230,7 @@ def _coinbase_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
     """Crypto OHLCV from Coinbase via ccxt. Resamples 4H and 1W from shorter bars."""
     try:
         import ccxt
+        ccxt_sym = _to_ccxt_sym(symbol)
         resample_map = {"4h": ("2h", 2, "4h"), "1wk": ("1d", 7, "1W")}
         if timeframe in resample_map:
             fetch_tf, mult, resample_rule = resample_map[timeframe]
@@ -225,7 +238,7 @@ def _coinbase_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
         else:
             fetch_tf, fetch_limit, resample_rule = timeframe, limit + 50, None
         ex = ccxt.coinbase({"enableRateLimit": True})
-        ohlcv = ex.fetch_ohlcv(symbol, fetch_tf, limit=fetch_limit)
+        ohlcv = ex.fetch_ohlcv(ccxt_sym, fetch_tf, limit=fetch_limit)
         if not ohlcv:
             return pd.DataFrame()
         df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
