@@ -791,7 +791,7 @@ async function fetchDataSourceSpeed() {
 /* test CoinGecko connectivity (and save key first) */
 async function testCoinGecko() {
   const r = await _fetch(`${API_BASE}/settings/data-sources/test-coingecko`, {
-    method: "POST", body: "{}",
+    method: "POST", body: "{}", headers: { "Content-Type": "application/json" },
   });
   return r.ok ? r.json() : null;
 }

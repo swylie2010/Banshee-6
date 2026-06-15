@@ -169,6 +169,7 @@ function DataSourceRow({ name, speed, cgKey, onCgKeyChange, onTest, testStatus }
       {name === "coingecko" && (
         <button
           onClick={onTest}
+          disabled={testStatus === "testing"}
           style={{
             padding: "4px 12px", background: "var(--bg-3)",
             border: "1px solid var(--line-2)", color: "var(--cyan)",
@@ -176,7 +177,10 @@ function DataSourceRow({ name, speed, cgKey, onCgKeyChange, onTest, testStatus }
             letterSpacing: "0.14em", cursor: "pointer", flexShrink: 0,
           }}
         >
-          {testStatus === "testing" ? "TESTING…" : testStatus === "ok" ? "✓ OK" : "TEST"}
+          {testStatus === "testing" ? "TESTING…"
+            : testStatus === "ok"    ? "✓ OK"
+            : testStatus === "error" ? "✗ ERR"
+            : "TEST"}
         </button>
       )}
     </div>
@@ -217,7 +221,7 @@ function DataSourcesSection({ cgKey, onCgKeyChange, onSaveCgKey, saveStatus }) {
         />
       ))}
       {saveStatus && (
-        <div className="mono" style={{ fontSize: 11, color: "var(--buy)", marginTop: 4 }}>
+        <div className="mono" style={{ fontSize: 11, color: saveStatus.startsWith("✗") ? "var(--sell)" : "var(--buy)", marginTop: 4 }}>
           {saveStatus}
         </div>
       )}
@@ -390,8 +394,8 @@ function SettingsPage({ onBack }) {
   }
 
   async function saveCgKey() {
-    await window.API.saveSettings({ COINGECKO: { key: cgKey } });
-    setCgSaveStatus("✓ SAVED");
+    const result = await window.API.saveSettings({ COINGECKO: { key: cgKey } });
+    setCgSaveStatus(result?.status === "saved" ? "✓ SAVED" : "✗ save failed");
     setTimeout(() => setCgSaveStatus(null), 2000);
   }
 
