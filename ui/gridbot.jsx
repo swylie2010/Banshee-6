@@ -549,6 +549,10 @@ function GbPaperSection({ deployParams, deployKey }) {
         <GbStat label="DEPLOYED"     value={gbFmtDollar(grid.config?.capital_plan?.total)} />
       </div>
 
+      <div style={{ fontSize: 10, color: "var(--ink-4)", marginBottom: 8, lineHeight: 1.5 }}>
+        ⚠ Price data via yfinance — may be delayed up to 15 min. Fills are simulated, not real orders.
+      </div>
+
       <GbSlotLadder slots={state.slots} currentPrice={cp} />
 
       {isStopped && deployParams && (
