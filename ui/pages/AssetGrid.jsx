@@ -9,7 +9,7 @@ function Ticker({ radarData = {}, snapshot = {} }) {
     const cached = !live && !!(snap && typeof snap.price === "number");
     return {
       sym:   a.sym,
-      price: r?.price   ?? snap?.price ?? a.price,
+      price: r?.price   ?? snap?.price ?? a.price ?? 0,
       chg:   r?.chg_pct ?? snap?.chg   ?? a.chg,
       live,
       cached,
@@ -53,7 +53,7 @@ function Ticker({ radarData = {}, snapshot = {} }) {
         }}>
           {items.map((a, i) => (
             <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span className="mono" style={{ fontSize: 13, color: (a.live || a.cached) ? "var(--ink)" : "var(--ink-4)", letterSpacing: "0.1em" }}>{a.sym}</span>
+              <span className="mono" style={{ fontSize: 13, color: a.live ? "var(--ink)" : a.cached ? "var(--ink-2)" : "var(--ink-4)", letterSpacing: "0.1em" }}>{a.sym}</span>
               <span className="num" style={{ fontSize: 13, color: "var(--ink)" }}>
                 {a.price < 100 ? a.price.toFixed(2) : a.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
