@@ -16,6 +16,11 @@ Banshee doesn't remove uncertainty — it removes the part where you wonder if y
 
 Most trading tools try to give you more signals. Banshee's best output is sometimes a clean "no." That's not a failure — that's the hard lifting done for you.
 
+**Banshee's analytical bias:**
+Banshee leans skeptical. Its default posture is to look for reasons *not* to trade before it looks for reasons to trade. In practice this means you will see more "conflicted," "no clear edge," or "stay out" verdicts than you might expect — even in conditions that feel bullish on the surface. This is by design: the system prioritizes protecting capital over finding setups.
+
+This does not mean Banshee is always right, or that a green verdict is safe to act on. When conditions genuinely align, it can be highly directional. When they don't, it says so plainly. Either way, **every decision and every risk is yours alone.** Banshee calculates. You decide.
+
 ---
 
 ## The Flow of a Trade
@@ -101,8 +106,9 @@ Macro Weather → Market Intel → Asset Radar → Structure Map → Banshee Nex
 
 **Foibles:**
 - Load the symbol in the sidebar first. The sidebar symbol selector controls all tabs.
-- Intraday data (sniper mode) is limited to ~60 days by yfinance. For longer history use Alpaca (stocks) or VPN for Binance (crypto).
-- Crypto symbols: use `BTC-USD` format for yfinance. Binance routing uses `BTC/USDT` automatically.
+- Intraday data (sniper mode) is limited to ~60 days by yfinance. For US stocks, adding an Alpaca API key extends this. Crypto intraday depth depends on yfinance availability for that pair.
+- Crypto symbols: use `BTC-USD` format. Banshee normalizes common shorthand (BTC → BTC-USD automatically).
+- **Some timeframe panels may display placeholder or mock data** if the data source for that specific interval is not yet connected. When in doubt, cross-reference an external chart before acting on any reading.
 
 ---
 
@@ -179,10 +185,18 @@ Lines are labeled with their short name (e.g. "yearly open", "c fib 1618"). OBs 
 
 **Timeframe:** Always look at at least two timeframes. HTF (daily or 4h) for structural bias. LTF (1h or 15m) for entry precision.
 
+**Geometric Harmonic overlay:**
+Below the main SMC chart, the Structure Map also runs a Geometric Harmonic analysis. This is a separate mathematical framework that finds significant price levels using multi-scalar Fibonacci arcs anchored at the asset's all-time high and low, plus local pivot highs and lows. Where multiple arcs from different timeframes intersect, Banshee marks a "hot zone" — a price cluster that at least two independent Fibonacci paths agree on.
+
+These hot zones are tagged with a directional bias (floor / ceiling / mixed) based on whether the arcs originate from the ATL or ATH. When a hot zone overlaps an SMC Order Block or FVG, the two systems are independently pointing at the same price — treat that as elevated confluence.
+
+The Geometric Harmonic layer doesn't give buy/sell signals on its own. Think of it as a second opinion on where institutional reaction levels might cluster.
+
 **Foibles:**
 - The more layers you show, the harder it is to read. Start minimal.
 - OBs require a BOS + FVG to qualify. Not every candle before a move is an OB.
 - EQH/EQL sweeps are often traps — price pokes above/below briefly, grabs the liquidity, then reverses hard. Don't chase the breakout.
+- Geometric Harmonic hot zones are probabilistic clusters — they show where math says levels tend to form, not where price will definitely react.
 
 ---
 
@@ -224,32 +238,15 @@ Lines are labeled with their short name (e.g. "yearly open", "c fib 1618"). OBs 
 ---
 
 ### 🔬 Signal Lab
-**What it is:** A backtesting and signal validation tool. Tests whether Banshee's signals have mechanical edge when followed blindly over historical data.
+**What it is:** A library of saved backtest results. Every time a backtest is run and saved anywhere in the system, it lands here. Use it to compare prior runs across symbols, modes, and lookbacks without re-running anything.
 
-**What it is NOT:** A strategy builder. It can't tell you what will work in the future, only what *would have* worked in the past on the data available.
+The results table is colour-coded by return and filterable. Click any row to expand the full metrics from that run.
 
-**The key tabs:**
-- **MTF Backtest:** Replays Banshee's real `score_timeframe()` + `compute_verdict()` over historical data. The most honest test of signal quality.
-- **Discovery Mode:** Tests 6–7 indicators one at a time and ranks them by Sharpe ratio for this specific asset/timeframe. Useful for tuning Asset Profiles.
-- **Live Snapshot:** Shows the current state of every indicator right now — green/red/neutral — with a confluence count and GO/NO-GO decision.
-- **Comparative Runs:** Batch-tests the same setup across multiple timeframes and lookback periods.
-- **Saved Results:** Your history of all saved backtest runs.
-
-**Read the Signal Playbook before interpreting results.** Key rules:
+**Read PLAYBOOK.md before drawing conclusions from backtest results.** The key rules:
 - Under 30 trades = not statistically meaningful (directional read only)
 - Sharpe ratio matters more than raw return
-- Long_term mode is a quality filter — don't judge it by alpha vs B&H
+- Long_term mode is a quality filter — don't judge it by alpha vs buy-and-hold
 - PRE-SIGNAL edge is real but lives in sniper mode
-
-**Foibles:**
-- Data is re-downloaded every run. This is slow on long lookbacks. A disk cache is planned but not yet built.
-- yfinance 15m cap = 60 days. Sniper mode needs Alpaca (stocks) or VPN/Binance (crypto) for real historical depth.
-- The lab can't model human judgment — it follows signals blindly. Your real results will differ because you'll skip some setups.
-
----
-
-### 📊 Saved Results
-All your saved backtest and validation runs in one filterable table. Colour-coded by return. Click any row to inspect the full metrics.
 
 ---
 
@@ -353,8 +350,8 @@ All your saved backtest and validation runs in one filterable table. Colour-code
 - **Nexus is slow:** Normal. The macro layer is cached but the AI call takes time. If it freezes completely, check your AI API key in Settings.
 - **Structure Map shows no BOS/CHoCH:** Either the selected timeframe/lookback doesn't have enough swings, or Focus Mode is filtering them out. Try a longer lookback or increase the Focus Mode slider.
 - **Backtest returns look terrible vs B&H:** In a strong bull market, any active strategy will underperform holding. Use Sharpe ratio and max drawdown to evaluate the strategy — not alpha vs B&H.
-- **Sniper mode backtest only covers 60 days:** yfinance limit. Add an Alpaca API key in Settings for US stocks, or use a VPN for crypto (Binance routing is built in — no code changes needed).
-- **Symbol not found:** Try alternate formats. `BTC-USD` for Bitcoin on yfinance. Some assets use `.` (e.g. `BRK.B`). Futures may not be available.
+- **Sniper mode backtest only covers 60 days:** yfinance limit for intraday bars. Add an Alpaca API key in Settings for US stocks to extend this.
+- **Symbol not found:** Try alternate formats. `BTC-USD` for Bitcoin, `BTC` also works (auto-converted). Some assets use `.` (e.g. `BRK.B`). Futures may not be available.
 - **"Symbol is too long" or "invalid characters" error:** Banshee validates symbols after normalization — max 10 characters, only `A-Z 0-9 - .` allowed. If you're getting a 400 error on a valid ticker, check if it resolved to a long form (e.g. full company name instead of ticker).
 - **AI features returning 429:** You've hit the hourly AI rate limit. Banshee will tell you the reset time. You can raise the limit in ⚙️ Settings → AI Rate Limit.
 
