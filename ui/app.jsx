@@ -241,7 +241,8 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
 /* ── Sidebar ───────────────────────────────────────────────── */
 function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, onOptions, onGridbot, currentPage, onPresetsOpen }) {
   const [searchVal, setSearchVal] = useState("");
-  const [shutdownState, setShutdownState] = useState("idle"); // idle | confirm | done
+  const [shutdownState, setShutdownState] = useState("idle"); // idle | gridbot_warn | confirm | done
+  const [gridbotSym, setGridbotSym] = React.useState(null);
   const wl = watchlists.find(w => w.id === watchlist);
   const symAssets = wl.syms
     .map(s => {
@@ -444,9 +445,42 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
         <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
           {shutdownState === "idle" && (
             <button
-              onClick={() => setShutdownState("confirm")}
+              onClick={async () => {
+                try {
+                  const gb = await window.API.getPaperGridbot();
+                  if (gb && gb.state && gb.state.status === "active") {
+                    setGridbotSym(gb.grid.sym);
+                    setShutdownState("gridbot_warn");
+                  } else {
+                    setShutdownState("confirm");
+                  }
+                } catch (_) {
+                  setShutdownState("confirm");
+                }
+              }}
               style={{ background: "transparent", border: "1px solid var(--sell)", color: "var(--sell)", cursor: "pointer", padding: "5px 10px", fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.14em", width: "100%" }}
             >⏻ STOP BANSHEE</button>
+          )}
+          {shutdownState === "gridbot_warn" && (
+            <div>
+              <div style={{
+                background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
+                borderRadius: 4, padding: "8px 10px", marginBottom: 8,
+                fontSize: 11, color: "var(--amber)", lineHeight: 1.55,
+              }}>
+                ⚠ Active grid on {gridbotSym} — fills stop when Core shuts down. The grid resumes polling on restart.
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={async () => { await window.API.shutdownBanshee(); setShutdownState("done"); }}
+                  style={{ flex: 1, background: "var(--sell)", border: "none", color: "#fff", cursor: "pointer", padding: "6px 0", fontFamily: "var(--mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em" }}
+                >SHUT DOWN</button>
+                <button
+                  onClick={() => setShutdownState("idle")}
+                  style={{ flex: 1, background: "transparent", border: "1px solid var(--line-2)", color: "var(--ink-3)", cursor: "pointer", padding: "6px 0", fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.1em" }}
+                >CANCEL</button>
+              </div>
+            </div>
           )}
           {shutdownState === "confirm" && (
             <div>
