@@ -110,6 +110,121 @@ const SELECT_STYLE = {
   paddingRight: 30,
 };
 
+/* ── DATA SOURCES ──────────────────────────────────────────── */
+
+const PROVIDER_META = {
+  coinbase:  { label: "COINBASE",  note: "free · no key needed",          hasKey: false },
+  alpaca:    { label: "ALPACA",    note: "uses your Alpaca key",           hasKey: false },
+  coingecko: { label: "COINGECKO", note: "key optional · Pro unlocks more", hasKey: true },
+  yfinance:  { label: "YFINANCE",  note: "always active · fallback",       hasKey: false },
+};
+
+const TIER_ICON  = { FAST: "⚡", GOOD: "◈", SLOW: "○", UNTESTED: "◌" };
+const TIER_COLOR = {
+  FAST:     "var(--buy)",
+  GOOD:     "var(--cyan)",
+  SLOW:     "var(--ink-3)",
+  UNTESTED: "var(--ink-4)",
+};
+
+function speedPct(avg_ms) {
+  if (!avg_ms) return 5;
+  if (avg_ms <= 300)  return Math.max(70, 95 - avg_ms / 20);
+  if (avg_ms <= 2000) return Math.max(35, 70 - (avg_ms - 300) / 50);
+  return Math.max(5, 35 - (avg_ms - 2000) / 300);
+}
+
+function DataSourceRow({ name, speed, cgKey, onCgKeyChange, onTest, testStatus }) {
+  const meta = PROVIDER_META[name];
+  const tier = speed?.tier || "UNTESTED";
+  const avg  = speed?.avg_ms;
+  const pct  = speedPct(avg);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+      <span className="mono" style={{ fontSize: 13, color: TIER_COLOR[tier], width: 16, flexShrink: 0 }}>
+        {TIER_ICON[tier]}
+      </span>
+      <span className="mono" style={{ fontSize: 12, color: "var(--ink)", letterSpacing: "0.14em", width: 96, flexShrink: 0 }}>
+        {meta.label}
+      </span>
+      <span className="mono" style={{ fontSize: 11, color: TIER_COLOR[tier], width: 72, flexShrink: 0, letterSpacing: "0.1em" }}>
+        {tier}{avg ? ` · ${avg < 1000 ? avg + "ms" : (avg / 1000).toFixed(1) + "s"}` : ""}
+      </span>
+      <div style={{ width: 100, height: 6, background: "var(--bg-3)", flexShrink: 0 }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: TIER_COLOR[tier], transition: "width 0.4s" }} />
+      </div>
+      {meta.hasKey ? (
+        <input
+          value={cgKey}
+          onChange={e => onCgKeyChange(e.target.value)}
+          placeholder="API key (optional)"
+          style={{ ...INPUT_STYLE, width: 200, fontSize: 12 }}
+        />
+      ) : (
+        <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.08em" }}>
+          {meta.note}
+        </span>
+      )}
+      {name === "coingecko" && (
+        <button
+          onClick={onTest}
+          style={{
+            padding: "4px 12px", background: "var(--bg-3)",
+            border: "1px solid var(--line-2)", color: "var(--cyan)",
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+            letterSpacing: "0.14em", cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          {testStatus === "testing" ? "TESTING…" : testStatus === "ok" ? "✓ OK" : "TEST"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DataSourcesSection({ cgKey, onCgKeyChange, onSaveCgKey, saveStatus }) {
+  const [speed, setSpeed] = React.useState({});
+  const [testStatus, setTestStatus] = React.useState(null);
+
+  React.useEffect(() => {
+    window.API.fetchDataSourceSpeed().then(d => { if (d) setSpeed(d); });
+  }, []);
+
+  async function handleTest() {
+    setTestStatus("testing");
+    await onSaveCgKey();
+    const result = await window.API.testCoinGecko();
+    if (result?.speed) setSpeed(result.speed);
+    setTestStatus(result?.price ? "ok" : "error");
+    setTimeout(() => setTestStatus(null), 3000);
+  }
+
+  return (
+    <SettingsSection title="▸ DATA SOURCES">
+      <div style={{ marginBottom: 16, color: "var(--ink-3)", fontSize: 11, fontFamily: "monospace", letterSpacing: "0.08em" }}>
+        Banshee tries providers fastest-first. Latency populates during normal use.
+      </div>
+      {["coinbase", "alpaca", "coingecko", "yfinance"].map(name => (
+        <DataSourceRow
+          key={name}
+          name={name}
+          speed={speed[name]}
+          cgKey={name === "coingecko" ? cgKey : ""}
+          onCgKeyChange={onCgKeyChange}
+          onTest={handleTest}
+          testStatus={name === "coingecko" ? testStatus : null}
+        />
+      ))}
+      {saveStatus && (
+        <div className="mono" style={{ fontSize: 11, color: "var(--buy)", marginTop: 4 }}>
+          {saveStatus}
+        </div>
+      )}
+    </SettingsSection>
+  );
+}
+
 function SettingsSection({ title, children }) {
   return (
     <div style={{ background: "var(--bg-2)", border: "1px solid var(--line)", padding: "20px 24px" }}>
@@ -222,6 +337,8 @@ function SettingsPage({ onBack }) {
   const [fredKey, setFredKey]       = useState("");
   const [alpacaKey, setAlpacaKey]   = useState("");
   const [alpacaSec, setAlpacaSec]   = useState("");
+  const [cgKey, setCgKey]           = useState("");
+  const [cgSaveStatus, setCgSaveStatus] = useState(null);
   const [aiType, setAiType]         = useState("Gemini");
   const [aiKey, setAiKey]           = useState("");
   const [aiModel, setAiModel]       = useState("");
@@ -240,6 +357,7 @@ function SettingsPage({ onBack }) {
       setFredKey(data.FRED_API?.key || "");
       setAlpacaKey(data.ALPACA_KEY?.key || "");
       setAlpacaSec(data.ALPACA_SECRET?.key || "");
+      setCgKey(data.COINGECKO?.key || "");
       const ai = data.AI_API || {};
       setAiType(ai.type || "Gemini");
       setAiKey(ai.key || "");
@@ -269,6 +387,12 @@ function SettingsPage({ onBack }) {
     });
     setAiSaveStatus(result.status === "saved" ? "saved" : "error: " + (result.message || "?"));
     setTimeout(() => setAiSaveStatus(null), 3000);
+  }
+
+  async function saveCgKey() {
+    await window.API.saveSettings({ COINGECKO: { key: cgKey } });
+    setCgSaveStatus("✓ SAVED");
+    setTimeout(() => setCgSaveStatus(null), 2000);
   }
 
   async function saveDataRecovery() {
@@ -310,6 +434,16 @@ function SettingsPage({ onBack }) {
 
       {/* scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignContent: "start" }}>
+
+        {/* DATA SOURCES — full width */}
+        <div style={{ gridColumn: "1 / -1" }}>
+          <DataSourcesSection
+            cgKey={cgKey}
+            onCgKeyChange={setCgKey}
+            onSaveCgKey={saveCgKey}
+            saveStatus={cgSaveStatus}
+          />
+        </div>
 
         {/* API KEYS */}
         <SettingsSection title="▸ API KEYS">
