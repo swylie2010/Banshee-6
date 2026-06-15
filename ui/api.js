@@ -752,6 +752,29 @@ async function analyzeGridbot(sym, capital, gridCount, feePct) {
   return r.json();
 }
 
+async function deployPaperGridbot(sym, capital, gridCount, feePct) {
+  const r = await _fetch(`${API_BASE}/gridbot/paper`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sym, capital, grid_count: gridCount, fee_pct: feePct }),
+  });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+async function getPaperGridbot() {
+  const r = await _fetch(`${API_BASE}/gridbot/paper`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
+async function stopPaperGridbot() {
+  const r = await _fetch(`${API_BASE}/gridbot/paper`, { method: "DELETE" });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
+
 async function shutdownBanshee() {
   try {
     await _fetch(`${API_BASE}/shutdown`, { method: "POST" });
@@ -759,4 +782,4 @@ async function shutdownBanshee() {
   return { ok: true };
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, shutdownBanshee };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee };
