@@ -1,6 +1,5 @@
 """tests/test_data_providers.py — unit tests for data_providers.py"""
 import pytest
-from unittest.mock import patch
 
 
 def test_asset_class_crypto_slash():

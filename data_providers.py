@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from cache_utils import ttl_cache
 
 # ── Key loading (direct — no import from shared_data to avoid circular dep) ───
 
@@ -98,7 +97,7 @@ def _tier(avg_ms: float) -> str:
     return "SLOW"
 
 
-def _sorted(names: list[str]) -> list[str]:
+def _by_speed(names: list[str]) -> list[str]:
     """Return provider names sorted fastest-first by observed latency."""
     return sorted(names, key=_mean_latency)
 
@@ -127,7 +126,7 @@ def get_speed_report() -> dict:
     return result
 
 
-def test_coingecko_latency() -> dict:
+def probe_coingecko_latency() -> dict:
     """Fire a timed CoinGecko BTC spot fetch (bypasses cache) to populate latency data.
     Called by POST /settings/data-sources/test-coingecko from the Settings TEST button."""
     t0 = time.monotonic()
