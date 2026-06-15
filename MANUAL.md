@@ -108,7 +108,7 @@ Macro Weather → Market Intel → Asset Radar → Structure Map → Banshee Nex
 - Load the symbol in the sidebar first. The sidebar symbol selector controls all tabs.
 - Intraday data (sniper mode) is limited to ~60 days by yfinance. For US stocks, adding an Alpaca API key extends this. Crypto intraday depth depends on yfinance availability for that pair.
 - Crypto symbols: use `BTC-USD` format. Banshee normalizes common shorthand (BTC → BTC-USD automatically).
-- **Some timeframe panels may display placeholder or mock data** if the data source for that specific interval is not yet connected. When in doubt, cross-reference an external chart before acting on any reading.
+- **Watch the data source label on every chart panel.** `◆ LIVE` (teal) means real data fetched successfully. `◇ MOCK` (amber) means the fetch failed and the chart is showing placeholder candles — the indicators are meaningless. Weekly timeframe (`1wk`) is the most likely to show MOCK. Never act on a reading from a MOCK panel.
 
 ---
 
@@ -221,8 +221,12 @@ The Geometric Harmonic layer doesn't give buy/sell signals on its own. Think of 
 
 ---
 
-### ⚖️ Risk Desk
+### ⚖️ Risk Desk + Asset Hub (SIMULATE / EXECUTE)
 **What it is:** Position sizing calculator. Given your account size, risk tolerance, and the ATR-based entry/stop from Asset Radar, it calculates exact unit size, margin required at various leverage levels, and R-targets.
+
+The **SIMULATE** button logs a paper trade to the journal with the current levels — no broker involved, just a record.
+
+The **EXECUTE** button is visible but intentionally not wired to any broker. Clicking it shows: *"Direct broker execution is not enabled. Use Simulate to log paper trades in the journal."* This is a permanent architectural decision — Banshee does not place live orders.
 
 **What to look at:**
 - **Entry, Stop, Target:** Auto-filled from the last Asset Radar run. You can edit these manually.
