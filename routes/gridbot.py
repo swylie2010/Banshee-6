@@ -77,7 +77,11 @@ async def route_gridbot_paper_deploy(
 ):
     """Deploy a virtual paper grid. Only one active grid allowed at a time."""
     existing = load_paper_gridbot()
-    if _active_grid(existing):
+    try:
+        already_active = _active_grid(existing)
+    except Exception:
+        already_active = False
+    if already_active:
         return JSONResponse(
             {"error": "A paper grid is already active. Stop it first."},
             status_code=409,
