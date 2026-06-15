@@ -1,149 +1,126 @@
-# Banshee Pro — New Machine Setup Guide
-*For the AI assistant helping with this: read this first.*
+# Banshee 6 — Setup Guide
+
+Banshee 6 is a trading analysis tool that runs on your computer. It watches the markets, spots patterns that big institutions leave behind in price data, and gives you plain-English explanations of what it sees. It does not place trades — that's always your call.
 
 ---
 
-## What This Is
+## Before You Start
 
-Banshee Pro is a unified trading command center that combines:
-- **Macro engine** — VIX, yield curve, Fed liquidity, 12 sensors, regime scoring (CLEAR / CAUTION / CRACK)
-- **Micro engine** — EMA stack, Supertrend, Stoch RSI, VWAP, OBV, ATR trade plans, funding rate
-- **Streamlit UI** — 4 tabs: Macro Weather | Asset Radar | Banshee Nexus | Market Intel
-- **MCP server** — 5 tools Claude Code can call directly (the hard part to set up)
+You need two free programs installed on your computer:
 
-The owner is not technical. Your job is to get this running with minimal friction.
+**Python 3.10 or newer**
+Download from [python.org](https://python.org). During install, check the box that says **"Add Python to PATH"** — this is easy to miss and causes problems later if skipped.
 
----
+**Node.js (any recent version)**
+Download from [nodejs.org](https://nodejs.org). Just run the installer, no special options needed.
 
-## Files in This Folder
-
-| File | Purpose |
-|------|---------|
-| `app.py` | Streamlit UI — run this to launch the dashboard |
-| `macro_engine.py` | Macro regime engine |
-| `micro_engine.py` | Technical analysis engine |
-| `shared_data.py` | Shared data fetchers: yfinance (stocks), Coinbase/Binance via ccxt (crypto) |
-| `banshee_ai.py` | AI synthesis prompt builder |
-| `mcp_server.py` | MCP server (stdio transport) — Claude Code calls this |
-| `launch_banshee.bat` | Windows shortcut to launch the Streamlit UI |
-
----
-
-## Step 1 — Install Dependencies
-
-```bash
-pip install streamlit yfinance ccxt pandas numpy anthropic
+To check if both are already installed, open a terminal and run:
 ```
+python --version
+node --version
+```
+Both should show a version number. If either says "not found", install it first.
 
 ---
 
-## Step 2 — Launch the UI (optional but useful to verify)
+## Step 1 — Launch Banshee
 
-**Windows:**
-```
-Double-click launch_banshee.bat
-```
-**Mac/Linux:**
-```bash
-cd /path/to/Banshee_Pro
-streamlit run app.py
-```
+Double-click `launch_banshee.bat` in the Banshee folder.
 
-First launch: enter FRED API key and AI API key in the sidebar. They save to `~/.banshee_keys.json`.
+That's it. The launcher handles everything automatically:
+- Creates a private Python environment so Banshee's packages don't interfere with anything else on your computer
+- Installs all required packages (this takes a few minutes on the very first run)
+- Builds the web UI
+- Starts the Banshee server
+- Opens the UI in your browser at `http://localhost:8765/ui/`
+
+On the first launch, you'll see a disclaimer screen — read it and click through. Then you'll see a 4-digit PIN screen. You can set your own PIN or skip it for now in Settings later.
 
 ---
 
-## Step 3 — Register the MCP Server (the critical part)
+## Step 2 — Add Your API Keys
 
-This is what lets Claude Code use Banshee's 5 tools directly in conversation.
+Banshee needs a couple of free API keys to pull in real data. Go to **Settings** in the sidebar (gear icon) and enter them there.
 
-There are **TWO files** that must both be updated. Claude Code checks both:
+**FRED API key** — for economic data (interest rates, liquidity, etc.)
+Get one free at [fred.stlouisfed.org/docs/api/api_key.html](https://fred.stlouisfed.org/docs/api/api_key.html). Takes about 60 seconds.
 
-### File 1: `~/.claude/.mcp.json`
-### File 2: `~/.mcp.json`
+**AI brain** — Banshee can use several AI providers for its written analysis. Pick one:
+- **Google Gemini** — get a free key at [aistudio.google.com](https://aistudio.google.com)
+- **Anthropic Claude** — get a key at [console.anthropic.com](https://console.anthropic.com)
+- **OpenAI** — get a key at [platform.openai.com](https://platform.openai.com)
+- **Ollama** — runs AI on your own computer, no key needed. Install from [ollama.com](https://ollama.com) and set the URL to `http://localhost:11434`
 
-Both files should contain the same content:
+**Alpaca** (optional) — only needed if you want to use the paper options trading feature. Get a free paper trading account at [alpaca.markets](https://alpaca.markets). Banshee only ever uses the paper (fake money) endpoint.
 
-**Windows:**
+All keys are stored in a file on your computer called `~/.banshee_keys.json` — they never leave your machine.
+
+---
+
+## Step 3 — Set Up the MCP Server (optional but powerful)
+
+This step lets Claude Code talk to Banshee directly — you can ask Claude questions and it will pull live data from Banshee to answer them.
+
+You need to add Banshee to **two** config files. Claude Code checks both, so if you only update one it won't work.
+
+Open (or create) these two files:
+- `C:\Users\YOUR_USERNAME\.claude\.mcp.json`
+- `C:\Users\YOUR_USERNAME\.mcp.json`
+
+Both files need the same content:
+
 ```json
 {
   "mcpServers": {
     "banshee-pro": {
-      "command": "python",
-      "args": ["C:/Users/YOUR_USERNAME/path/to/Banshee_Pro/mcp_server.py"]
+      "command": "C:/Users/YOUR_USERNAME/AntiEverything/Banshee_6/.venv/Scripts/python.exe",
+      "args": ["C:/Users/YOUR_USERNAME/AntiEverything/Banshee_6/mcp_server.py"]
     }
   }
 }
 ```
 
-**Mac/Linux:**
-```json
-{
-  "mcpServers": {
-    "banshee-pro": {
-      "command": "python3",
-      "args": ["/Users/YOUR_USERNAME/path/to/Banshee_Pro/mcp_server.py"]
-    }
-  }
-}
-```
+Replace `YOUR_USERNAME` with your actual Windows username. Use forward slashes, not backslashes.
 
-Use the **actual absolute path** to `mcp_server.py` on this machine.
-Use forward slashes even on Windows.
-Transport is stdio — no server needs to be pre-running. Claude Code spawns it automatically.
+Restart Claude Code after saving. You'll know it worked when you can see "banshee-pro" listed in Claude Code's MCP panel, or when Claude responds to questions with live Banshee data.
 
 ---
 
-## Step 4 — Verify It's Working
+## MCP Tools Available
 
-Start a new Claude Code session and run all 5 tools:
+Once the MCP server is connected, Claude Code has access to these Banshee tools:
 
-1. `get_macro_weather` — no arguments needed
-2. `read_market_intel` — no arguments needed
-3. `get_asset_radar("BTC/USD", "swing")`
-4. `scan_assets(["BTC/USD", "ETH/USD", "SPY"], "swing")`
-5. `synthesize_nexus("BTC/USD", "swing", use_ai=False)`
-
-If the MCP tools don't appear, the most common cause is that only one of the two `.mcp.json` files was updated. Check both.
-
----
-
-## MCP Tool Reference
-
-| Tool | What it does | Key args |
-|------|-------------|----------|
-| `get_macro_weather` | Global macro regime snapshot | none |
-| `read_market_intel` | Live RSS headlines + event keywords | none |
-| `get_asset_radar` | Full technical analysis for one symbol | `symbol`, `mode` |
-| `scan_assets` | Ranked leaderboard across a watchlist | `symbols[]`, `mode` |
-| `synthesize_nexus` | Top-down AI briefing: macro + micro + news | `symbol`, `mode`, `use_ai` |
-
-**Mode options:** `"swing"` (default), `"long_term"`, `"sniper"`
-**Crypto symbols:** `"BTC/USD"`, `"ETH/USD"`, `"SOL/USD"`, `"SUI/USD"`, `"XRP/USD"`
-**Stock symbols:** `"NVDA"`, `"SPY"`, `"AAPL"`, `"TSLA"`
-**Futures:** `"GC=F"` (gold), `"CL=F"` (oil)
+| Tool | What it does |
+|------|-------------|
+| `get_macro_weather` | Global macro regime — is the market in risk-on or risk-off mode? |
+| `get_asset_radar` | Full technical analysis for one symbol |
+| `scan_assets` | Ranked analysis across your whole watchlist |
+| `synthesize_nexus` | Top-down AI briefing: macro + structure + signals combined |
+| `get_smc_structure` | Raw Smart Money Concepts data for a symbol |
+| `build_execution_plan` | Position sizing and entry/exit levels for a trade idea |
+| `get_geo_harmonic` | Geometric Harmonic arc levels (key price zones) |
+| `get_options_candidate` | Best cash-secured put candidate from the options universe |
+| `get_paper_wheels` | Status of your paper options wheel trades |
+| `check_kill_switch` | Whether any open trades have hit their loss limit |
 
 ---
 
-## Data Sources
+## Stopping Banshee
 
-- **Stocks/ETFs/Futures:** Yahoo Finance (yfinance)
-- **Crypto OHLCV:** Coinbase (primary) → Yahoo Finance fallback
-- **Crypto funding rate:** Binance perpetual futures (ccxt binanceusdm)
-- **Macro data:** FRED API (Fed liquidity), yfinance (VIX, SPY, HYG, etc.), RSS feeds
+Click the **⏻ STOP BANSHEE** button in the sidebar. This shuts down the server cleanly. Don't just close the browser tab — the server keeps running in the background until you stop it properly.
 
-No paid data subscriptions required. FRED API key is free at fred.stlouisfed.org.
+To restart, just double-click `launch_banshee.bat` again.
 
 ---
 
-## Keys File
+## Troubleshooting
 
-`~/.banshee_keys.json` stores:
-- `FRED_API` — macroeconomic data (free from FRED)
-- `AI_API` — Claude or Gemini key for the Nexus AI briefing
+**"Port 8765 already in use"** — A previous Banshee session is still running. Open PowerShell and run `stop_banshee.ps1`, or restart your computer.
 
-Enter these in the Streamlit sidebar on first launch, or copy the file from the old machine.
+**UI shows but data won't load** — Check the Settings page. You probably have a missing or incorrect API key.
 
----
+**MCP tools not showing up in Claude Code** — Make sure you updated *both* `.mcp.json` files (see Step 3) and restarted Claude Code.
 
-*Banshee Pro v1.6 — built on this machine, designed to travel.*
+**npm errors during launch** — Node.js probably isn't installed, or the install didn't finish. Re-install Node.js and try again.
+
+**Python not found** — During Python install you need to check "Add Python to PATH". Uninstall Python and reinstall with that box checked.

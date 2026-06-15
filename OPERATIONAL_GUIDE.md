@@ -1,4 +1,4 @@
-# Banshee Pro 3 — Operational Guide
+# Banshee 6 — Operational Guide
 
 **Audience:** The owner/builder of this system and any AI agent assisting them.
 **Purpose:** Plain-English explanation of every concept this system implements, how to read a live chart, and how to make trading decisions from what you see. This is not code documentation — the code has that. This is the decision manual.
@@ -7,7 +7,7 @@
 
 ---
 
-## What Banshee Pro 3 Is
+## What Banshee 6 Is
 
 A unified trading analysis platform built on Smart Money Concepts (SMC) — the theory that institutional traders (banks, hedge funds, "smart money") leave detectable footprints in price action, and that retail traders consistently lose because they trade the obvious levels institutions use as traps. Banshee's job is to identify those traps and position on the institutional side instead.
 
@@ -18,9 +18,19 @@ The system has several engines working together:
 | SMC Engine | `smc_engine.py` | Swing detection, market structure, OBs, FVGs, liquidity pools |
 | Micro Engine | `micro_engine.py` | Short-term momentum indicators (RSI, MACD, ADX, etc.) |
 | Macro Engine | `macro_engine.py` | Macro regime (VIX, DXY, yield curve, risk-on/off) |
+| Sector Rotation | `sector_rotation_engine.py` | Relative strength across 10 sectors; money-flow direction |
+| Geometric Harmonic | `geometric_harmonic.py` | Fibonacci arc circles anchored at ATH/ATL; hot-zone clustering |
+| XABCD Scanner | `xabcd_scanner.py` | Gartley, Bat, Butterfly, Crab and 4 other harmonic patterns |
+| Options Engine | `options_engine.py` | Cash-secured put candidate scoring; spread grader; IV rank estimate |
+| Wheel Engine | `wheel_engine.py` | Event-sourced FSM for the options wheel strategy |
+| Spread Sim Engine | `spread_sim_engine.py` | Bull put spread simulation (event-sourced, mirrors wheel engine) |
+| Gridbot Engine | `gridbot_engine.py` | Grid-trading regime check, topology, capital plan, risk guardrails |
+| Portfolio Engine | `portfolio_engine.py` | Grade, benchmark, momentum and risk scoring for a holdings book |
+| Ledger Engine | `ledger_engine.py` | Avg-cost accounting, realized P&L, evolution one-liner |
+| Predator Engine | `predator_engine.py` | Daily news intake, event classification, AI briefing |
 | Banshee AI | `banshee_ai.py` | Synthesizes all engines into a plain-English AI narrative |
-| Structure Map | `structure_map.py` | Visual chart tab — the primary human interface |
-| Strategy Lab | `strategy_lab.py` | Backtesting engine |
+| React UI | `ui/` | Browser-based dashboard served at `http://localhost:8765/ui/` |
+| MCP Server | `mcp_server.py` | Exposes 22 tools so Claude Code can query Banshee directly |
 
 ---
 
@@ -179,7 +189,7 @@ ICT (Inner Circle Trader) theory holds that different trading sessions have diff
 ## How to Read a Banshee Chart — Step by Step
 
 ### Step 1: Structure State
-Top of the Structure Map: **BULLISH / BEARISH / UNDEFINED**. This is the state machine's current read based on the sequence of swing highs and lows. Start here — everything else is filtered through this lens.
+Open the SMC tab for your asset and look at the top of the chart panel: **BULLISH / BEARISH / UNDEFINED**. This is the state machine's current read based on the sequence of swing highs and lows. Start here — everything else is filtered through this lens.
 
 ### Step 2: HTF Context
 The HTF selector runs the same SMC engine on a higher timeframe (e.g., 1D while you're on 4H). Check it for alignment. A bullish 4H setup inside a bearish 1D structure is a counter-trend trade — lower confidence.
@@ -267,7 +277,7 @@ There are two types of calibration: **indicator calibration** (are Banshee's com
 Use the calibration script (the fastest path):
 
 ```bash
-cd ~/AntiEverything/Banshee_Pro_3
+cd ~/AntiEverything/Banshee_6
 python calibrate.py NVDA long_term          # show current values; auto-compare if baseline exists
 python calibrate.py BTC/USD swing           # same for BTC swing
 python calibrate.py NVDA long_term --save   # save current values as new baseline
@@ -319,7 +329,7 @@ Alternatively, use the MCP agent output — `raw_indicators` block is now includ
 
 **What it is:** Named institutional reference levels that Banshee can't compute from raw OHLCV. Stored in `htf_levels.json`. Examples: yearly opens, Market Maker PD/PW levels, Elliott Wave targets.
 
-**File location:** `~/AntiEverything/Banshee_Pro_3/htf_levels.json`
+**File location:** `~/AntiEverything/Banshee_6/htf_levels.json`
 
 **In the UI:** The Structure Map draws these levels as horizontal lines (gold = opens, purple = Market Maker, teal = VWAP, gray = Elliott Wave). Any OB or FVG whose zone falls within 1 ATR of a named level gets a **★** tag on its chart label. The AI narrative (Rule 8) will also call out these confluences explicitly. No action needed — it's automatic once the file is populated.
 
@@ -363,7 +373,7 @@ When adding a new feature to any engine:
 
 1. Add or update the relevant section in this guide.
 2. If a new named constant is added to `smc_engine.py`, add it to the constants table in the relevant concept section.
-3. If a new visual element is added to `structure_map.py`, add it to the "How to Read a Banshee Chart" section.
+3. If a new visual element is added to the React UI, add it to the "How to Read a Banshee Chart" section.
 4. If the interpretation of an existing field changes, update the concept section AND the step-by-step workflow.
 5. If a gate or flag is flipped (e.g., `INDUCEMENT_HARD_GATE`), note it in "Known Limitations and Pending Work."
 
