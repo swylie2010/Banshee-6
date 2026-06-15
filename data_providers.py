@@ -392,7 +392,7 @@ def probe_coingecko_latency() -> dict:
     t0 = time.monotonic()
     price = None
     try:
-        price = _coingecko_spot("BTC")  # _coingecko_spot defined in Task 2
+        price = _coingecko_spot("BTC")
         if price:
             _record_latency("coingecko", (time.monotonic() - t0) * 1000)
     except Exception:

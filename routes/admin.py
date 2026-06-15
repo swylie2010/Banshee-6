@@ -204,14 +204,21 @@ def route_settings_test(body: SettingsBody):
 def route_data_sources_speed():
     """Return latency summary for all providers. Used by the Settings DATA SOURCES speed gauge."""
     import data_providers
-    return data_providers.get_speed_report()
+    try:
+        return data_providers.get_speed_report()
+    except Exception as exc:
+        return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
 
 
 @router.post("/settings/data-sources/test-coingecko")
-def route_data_sources_test_coingecko():
+async def route_data_sources_test_coingecko():
     """Fire a timed CoinGecko BTC fetch to populate latency, then return speed report."""
+    import asyncio
     import data_providers
-    return data_providers.probe_coingecko_latency()
+    try:
+        return await asyncio.to_thread(data_providers.probe_coingecko_latency)
+    except Exception as exc:
+        return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
