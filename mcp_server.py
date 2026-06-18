@@ -26,6 +26,10 @@ Tools exposed:
   get_paper_wheels       — all paper Wheel positions with track record summary
   get_paper_wheel_alerts — paper wheels needing attention (checkpoint/expiry/fill)
   open_paper_wheel       — create a paper Wheel + place Alpaca paper CSP order
+  analyze_gridbot        — 4-phase gridbot analysis (regime, topology, capital, risk)
+  deploy_paper_gridbot   — deploy a paper grid (one active at a time)
+  get_paper_gridbot      — check in on a running paper grid
+  stop_paper_gridbot     — stop the active paper grid (the learning-event trigger)
 """
 
 import json
@@ -76,6 +80,17 @@ def _post(path: str, body: dict) -> str:
     try:
         r = requests.post(f"{CORE_URL}{path}", json=body, timeout=_TIMEOUT,
                           headers={"X-Banshee-Token": _banshee_token()})
+        return r.text
+    except requests.ConnectionError:
+        return _OFFLINE_MSG
+    except Exception as e:
+        return f"Core error ({path}): {e}"
+
+
+def _delete(path: str) -> str:
+    try:
+        r = requests.delete(f"{CORE_URL}{path}", timeout=_TIMEOUT,
+                            headers={"X-Banshee-Token": _banshee_token()})
         return r.text
     except requests.ConnectionError:
         return _OFFLINE_MSG
@@ -721,6 +736,97 @@ def open_paper_wheel(
         return json.dumps(json.loads(raw), indent=2)
     except Exception:
         return raw
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GRIDBOT TOOLS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def analyze_gridbot(
+    symbol: str,
+    capital: float,
+    grid_count: int = 10,
+    fee_pct: float = 0.1,
+) -> str:
+    """
+    4-phase gridbot analysis for a given asset and capital.
+    Always call this before deploy_paper_gridbot.
+
+    Phase 1 — Regime check: MA120 slope + RSI. Returns ELIGIBLE / NOT ELIGIBLE.
+    Phase 2 — Topology: arithmetic (<= 15% range) or geometric (> 15% range).
+    Phase 3 — Capital plan: 50% anchor + soft martingale across grid levels.
+    Phase 4 — Risk guardrails: disaster stop, max drawdown estimate, fee churn warning.
+
+    ELIGIBLE is a flag, not a block — you decide whether to deploy.
+
+    Args:
+        symbol:     Ticker. Crypto: 'BTC/USD'. Stock/ETF: 'NVDA', 'SPY'.
+        capital:    Total USD to allocate across the grid.
+        grid_count: Number of grid levels (default 10).
+        fee_pct:    Exchange fee percentage per fill (default 0.1).
+    """
+    return _post("/gridbot/analyze", {
+        "sym": symbol,
+        "capital": capital,
+        "grid_count": grid_count,
+        "fee_pct": fee_pct,
+    })
+
+
+@mcp.tool()
+def deploy_paper_gridbot(
+    symbol: str,
+    capital: float,
+    grid_count: int = 10,
+    fee_pct: float = 0.1,
+) -> str:
+    """
+    Deploy a paper (simulated) grid for the given asset and capital.
+    Only one grid can be active at a time — stop the current one first.
+
+    Returns the initial slot ladder and deployed config.
+    The grid runs automatically via a 5-minute server-side poller — no action needed
+    between check-ins.
+
+    Args:
+        symbol:     Ticker. Crypto: 'BTC/USD'. Stock/ETF: 'NVDA', 'SPY'.
+        capital:    Total USD to allocate across the grid.
+        grid_count: Number of grid levels (default 10).
+        fee_pct:    Exchange fee percentage per fill (default 0.1).
+    """
+    return _post("/gridbot/paper", {
+        "sym": symbol,
+        "capital": capital,
+        "grid_count": grid_count,
+        "fee_pct": fee_pct,
+    })
+
+
+@mcp.tool()
+def get_paper_gridbot() -> str:
+    """
+    Check in on the active (or most recently stopped) paper grid.
+    Returns current price, slot fill count, realized P&L, unrealized P&L,
+    cycle count, and status.
+
+    Note: price data may lag up to 15 minutes (yfinance). Do not use fill
+    accuracy to judge real-time performance — this is a simulator.
+    """
+    raw = _get("/gridbot/paper")
+    return raw + "\n\n⚠ Price data may lag up to 15 min (yfinance). Use for structure, not real-time fills."
+
+
+@mcp.tool()
+def stop_paper_gridbot() -> str:
+    """
+    Stop the active paper grid. This is the learning-event trigger.
+
+    Returns final P&L, cycle count, and full slot state.
+    After calling this, write a journal entry: what you saw, why you stopped,
+    what you learned.
+    """
+    return _delete("/gridbot/paper")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
