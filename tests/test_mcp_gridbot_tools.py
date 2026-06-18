@@ -73,6 +73,12 @@ def test_deploy_paper_gridbot_offline():
         result = mcp_server.deploy_paper_gridbot("BTC/USD", 1000.0)
     assert "OFFLINE" in result
 
+def test_deploy_paper_gridbot_error():
+    with patch("mcp_server.requests.post", side_effect=Exception("timeout")):
+        result = mcp_server.deploy_paper_gridbot("BTC/USD", 1000.0)
+    assert "Core error" in result
+    assert "/gridbot/paper" in result
+
 
 # ── get_paper_gridbot ─────────────────────────────────────────────────────────
 
