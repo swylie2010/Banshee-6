@@ -814,6 +814,8 @@ def get_paper_gridbot() -> str:
     accuracy to judge real-time performance — this is a simulator.
     """
     raw = _get("/gridbot/paper")
+    if raw.startswith(("BANSHEE", "Core error")):
+        return raw
     return raw + "\n\n⚠ Price data may lag up to 15 min (yfinance). Use for structure, not real-time fills."
 
 

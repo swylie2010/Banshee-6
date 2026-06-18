@@ -133,7 +133,7 @@ Keep entries honest. A stopped grid with a clear reason is more valuable than a 
 - **Gridbot is simulated.** All fills are paper. No real money moves.
 - **yfinance lag.** Up to 15-minute delay on price data. The 5-minute server poll interval does not mean 5-minute price freshness.
 - **Poll rate.** Do not call `get_paper_gridbot()` more than once every few minutes — the server-side poller already runs on a 5-minute interval.
-- **Rate limits.** No meaningful rate limits on yfinance or Coinbase in normal single-agent use.
+- **Rate limits.** Rate limits exist on yfinance and Coinbase, but the poll-rate constraint above (check-in every few minutes) keeps usage well within bounds for normal single-agent use.
 
 ---
 

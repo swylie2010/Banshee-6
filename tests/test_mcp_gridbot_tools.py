@@ -94,6 +94,12 @@ def test_get_paper_gridbot_offline():
         result = mcp_server.get_paper_gridbot()
     assert "OFFLINE" in result
 
+def test_get_paper_gridbot_error():
+    with patch("mcp_server.requests.get", side_effect=Exception("timeout")):
+        result = mcp_server.get_paper_gridbot()
+    assert "Core error" in result
+    assert "lag" not in result.lower()
+
 def test_get_paper_gridbot_includes_lag_warning():
     with patch("mcp_server.requests.get") as mock:
         mock.return_value = _resp('{"state":{"status":"active"}}')
@@ -119,3 +125,4 @@ def test_stop_paper_gridbot_error():
     with patch("mcp_server.requests.delete", side_effect=Exception("refused")):
         result = mcp_server.stop_paper_gridbot()
     assert "Core error" in result
+    assert "/gridbot/paper" in result
