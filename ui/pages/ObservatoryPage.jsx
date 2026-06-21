@@ -222,7 +222,7 @@ export default function ObservatoryPage({ onBack }) {
             </span>
             {[7, 30, 90].map(d => (
               <button key={d} onClick={() => setSummaryDays(d)} style={{
-                background: summaryDays === d ? "rgba(56,189,248,0.12)" : "transparent",
+                background: summaryDays === d ? "var(--buy-faint, rgba(56,189,248,0.12))" : "transparent",
                 border: `1px solid ${summaryDays === d ? "var(--cyan)" : "var(--line)"}`,
                 color: summaryDays === d ? "var(--cyan)" : "var(--ink-3)",
                 cursor: "pointer", padding: "3px 10px",
@@ -380,6 +380,16 @@ export default function ObservatoryPage({ onBack }) {
               <option value="failed">Failed</option>
             </select>
           </div>
+
+          {/* Status filter info notice */}
+          {filterStatus !== "" && (
+            <div style={{
+              padding: "8px 14px", borderBottom: "1px solid var(--line)",
+              fontSize: 14, color: "var(--ink)", opacity: 0.6,
+            }}>
+              Filtering by status applies to this page only. Use pagination to see more entries.
+            </div>
+          )}
 
           {/* Entries */}
           {loading && (
