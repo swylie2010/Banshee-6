@@ -30,6 +30,8 @@ Tools exposed:
   deploy_paper_gridbot   — deploy a paper grid (one active at a time)
   get_paper_gridbot      — check in on a running paper grid
   stop_paper_gridbot     — stop the active paper grid (the learning-event trigger)
+  get_audit_log          — recent Banshee audit log entries
+  get_audit_summary      — aggregated Banshee usage statistics
 """
 
 import json
@@ -43,6 +45,16 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP
+
+from banshee_gateway import (
+    BansheeGateway,
+    AuditLogSchema, AuditSummarySchema,
+    ExecutionPlanSchema, GeoHarmonicSchema, GHPineSchema,
+    GridbotSchema, NexusSchema, OptionsCandidateSchema,
+    PaperTradeSchema, PaperWheelSchema, RadarSchema,
+    SMCSchema, ScanSchema, SignalOutcomeSchema,
+    StrategyResultsSchema, XABCDSchema,
+)
 
 mcp = FastMCP("Banshee Pro")
 
@@ -98,6 +110,9 @@ def _delete(path: str) -> str:
         return f"Core error ({path}): {e}"
 
 
+# Gateway — instantiated after _banshee_token is defined
+gateway = BansheeGateway(token_fn=_banshee_token)
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -108,7 +123,7 @@ def get_macro_weather() -> str:
     Use before sizing into any trade to confirm macro is a tailwind, not headwind.
     Returns: MACRO REGIME / SYSTEMIC RISK SCORE / ACTIVE WARNINGS / SENSOR DETAILS.
     """
-    return _get("/macro/weather")
+    return gateway.call("get_macro_weather", {}, None, lambda _: _get("/macro/weather"))
 
 
 @mcp.tool()
@@ -120,7 +135,7 @@ def read_market_intel() -> str:
     yesterday followups, macro tone, and risk level.
     Run the Daily Predator from the Market Intel tab to generate a fresh briefing.
     """
-    return _get("/intel")
+    return gateway.call("read_market_intel", {}, None, lambda _: _get("/intel"))
 
 
 @mcp.tool()
@@ -131,7 +146,7 @@ def get_regime() -> str:
     Reads from the 15-minute disk cache when warm; falls back to a live fetch.
     Regime buckets: TRENDING / NEUTRAL / CAUTION / FEAR.
     """
-    return _get("/regime")
+    return gateway.call("get_regime", {}, None, lambda _: _get("/regime"))
 
 
 @mcp.tool()
@@ -141,7 +156,7 @@ def get_watchlist() -> str:
     Use this before scan_assets so you know what to scan without asking the user.
     Also returns the configured sensitivity and any custom Tier 1 keywords.
     """
-    return _get("/watchlist")
+    return gateway.call("get_watchlist", {}, None, lambda _: _get("/watchlist"))
 
 
 @mcp.tool()
@@ -157,7 +172,12 @@ def get_asset_radar(symbol: str, mode: str = "swing", output_mode: str = "human"
                      Aliases: 'active' → swing, 'position' → long_term.
         output_mode: 'human' [default] — full narrative. 'agent' — compact JSON.
     """
-    return _get("/radar", symbol=symbol, mode=mode, output_mode=output_mode)
+    return gateway.call(
+        "get_asset_radar",
+        {"symbol": symbol, "mode": mode, "output_mode": output_mode},
+        RadarSchema,
+        lambda p: _get("/radar", symbol=p["symbol"], mode=p["mode"], output_mode=p["output_mode"]),
+    )
 
 
 @mcp.tool()
@@ -171,7 +191,12 @@ def scan_assets(symbols: list[str], mode: str = "swing", output_mode: str = "hum
         mode:        Same as get_asset_radar — 'long_term', 'swing' [default], 'sniper'.
         output_mode: 'human' [default] — formatted table. 'agent' — compact JSON array.
     """
-    return _post("/scan", {"symbols": symbols, "mode": mode, "output_mode": output_mode})
+    return gateway.call(
+        "scan_assets",
+        {"symbols": symbols, "mode": mode, "output_mode": output_mode},
+        ScanSchema,
+        lambda p: _post("/scan", {"symbols": p["symbols"], "mode": p["mode"], "output_mode": p["output_mode"]}),
+    )
 
 
 @mcp.tool()
@@ -186,7 +211,12 @@ def synthesize_nexus(symbol: str, mode: str = "swing", use_ai: bool = True, outp
         use_ai:      Set False to skip the AI call and return structured data only.
         output_mode: 'human' [default] — full narrative. 'agent' — compact JSON.
     """
-    return _get("/nexus", symbol=symbol, mode=mode, use_ai=use_ai, output_mode=output_mode)
+    return gateway.call(
+        "synthesize_nexus",
+        {"symbol": symbol, "mode": mode, "use_ai": use_ai, "output_mode": output_mode},
+        NexusSchema,
+        lambda p: _get("/nexus", symbol=p["symbol"], mode=p["mode"], use_ai=p["use_ai"], output_mode=p["output_mode"]),
+    )
 
 
 @mcp.tool()
@@ -210,13 +240,18 @@ def build_execution_plan(
                         alignment). Position size will be halved and a confidence
                         warning will appear in the output.
     """
-    return _post("/execution-plan", {
-        "account_size":   account_size,
-        "risk_percent":   risk_percent,
-        "entry_price":    entry_price,
-        "stop_loss":      stop_loss,
-        "smc_conflicted": smc_conflicted,
-    })
+    return gateway.call(
+        "build_execution_plan",
+        {
+            "account_size":   account_size,
+            "risk_percent":   risk_percent,
+            "entry_price":    entry_price,
+            "stop_loss":      stop_loss,
+            "smc_conflicted": smc_conflicted,
+        },
+        ExecutionPlanSchema,
+        lambda p: _post("/execution-plan", p),
+    )
 
 
 @mcp.tool()
@@ -230,7 +265,12 @@ def get_strategy_results(strategy_name: str = "") -> str:
     Args:
         strategy_name: Name to retrieve (case-insensitive). Omit to list all.
     """
-    return _get("/strategies", name=strategy_name if strategy_name else None)
+    return gateway.call(
+        "get_strategy_results",
+        {"strategy_name": strategy_name},
+        StrategyResultsSchema,
+        lambda p: _get("/strategies", name=p["strategy_name"] if p["strategy_name"] else None),
+    )
 
 
 @mcp.tool()
@@ -246,7 +286,12 @@ def get_smc_structure(symbol: str, ltf: str = "4h", htf: str = "1d", use_ai: boo
         htf:     Higher timeframe for structural context. Default '1d'.
         use_ai:  Set False to return raw SMC data without the AI narrative.
     """
-    return _get("/smc", symbol=symbol, ltf=ltf, htf=htf, use_ai=use_ai)
+    return gateway.call(
+        "get_smc_structure",
+        {"symbol": symbol, "ltf": ltf, "htf": htf, "use_ai": use_ai},
+        SMCSchema,
+        lambda p: _get("/smc", symbol=p["symbol"], ltf=p["ltf"], htf=p["htf"], use_ai=p["use_ai"]),
+    )
 
 
 @mcp.tool()
@@ -283,24 +328,23 @@ def open_paper_trade(
 
     Returns: JSON with status, trade_id, order_id, order_type, and any Alpaca error.
     """
-    import json
-    body = {
-        "symbol":       symbol,
-        "direction":    direction,
-        "entry_price":  entry_price,
-        "stop_price":   stop_price,
-        "target_price": target_price,
-        "position_usd": position_usd,
-        "verdict":      verdict,
-        "regime":       regime,
-        "macro_regime": macro_regime,
-        "notes":        notes,
-    }
-    raw = _post("/journal/open", body)
-    try:
-        return json.dumps(json.loads(raw), indent=2)
-    except Exception:
-        return raw
+    return gateway.call(
+        "open_paper_trade",
+        {
+            "symbol":       symbol,
+            "direction":    direction,
+            "entry_price":  entry_price,
+            "stop_price":   stop_price,
+            "target_price": target_price,
+            "position_usd": position_usd,
+            "verdict":      verdict,
+            "regime":       regime,
+            "macro_regime": macro_regime,
+            "notes":        notes,
+        },
+        PaperTradeSchema,
+        lambda p: _post("/journal/open", p),
+    )
 
 
 @mcp.tool()
@@ -330,19 +374,12 @@ def log_signal_outcome(
                         Omit if unsure — can be set later.
         note:           Free-text observation appended as a timestamped annotation.
     """
-    body: dict = {"trade_id": trade_id}
-    if exit_reason:
-        body["exit_reason"] = exit_reason
-    if signal_correct is not None:
-        body["signal_correct"] = signal_correct
-    if note:
-        body["note"] = note
-    import json
-    raw = _post("/journal/annotate", body)
-    try:
-        return json.dumps(json.loads(raw), indent=2)
-    except Exception:
-        return raw
+    return gateway.call(
+        "log_signal_outcome",
+        {"trade_id": trade_id, "exit_reason": exit_reason, "signal_correct": signal_correct, "note": note},
+        SignalOutcomeSchema,
+        lambda p: _post("/journal/annotate", {k: v for k, v in p.items() if v not in (None, "")}),
+    )
 
 
 @mcp.tool()
@@ -356,28 +393,7 @@ def check_kill_switch() -> str:
     Use this any time you suspect macro has deteriorated into crisis territory,
     or after seeing CRACK DETECTED in get_macro_weather / get_regime output.
     """
-    import json
-    raw = _get("/kill-switch/check")
-    try:
-        data = json.loads(raw)
-        lines = [
-            f"KILL SWITCH: {'FIRED' if data.get('fired') else 'NOT TRIGGERED'}",
-            f"DOMINO PHASE: {data.get('domino_phase', '?')}",
-            f"REGIME: {data.get('regime', '?')}",
-            data.get("message", ""),
-        ]
-        closed = data.get("positions_closed", [])
-        if closed:
-            lines += ["", f"POSITIONS CLOSED ({len(closed)}):"]
-            for p in closed:
-                pnl = f"{p['pnl_pct']:+.2f}%" if p.get("pnl_pct") is not None else "N/A"
-                lines.append(
-                    f"  #{p['id']} {p['symbol']} {p['direction'].upper()} — "
-                    f"exit ${p['exit_price']:.4f}  P&L: {pnl}"
-                )
-        return "\n".join(lines)
-    except Exception:
-        return raw
+    return gateway.call("check_kill_switch", {}, None, lambda _: _get("/kill-switch/check"))
 
 
 @mcp.tool()
@@ -390,43 +406,7 @@ def get_signal_log() -> str:
     and 'In which regimes does it get direction wrong?'
     This is the core Autonomous Agent training data read path.
     """
-    import json
-    raw = _get("/journal/signal-log")
-    try:
-        data = json.loads(raw)
-        lines = [
-            f"TOTAL TRADES: {data.get('total_trades', 0)}",
-            f"JUDGED (signal_correct set): {data.get('judged_trades', 0)}",
-        ]
-        rate = data.get("signal_correct_rate_pct")
-        lines.append(f"SIGNAL CORRECT RATE: {rate}%" if rate is not None else "SIGNAL CORRECT RATE: not yet judged")
-
-        regime_bd = data.get("regime_breakdown", {})
-        if regime_bd:
-            lines += ["", "REGIME BREAKDOWN:"]
-            for regime, stats in regime_bd.items():
-                lines.append(f"  {regime}: {stats['correct']}/{stats['judged']} correct ({stats.get('correct_rate_pct', '?')}%)")
-
-        exit_bd = data.get("exit_reason_breakdown", {})
-        if exit_bd:
-            lines += ["", "EXIT REASON BREAKDOWN:"]
-            for reason, count in sorted(exit_bd.items(), key=lambda x: -x[1]):
-                lines.append(f"  {reason}: {count}")
-
-        judged_list = data.get("judged_trade_list", [])
-        if judged_list:
-            lines += ["", f"JUDGED TRADES ({len(judged_list)}):"]
-            for t in judged_list[-20:]:  # last 20 to keep it readable
-                sc    = "✓" if t.get("signal_correct") else "✗"
-                er    = t.get("exit_reason") or "—"
-                ann_n = len(t.get("annotations", []))
-                lines.append(
-                    f"  #{t['id']} {t.get('symbol','?')} {t.get('direction','?')} "
-                    f"[{sc}] exit:{er}  P&L:{t.get('pnl_pct','?')}%  notes:{ann_n}"
-                )
-        return "\n".join(lines)
-    except Exception:
-        return raw
+    return gateway.call("get_signal_log", {}, None, lambda _: _get("/journal/signal-log"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -448,19 +428,7 @@ def get_feedback_synthesis() -> str:
     Use this after accumulating judged trades to drive systematic improvement.
     Requires: judged closed trades (via log_signal_outcome) + daily briefings.
     """
-    import json
-    raw = _get("/journal/feedback-synthesis")
-    try:
-        data = json.loads(raw)
-        narrative = data.get("narrative", "")
-        meta = (
-            f"[Trades analyzed: {data.get('trades_analyzed', 0)} | "
-            f"Judged closed: {data.get('trade_count', 0)} | "
-            f"Briefings matched: {data.get('briefings_matched', 0)}]"
-        )
-        return f"{meta}\n\n{narrative}"
-    except Exception:
-        return raw
+    return gateway.call("get_feedback_synthesis", {}, None, lambda _: _get("/journal/feedback-synthesis"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -491,18 +459,12 @@ def get_geo_harmonic(symbol: str, n_local: int = 233) -> str:
              macro anchors (ATL/ATH bar + date), arc levels at current bar,
              and ZigZag pivot summary.
     """
-    import json
-    raw = _get("/geo-harmonic", symbol=symbol, n_local=n_local)
-    try:
-        data = json.loads(raw)
-        if "error" in data:
-            return f"GEO HARMONIC ERROR: {data['error']}"
-
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        import geometric_harmonic as gh
-        return gh.format_human(data, symbol=symbol)
-    except Exception:
-        return raw
+    return gateway.call(
+        "get_geo_harmonic",
+        {"symbol": symbol, "n_local": n_local},
+        GeoHarmonicSchema,
+        lambda p: _get("/geo-harmonic", symbol=p["symbol"], n_local=p["n_local"]),
+    )
 
 
 @mcp.tool()
@@ -525,15 +487,12 @@ def generate_gh_pine(symbol: str, arithmetic_mid: bool = False) -> str:
 
     Returns: Complete Pine Script v5 string ready to paste into TradingView.
     """
-    import json
-    raw = _get("/geo-harmonic/pine", symbol=symbol, arithmetic_mid=arithmetic_mid)
-    try:
-        data = json.loads(raw)
-        if "error" in data:
-            return f"GH PINE ERROR: {data['error']}"
-        return data.get("pine_script", raw)
-    except Exception:
-        return raw
+    return gateway.call(
+        "generate_gh_pine",
+        {"symbol": symbol, "arithmetic_mid": arithmetic_mid},
+        GHPineSchema,
+        lambda p: _get("/geo-harmonic/pine", symbol=p["symbol"], arithmetic_mid=p["arithmetic_mid"]),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -563,17 +522,12 @@ def scan_xabcd(symbol: str, pct: float = 0.03) -> str:
     Returns: Confirmed patterns (with D PRZ and confidence score) and forming
              patterns (with projected PRZ range to watch).
     """
-    import json
-    raw = _get("/xabcd", symbol=symbol, pct=pct)
-    try:
-        data = json.loads(raw)
-        if "error" in data:
-            return f"XABCD SCANNER ERROR: {data['error']}"
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        import xabcd_scanner as xs
-        return xs.format_human(data, symbol=symbol)
-    except Exception:
-        return raw
+    return gateway.call(
+        "scan_xabcd",
+        {"symbol": symbol, "pct": pct},
+        XABCDSchema,
+        lambda p: _get("/xabcd", symbol=p["symbol"], pct=p["pct"]),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -597,12 +551,12 @@ def get_options_candidate(account_size: float | None = None) -> str:
 
     Call before open_paper_wheel to confirm the spec passes all guardrails.
     """
-    import json
-    raw = _get("/options/candidate", account_size=account_size)
-    try:
-        return json.dumps(json.loads(raw), indent=2)
-    except Exception:
-        return raw
+    return gateway.call(
+        "get_options_candidate",
+        {"account_size": account_size},
+        OptionsCandidateSchema,
+        lambda p: _get("/options/candidate", account_size=p["account_size"]),
+    )
 
 
 @mcp.tool()
@@ -615,20 +569,7 @@ def get_paper_wheel_alerts() -> str:
     Use as a morning check: "Do any of my paper options need action today?"
     Returns a clear message when nothing is pending — never an empty string.
     """
-    import json
-    raw = _get("/paper-wheels/alerts")
-    try:
-        data = json.loads(raw)
-        alerts = data.get("alerts", [])
-        if not alerts:
-            return "NO PAPER WHEEL ALERTS — all paper wheels are on track."
-        lines = [f"PAPER WHEEL ALERTS ({len(alerts)}):"]
-        for a in alerts:
-            reason = a.get("attention_reason") or "needs attention"
-            lines.append(f"  #{a.get('id', '?')[:8]} {a.get('underlying', '?')} — {reason}")
-        return "\n".join(lines)
-    except Exception:
-        return raw
+    return gateway.call("get_paper_wheel_alerts", {}, None, lambda _: _get("/paper-wheels/alerts"))
 
 
 @mcp.tool()
@@ -642,56 +583,7 @@ def get_paper_wheels() -> str:
 
     Use to answer: "Where am I in the Wheel?" and "How is my paper track record?"
     """
-    import json
-    raw = _get("/paper-wheels")
-    try:
-        data = json.loads(raw)
-        wheels = data.get("wheels", [])
-
-        total_cycles = sum(
-            w.get("state", {}).get("totals", {}).get("cycles_completed", 0)
-            for w in wheels
-        )
-        net_pnl = sum(
-            w.get("state", {}).get("totals", {}).get("realized_pnl", 0.0)
-            for w in wheels
-        )
-        active = sum(1 for w in wheels if w.get("state", {}).get("state") != "CASH")
-        attention = sum(1 for w in wheels if w.get("needs_attention"))
-
-        lines = [
-            "PAPER WHEEL TRACK RECORD",
-            f"  Cycles completed: {total_cycles}  |  Net P&L: ${net_pnl:+.2f}  |  Active legs: {active}",
-        ]
-        if attention:
-            lines.append(f"  ⚠ NEEDS ATTENTION: {attention} wheel(s)")
-
-        if not wheels:
-            lines.append(
-                "\n  No paper wheels yet. "
-                "Use get_options_candidate then open_paper_wheel to start."
-            )
-        else:
-            lines.append(f"\nWHEELS ({len(wheels)}):")
-            for w in wheels:
-                st        = w.get("state", {})
-                fsm       = st.get("state", "?")
-                totals    = st.get("totals", {})
-                pnl       = totals.get("realized_pnl", 0.0)
-                cycles    = totals.get("cycles_completed", 0)
-                live      = w.get("live") or {}
-                dte       = live.get("dte", "")
-                dte_str   = f" | DTE: {dte}" if dte not in ("", None) else ""
-                pending   = " [FILL PENDING]" if w.get("pending_fill") else ""
-                flag      = " ⚠ NEEDS ATTENTION" if w.get("needs_attention") else ""
-                lines.append(
-                    f"  #{w.get('id', '?')[:8]} {w.get('underlying', '?')} — {fsm} | "
-                    f"P&L: ${pnl:+.2f} | Cycles: {cycles}{dte_str}{pending}{flag}"
-                )
-
-        return "\n".join(lines)
-    except Exception:
-        return raw
+    return gateway.call("get_paper_wheels", {}, None, lambda _: _get("/paper-wheels"))
 
 
 @mcp.tool()
@@ -719,23 +611,23 @@ def open_paper_wheel(
              On Alpaca rejection (400) or unavailability (503): structured error string,
              no wheel record is created.
     """
-    import json
-    body = {
-        "candidate_snapshot": {
-            "candidate": {
-                "underlying": underlying,
-                "strike":     strike,
-                "expiry":     expiry,
-                "mid":        premium,
-            }
-        },
-        "name": name or f"{underlying.upper()} Paper Wheel",
-    }
-    raw = _post("/paper-wheels", body)
-    try:
-        return json.dumps(json.loads(raw), indent=2)
-    except Exception:
-        return raw
+    return gateway.call(
+        "open_paper_wheel",
+        {"underlying": underlying, "strike": strike, "expiry": expiry,
+         "premium": premium, "name": name},
+        PaperWheelSchema,
+        lambda p: _post("/paper-wheels", {
+            "candidate_snapshot": {
+                "candidate": {
+                    "underlying": p["underlying"],
+                    "strike":     p["strike"],
+                    "expiry":     p["expiry"],
+                    "mid":        p["premium"],
+                }
+            },
+            "name": p["name"] or f"{p['underlying'].upper()} Paper Wheel",
+        }),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -766,12 +658,13 @@ def analyze_gridbot(
         grid_count: Number of grid levels (default 10).
         fee_pct:    Exchange fee percentage per fill (default 0.1).
     """
-    return _post("/gridbot/analyze", {
-        "sym": symbol,
-        "capital": capital,
-        "grid_count": grid_count,
-        "fee_pct": fee_pct,
-    })
+    return gateway.call(
+        "analyze_gridbot",
+        {"symbol": symbol, "capital": capital, "grid_count": grid_count, "fee_pct": fee_pct},
+        GridbotSchema,
+        lambda p: _post("/gridbot/analyze", {"sym": p["symbol"], "capital": p["capital"],
+                                              "grid_count": p["grid_count"], "fee_pct": p["fee_pct"]}),
+    )
 
 
 @mcp.tool()
@@ -795,12 +688,13 @@ def deploy_paper_gridbot(
         grid_count: Number of grid levels (default 10).
         fee_pct:    Exchange fee percentage per fill (default 0.1).
     """
-    return _post("/gridbot/paper", {
-        "sym": symbol,
-        "capital": capital,
-        "grid_count": grid_count,
-        "fee_pct": fee_pct,
-    })
+    return gateway.call(
+        "deploy_paper_gridbot",
+        {"symbol": symbol, "capital": capital, "grid_count": grid_count, "fee_pct": fee_pct},
+        GridbotSchema,
+        lambda p: _post("/gridbot/paper", {"sym": p["symbol"], "capital": p["capital"],
+                                            "grid_count": p["grid_count"], "fee_pct": p["fee_pct"]}),
+    )
 
 
 @mcp.tool()
@@ -813,8 +707,8 @@ def get_paper_gridbot() -> str:
     Note: price data may lag up to 15 minutes (yfinance). Do not use fill
     accuracy to judge real-time performance — this is a simulator.
     """
-    raw = _get("/gridbot/paper")
-    if raw.startswith(("BANSHEE", "Core error")):
+    raw = gateway.call("get_paper_gridbot", {}, None, lambda _: _get("/gridbot/paper"))
+    if raw.startswith(("BANSHEE", "Core error", '{"error"')):
         return raw
     return raw + "\n\n⚠ Price data may lag up to 15 min (yfinance). Use for structure, not real-time fills."
 
@@ -828,7 +722,57 @@ def stop_paper_gridbot() -> str:
     After calling this, write a journal entry: what you saw, why you stopped,
     what you learned.
     """
-    return _delete("/gridbot/paper")
+    return gateway.call("stop_paper_gridbot", {}, None, lambda _: _delete("/gridbot/paper"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OBSERVATORY — audit log access for calling agents
+# ─────────────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def get_audit_log(limit: int = 50, tool: str = "", since: str = "") -> str:
+    """
+    Returns recent Banshee audit log entries — what tools were called, with what
+    parameters, whether validation passed, and what the outcome was.
+
+    Use this to inspect Banshee's recent behavior, verify that calls were
+    recorded correctly, or report activity to your user.
+
+    Args:
+        limit: Number of entries to return (1–500, default 50). Newest first.
+        tool:  Filter by tool name (e.g. 'synthesize_nexus'). Empty = all tools.
+        since: ISO date string to filter entries after (e.g. '2026-06-20').
+    """
+    return gateway.call(
+        "get_audit_log",
+        {"limit": limit, "tool": tool, "since": since},
+        AuditLogSchema,
+        lambda p: _get("/audit/entries",
+                       limit=p["limit"],
+                       tool=p["tool"] if p["tool"] else None,
+                       since=p["since"] if p["since"] else None),
+    )
+
+
+@mcp.tool()
+def get_audit_summary(days: int = 7) -> str:
+    """
+    Returns aggregated Banshee usage statistics over a rolling window.
+    Includes: total calls, breakdown by tool, validation failure rate,
+    top violation rules, signal distribution, top tickers, and average latency.
+
+    Use this to report on Banshee's behavior patterns to your user, or to
+    factor recent signal distribution into your analysis.
+
+    Args:
+        days: Rolling window in days (1–90, default 7).
+    """
+    return gateway.call(
+        "get_audit_summary",
+        {"days": days},
+        AuditSummarySchema,
+        lambda p: _get("/audit/summary", days=p["days"]),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -24,7 +24,10 @@ def test_analyze_gridbot_calls_post():
     assert "/gridbot/analyze" in call_args[0][0]
     assert call_args[1]["json"]["sym"] == "BTC/USD"
     assert call_args[1]["json"]["capital"] == 1000.0
-    assert result == '{"eligible":true}'
+    # gateway enriches JSON responses with _audit — parse and check the key field
+    import json as _json
+    data = _json.loads(result)
+    assert data["eligible"] is True
 
 def test_analyze_gridbot_defaults():
     with patch("mcp_server.requests.post") as mock:
@@ -58,7 +61,10 @@ def test_deploy_paper_gridbot_calls_post():
     assert call_args[1]["json"]["capital"] == 2000.0
     assert call_args[1]["json"]["grid_count"] == 12
     assert call_args[1]["json"]["fee_pct"] == 0.15
-    assert result == '{"grid":{"sym":"BTC/USD"}}'
+    # gateway enriches JSON responses with _audit — parse and check the key field
+    import json as _json
+    data = _json.loads(result)
+    assert data["grid"]["sym"] == "BTC/USD"
 
 def test_deploy_paper_gridbot_defaults():
     with patch("mcp_server.requests.post") as mock:
