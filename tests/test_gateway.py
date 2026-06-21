@@ -2,7 +2,6 @@
 import json
 import pathlib
 import pytest
-from unittest.mock import patch
 
 import banshee_gateway as gw
 

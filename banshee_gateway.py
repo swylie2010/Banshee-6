@@ -247,7 +247,7 @@ class BansheeGateway:
         self,
         tool_name: str,
         params: dict,
-        schema: Optional[Type[BaseModel]],
+        schema_cls: Optional[Type[BaseModel]],
         handler: Callable,
         signal_field: Optional[str] = None,
     ) -> str:
@@ -266,10 +266,10 @@ class BansheeGateway:
         }
 
         # ── Validate ──────────────────────────────────────────────────────────
-        if schema is not None:
+        if schema_cls is not None:
             try:
-                validated = schema(**params)
-                rules_checked = list(schema.model_fields.keys())
+                validated = schema_cls(**params)
+                rules_checked = list(schema_cls.model_fields.keys())
                 entry["validation"] = {
                     "passed": True,
                     "rules_checked": rules_checked,
@@ -293,7 +293,8 @@ class BansheeGateway:
                     "rules_checked": [],
                     "violations": violations,
                 }
-                entry["outcome"] = {"status": "rejected", "duration_ms": 0}
+                duration_ms = round((time.monotonic() - t0) * 1000)
+                entry["outcome"] = {"status": "rejected", "duration_ms": duration_ms}
                 _write_entry(entry)
                 return json.dumps({
                     "error": "Validation failed",
@@ -318,4 +319,8 @@ class BansheeGateway:
             duration_ms = round((time.monotonic() - t0) * 1000)
             entry["outcome"] = {"status": "error", "duration_ms": duration_ms, "error": str(exc)}
             _write_entry(entry)
-            return f"Gateway error on {tool_name}: {exc}"
+            return json.dumps({
+                "error": f"Gateway error: {exc}",
+                "tool": tool_name,
+                "_audit": {"id": entry_id, "validation_passed": True, "status": "error"},
+            })
