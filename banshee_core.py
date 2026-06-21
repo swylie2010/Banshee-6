@@ -48,6 +48,7 @@ from routes.analysis import (
 from routes.portfolio import router as _portfolio_router
 from routes.options import router as _options_router
 from routes.gridbot import router as _gridbot_router
+from routes.audit import router as _audit_router
 
 # resolve_symbol defined here (not imported) so tests can monkeypatch bc._live_price
 def resolve_symbol(sym: str):
@@ -90,6 +91,7 @@ app.include_router(_analysis_router)
 app.include_router(_portfolio_router)
 app.include_router(_options_router)
 app.include_router(_gridbot_router)
+app.include_router(_audit_router)
 
 
 @app.get("/auth/token")
