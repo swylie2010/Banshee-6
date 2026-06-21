@@ -742,21 +742,25 @@ async function postPaperWheelEvent(wheelId, event) {
   return r.json();
 }
 
-async function analyzeGridbot(sym, capital, gridCount, feePct) {
+async function analyzeGridbot(sym, capital, gridCount, feePct, rangeMin = null, rangeMax = null) {
+  const body = { sym, capital, grid_count: gridCount, fee_pct: feePct };
+  if (rangeMin != null && rangeMax != null) { body.range_min = rangeMin; body.range_max = rangeMax; }
   const r = await _fetch(`${API_BASE}/gridbot/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sym, capital, grid_count: gridCount, fee_pct: feePct }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) throw await r.json();
   return r.json();
 }
 
-async function deployPaperGridbot(sym, capital, gridCount, feePct) {
+async function deployPaperGridbot(sym, capital, gridCount, feePct, rangeMin = null, rangeMax = null) {
+  const body = { sym, capital, grid_count: gridCount, fee_pct: feePct };
+  if (rangeMin != null && rangeMax != null) { body.range_min = rangeMin; body.range_max = rangeMax; }
   const r = await _fetch(`${API_BASE}/gridbot/paper`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sym, capital, grid_count: gridCount, fee_pct: feePct }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) throw await r.json();
   return r.json();
@@ -796,4 +800,29 @@ async function testCoinGecko() {
   return r.ok ? r.json() : null;
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko };
+async function fetchAuditEntries({ limit = 50, tool = "", since = "", offset = 0 } = {}) {
+  try {
+    const q = new URLSearchParams();
+    q.set("limit", limit);
+    q.set("offset", offset);
+    if (tool) q.set("tool", tool);
+    if (since) q.set("since", since);
+    const res = await _fetch(`${API_BASE}/audit/entries?${q}`);
+    if (!res.ok) return { total: 0, entries: [], error: await res.text() };
+    return await res.json();
+  } catch (e) {
+    return { total: 0, entries: [], error: e.message };
+  }
+}
+
+async function fetchAuditSummary(days = 7) {
+  try {
+    const res = await _fetch(`${API_BASE}/audit/summary?days=${days}`);
+    if (!res.ok) return { error: await res.text() };
+    return await res.json();
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, fetchAuditEntries, fetchAuditSummary };

@@ -10,6 +10,7 @@ import RiskDeskPage from './pages/RiskDeskPage.jsx';
 import JournalPage from './pages/JournalPage.jsx';
 import NewsPage from './pages/NewsPage.jsx';
 import ManualPage from './pages/ManualPage.jsx';
+import ObservatoryPage from './pages/ObservatoryPage.jsx';
 
 /* convert /macro/sensors response → TopBar-compatible shape */
 function sensorsToTopBar(data) {
@@ -239,7 +240,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
-function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, onOptions, onGridbot, currentPage, onPresetsOpen }) {
+function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, onOptions, onGridbot, onObservatory, currentPage, onPresetsOpen }) {
   const [searchVal, setSearchVal] = useState("");
   const [shutdownState, setShutdownState] = useState("idle"); // idle | gridbot_warn | confirm | done
   const [gridbotSym, setGridbotSym] = React.useState(null);
@@ -413,12 +414,13 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
             { id: "journal",  label: "TRADE JOURNAL",  icon: "◎" },
             { id: "options",  label: "OPTIONS",        icon: "◆" },
             { id: "gridbot",  label: "GRIDBOT",        icon: "⊞" },
+            { id: "observatory", label: "OBSERVATORY", icon: "◈" },
             { id: "lab",      label: "SIGNAL LAB",     icon: "◬" },
             { id: "settings", label: "SETTINGS",       icon: "⚙" },
             { id: "manual",   label: "MANUAL",         icon: "◌" },
           ].map(({ id, label, icon }) => {
             const active = currentPage === id;
-            const HANDLERS = { macro: onMacro, news: onNews, lab: onLab, risk: onRisk, journal: onJournal, settings: onSettings, manual: onManual, options: onOptions, gridbot: onGridbot };
+            const HANDLERS = { macro: onMacro, news: onNews, lab: onLab, risk: onRisk, journal: onJournal, settings: onSettings, manual: onManual, options: onOptions, gridbot: onGridbot, observatory: onObservatory };
             const handler = HANDLERS[id];
             return (
               <button key={id} onClick={handler}
@@ -681,7 +683,7 @@ function App() {
         if (page === "analysis") { setPage("hub"); return; }
         if (page === "hub")      { setOpenSym(null); setCustomAsset(null); setPage("grid"); return; }
         if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); return; }
-        if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio", "options", "gridbot"].includes(page)) { setPage("grid"); return; }
+        if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio", "options", "gridbot", "observatory"].includes(page)) { setPage("grid"); return; }
       }
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && page === "hub" && openSym) {
         e.preventDefault();
@@ -833,7 +835,7 @@ function App() {
     if (page === "analysis") setPage("hub");
     else if (page === "hub") { setOpenSym(null); setCustomAsset(null); setPage("grid"); }
     else if (page === "risk") { setSimulateMode(false); setPage(simulateMode ? "hub" : "grid"); }
-    else if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio", "options", "gridbot"].includes(page)) setPage("grid");
+    else if (["macro", "settings", "lab", "journal", "manual", "news", "portfolio", "options", "gridbot", "observatory"].includes(page)) setPage("grid");
   }
 
   const liveAsset = openSym
@@ -886,6 +888,7 @@ function App() {
           onManual={() => setPage("manual")}
           onOptions={() => setPage("options")}
           onGridbot={() => setPage("gridbot")}
+          onObservatory={() => setPage("observatory")}
           currentPage={page}
           onPresetsOpen={() => setPresetsOpen(true)}
         />
@@ -953,6 +956,9 @@ function App() {
         )}
         {page === "gridbot" && (
           <window.GridbotPage onBack={() => setPage("grid")} />
+        )}
+        {page === "observatory" && (
+          <ObservatoryPage onBack={() => setPage("grid")} />
         )}
         {presetsOpen && (
           <window.PresetsModal
