@@ -90,39 +90,6 @@ def save_providers(providers: dict):
 # 2. MARKET DATA FETCHERS (PLUGGABLE PROVIDERS)
 # ─────────────────────────────────────────────────────────────────
 
-@ttl_cache(ttl=900)
-def fetch_yf_history(ticker: str, period: str, interval: str = "1d") -> pd.DataFrame:
-    """
-    DEPRECATED: Stub for backward compatibility during Tasks 5–6.
-    Use data_providers.fetch_ohlcv() instead.
-    Tasks 5 and 6 will remove all callers and this stub.
-    """
-    import data_providers
-    try:
-        # Convert yfinance period to bar count. Rough approximation:
-        # '5d' -> 5 bars, '1mo' -> 21, '3mo' -> 65, '1y' -> 252
-        period_map = {"5d": 5, "1mo": 21, "3mo": 65, "6mo": 130, "1y": 252, "2y": 504, "5y": 1260}
-        bar_count = period_map.get(period, 65)
-        df = data_providers.fetch_ohlcv(ticker, interval, bar_count)
-        if not df.empty:
-            return df
-    except Exception:
-        pass
-    return pd.DataFrame()
-
-@ttl_cache(ttl=900)
-def fetch_yf_fast_info(ticker: str) -> float | None:
-    """
-    DEPRECATED: Stub for backward compatibility during Tasks 5–6.
-    Use data_providers.get_spot_price() instead.
-    Tasks 5 and 6 will remove all callers and this stub.
-    """
-    import data_providers
-    try:
-        return data_providers.get_spot_price(ticker)
-    except Exception:
-        return None
-
 def get_last_price(symbol: str) -> float | None:
     """Last known price via pluggable provider chain in data_providers. 60s cache lives there."""
     import data_providers  # lazy import breaks potential circular dep
