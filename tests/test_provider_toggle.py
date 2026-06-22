@@ -104,3 +104,21 @@ def test_options_chain_available_when_yfinance_on():
     import data_providers
     with patch("data_providers._load_keys", return_value=_keys({"YFINANCE": {"enabled": True}})):
         assert data_providers.has_capability("options_chain") is True
+
+
+def test_fetch_chain_returns_error_dict_when_no_capability():
+    import options_data
+    with patch("data_providers._load_keys", return_value=_keys()):
+        result = options_data.fetch_chain("AAPL")
+    assert isinstance(result, dict)
+    assert result.get("error") == "provider_unavailable"
+    assert "user_message" in result
+
+
+def test_fetch_earnings_date_returns_error_dict_when_no_capability():
+    import options_data
+    with patch("data_providers._load_keys", return_value=_keys()):
+        result = options_data.fetch_earnings_date("AAPL")
+    assert isinstance(result, dict)
+    assert result.get("error") == "provider_unavailable"
+    assert "user_message" in result

@@ -87,8 +87,12 @@ def normalize_puts(df, spot, expiry, today):
 
 
 def fetch_chain(symbol, today=None, max_dte=55):
-    """yfinance I/O: fetch put contracts for `symbol` within max_dte days.
-    Returns (contracts, meta). Network — not exercised in unit tests."""
+    """Fetch put contracts for `symbol` within max_dte days.
+    Returns (contracts, meta) on success, or an error dict when no capable provider is active."""
+    import data_providers
+    if not data_providers.has_capability("options_chain"):
+        return {"error": "provider_unavailable", "feature": "options_chain",
+                "user_message": "No provider available for options chain data — enable a compatible provider in Settings → Data Sources"}
     import yfinance as yf
     today = today or _date.today().isoformat()
     tk = yf.Ticker(symbol)
@@ -106,18 +110,24 @@ def fetch_chain(symbol, today=None, max_dte=55):
 
 
 def fetch_closes(symbol, period="1y"):
-    """yfinance I/O: trailing daily closes for the IVR realized-vol estimate."""
-    import yfinance as yf
-    hist = yf.Ticker(symbol).history(period=period)
-    return [float(x) for x in hist["Close"].tolist()] if len(hist) else []
+    """Trailing daily closes for the IVR realized-vol estimate, via provider chain."""
+    import data_providers
+    limit = 252 if period == "1y" else 126
+    df = data_providers.fetch_ohlcv(symbol, "1d", limit)
+    return [float(x) for x in df["close"].tolist()] if not df.empty else []
 
 
 def fetch_earnings_date(symbol: str):
     """Return the next earnings date for symbol as a date object, or None.
+    Returns an error dict when no capable provider is active.
 
     Defensive: yfinance calendar format varies by version. Returns None on
     any error so callers can treat missing data as 'no known earnings'.
     """
+    import data_providers
+    if not data_providers.has_capability("earnings_calendar"):
+        return {"error": "provider_unavailable", "feature": "earnings_calendar",
+                "user_message": "No provider available for earnings calendar — enable a compatible provider in Settings → Data Sources"}
     try:
         import yfinance as yf
         from datetime import date as _date

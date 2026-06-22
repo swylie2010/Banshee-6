@@ -74,7 +74,8 @@ def test_fetch_earnings_date_returns_date():
     from datetime import date
     mock_ticker = MagicMock()
     mock_ticker.calendar = {"Earnings Date": [date(2026, 7, 18)]}
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+    with patch("data_providers.has_capability", return_value=True), \
+         patch("yfinance.Ticker", return_value=mock_ticker):
         result = od.fetch_earnings_date("AAPL")
     assert result == date(2026, 7, 18)
 
@@ -83,6 +84,7 @@ def test_fetch_earnings_date_returns_none_on_error():
     from unittest.mock import patch, MagicMock
     mock_ticker = MagicMock()
     mock_ticker.calendar = None
-    with patch("yfinance.Ticker", return_value=mock_ticker):
+    with patch("data_providers.has_capability", return_value=True), \
+         patch("yfinance.Ticker", return_value=mock_ticker):
         result = od.fetch_earnings_date("AAPL")
     assert result is None
