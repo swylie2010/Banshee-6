@@ -113,10 +113,10 @@ const SELECT_STYLE = {
 /* ── DATA SOURCES ──────────────────────────────────────────── */
 
 const PROVIDER_META = {
-  coinbase:  { label: "COINBASE",  note: "free · no key needed",          hasKey: false },
-  alpaca:    { label: "ALPACA",    note: "uses your Alpaca key",           hasKey: false },
+  coinbase:  { label: "COINBASE",  note: "free · no key needed",           hasKey: false },
+  alpaca:    { label: "ALPACA",    note: "uses your Alpaca key",            hasKey: false },
   coingecko: { label: "COINGECKO", note: "key optional · Pro unlocks more", hasKey: true },
-  yfinance:  { label: "YFINANCE",  note: "always active · fallback",       hasKey: false },
+  yfinance:  { label: "YFINANCE",  note: "options chain · earnings calendar", hasKey: false },
 };
 
 const TIER_ICON  = { FAST: "⚡", GOOD: "◈", SLOW: "○", UNTESTED: "◌" };
@@ -134,27 +134,53 @@ function speedPct(avg_ms) {
   return Math.max(5, 35 - (avg_ms - 2000) / 300);
 }
 
-function DataSourceRow({ name, speed, cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange, onTest, testStatus }) {
+function Toggle({ on, onChange }) {
+  return (
+    <div
+      onClick={onChange}
+      style={{
+        width: 36, height: 18, borderRadius: 9, cursor: "pointer", flexShrink: 0,
+        background: on ? "var(--cyan)" : "var(--bg-3)",
+        border: `1px solid ${on ? "var(--cyan)" : "var(--line-2)"}`,
+        position: "relative", transition: "background 0.2s",
+      }}
+    >
+      <div style={{
+        position: "absolute", top: 2, left: on ? 18 : 2,
+        width: 12, height: 12, borderRadius: 6,
+        background: on ? "var(--bg-0)" : "var(--ink-4)",
+        transition: "left 0.2s",
+      }} />
+    </div>
+  );
+}
+
+function DataSourceRow({ name, speed, enabled, onToggle, cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange, onTest, testStatus }) {
   const meta = PROVIDER_META[name];
-  const tier = speed?.tier || "UNTESTED";
-  const avg  = speed?.avg_ms;
-  const pct  = speedPct(avg);
+  const tier = (enabled && speed?.tier) ? speed.tier : "UNTESTED";
+  const avg  = enabled ? speed?.avg_ms : null;
+  const pct  = enabled ? speedPct(avg) : 0;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
       <span className="mono" style={{ fontSize: 13, color: TIER_COLOR[tier], width: 16, flexShrink: 0 }}>
-        {TIER_ICON[tier]}
+        {enabled ? TIER_ICON[tier] : "◌"}
       </span>
       <span className="mono" style={{ fontSize: 12, color: "var(--ink)", letterSpacing: "0.14em", width: 96, flexShrink: 0 }}>
         {meta.label}
       </span>
-      <span className="mono" style={{ fontSize: 11, color: TIER_COLOR[tier], width: 72, flexShrink: 0, letterSpacing: "0.1em" }}>
-        {tier}{avg ? ` · ${avg < 1000 ? avg + "ms" : (avg / 1000).toFixed(1) + "s"}` : ""}
-      </span>
-      <div style={{ width: 100, height: 6, background: "var(--bg-3)", flexShrink: 0 }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: TIER_COLOR[tier], transition: "width 0.4s" }} />
-      </div>
-      {meta.hasKey ? (
+      <Toggle on={enabled} onChange={onToggle} />
+      {enabled && (
+        <span className="mono" style={{ fontSize: 11, color: TIER_COLOR[tier], width: 72, flexShrink: 0, letterSpacing: "0.1em" }}>
+          {tier}{avg ? ` · ${avg < 1000 ? avg + "ms" : (avg / 1000).toFixed(1) + "s"}` : ""}
+        </span>
+      )}
+      {enabled && (
+        <div style={{ width: 100, height: 6, background: "var(--bg-3)", flexShrink: 0 }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: TIER_COLOR[tier], transition: "width 0.4s" }} />
+        </div>
+      )}
+      {meta.hasKey && enabled ? (
         <>
           <input
             value={cgKey}
@@ -171,12 +197,12 @@ function DataSourceRow({ name, speed, cgKey, onCgKeyChange, cgKeyType, onCgKeyTy
             <option value="pro">pro</option>
           </select>
         </>
-      ) : (
+      ) : !meta.hasKey && !enabled ? (
         <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", letterSpacing: "0.08em" }}>
           {meta.note}
         </span>
-      )}
-      {name === "coingecko" && (
+      ) : null}
+      {name === "coingecko" && enabled && (
         <button
           onClick={onTest}
           disabled={testStatus === "testing"}
@@ -187,23 +213,61 @@ function DataSourceRow({ name, speed, cgKey, onCgKeyChange, cgKeyType, onCgKeyTy
             letterSpacing: "0.14em", cursor: "pointer", flexShrink: 0,
           }}
         >
-          {testStatus === "testing" ? "TESTING…"
-            : testStatus === "ok"    ? "✓ OK"
-            : testStatus === "error" ? "✗ ERR"
-            : "TEST"}
+          {testStatus === "testing" ? "TESTING…" : testStatus === "ok" ? "✓ OK" : testStatus === "error" ? "✗ ERR" : "TEST"}
         </button>
       )}
     </div>
   );
 }
 
-function DataSourcesSection({ cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange, onSaveCgKey, saveStatus }) {
+function DataSourcesSection({ cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange, onSaveCgKey, saveStatus, onSettingsSave }) {
   const [speed, setSpeed] = React.useState({});
   const [testStatus, setTestStatus] = React.useState(null);
+  const [customOpen, setCustomOpen] = React.useState(false);
+  const [customName, setCustomName] = React.useState("");
+  const [customUrl, setCustomUrl] = React.useState("");
+  const [customKey, setCustomKey] = React.useState("");
+  const [customClass, setCustomClass] = React.useState("both");
+  const [customTestStatus, setCustomTestStatus] = React.useState(null);
+
+  const providerKeys = ["coinbase", "alpaca", "coingecko", "yfinance"];
+  const anyEnabled = providerKeys.some(n => !!(speed[n]?.enabled)) || !!(speed["custom"]?.enabled);
 
   React.useEffect(() => {
-    window.API.fetchDataSourceSpeed().then(d => { if (d) setSpeed(d); });
+    window.API.fetchDataSourceSpeed().then(d => {
+      if (d) {
+        setSpeed(d);
+        // Pre-populate custom fields from speed report if available
+        if (d.custom) {
+          setCustomName(d.custom.name || "");
+          setCustomUrl(d.custom.base_url || "");
+          setCustomKey(d.custom.api_key || "");
+          setCustomClass(d.custom.asset_class || "both");
+        }
+      }
+    });
   }, []);
+
+  function isEnabled(name) {
+    return !!(speed[name]?.enabled);
+  }
+
+  async function handleToggle(name) {
+    const newEnabled = !isEnabled(name);
+    // Optimistic UI update
+    setSpeed(prev => ({ ...prev, [name]: { ...prev[name], enabled: newEnabled } }));
+    // Persist via settings save — server merges nested keys, so sending just {enabled} is safe
+    const keyMap = {
+      coinbase: "COINBASE", alpaca: "ALPACA_KEY",
+      coingecko: "COINGECKO", yfinance: "YFINANCE",
+    };
+    const settingsKey = keyMap[name];
+    if (settingsKey && onSettingsSave) {
+      await onSettingsSave({ [settingsKey]: { enabled: newEnabled } });
+    }
+    // Refresh speed report
+    window.API.fetchDataSourceSpeed().then(d => { if (d) setSpeed(d); });
+  }
 
   async function handleTest() {
     setTestStatus("testing");
@@ -214,16 +278,40 @@ function DataSourcesSection({ cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange
     setTimeout(() => setTestStatus(null), 3000);
   }
 
+  async function handleCustomTest() {
+    setCustomTestStatus("testing");
+    if (onSettingsSave) {
+      await onSettingsSave({
+        CUSTOM_DATA: { enabled: true, name: customName, base_url: customUrl, api_key: customKey, asset_class: customClass }
+      });
+    }
+    const result = await window.API.testCustomSource();
+    if (result?.speed) setSpeed(result.speed);
+    setCustomTestStatus(result?.price ? "ok" : "error");
+    setTimeout(() => setCustomTestStatus(null), 3000);
+  }
+
   return (
     <SettingsSection title="▸ DATA SOURCES">
+      {!anyEnabled && (
+        <div className="mono" style={{
+          marginBottom: 16, padding: "10px 14px",
+          background: "var(--bg-3)", border: "1px solid var(--sell)",
+          color: "var(--sell)", fontSize: 11, letterSpacing: "0.08em",
+        }}>
+          No data providers enabled — Banshee has no market data source. Enable at least one below.
+        </div>
+      )}
       <div style={{ marginBottom: 16, color: "var(--ink-3)", fontSize: 11, fontFamily: "monospace", letterSpacing: "0.08em" }}>
-        Banshee tries providers fastest-first. Latency populates during normal use.
+        Banshee tries enabled providers fastest-first. Toggle to activate. Latency populates during use.
       </div>
-      {["coinbase", "alpaca", "coingecko", "yfinance"].map(name => (
+      {providerKeys.map(name => (
         <DataSourceRow
           key={name}
           name={name}
           speed={speed[name]}
+          enabled={isEnabled(name)}
+          onToggle={() => handleToggle(name)}
           cgKey={name === "coingecko" ? cgKey : ""}
           onCgKeyChange={onCgKeyChange}
           cgKeyType={cgKeyType}
@@ -235,6 +323,50 @@ function DataSourcesSection({ cgKey, onCgKeyChange, cgKeyType, onCgKeyTypeChange
       {saveStatus && (
         <div className="mono" style={{ fontSize: 11, color: saveStatus.startsWith("✗") ? "var(--sell)" : "var(--buy)", marginTop: 4 }}>
           {saveStatus}
+        </div>
+      )}
+
+      {/* Custom source */}
+      <div
+        onClick={() => setCustomOpen(o => !o)}
+        style={{ cursor: "pointer", color: "var(--ink-3)", fontSize: 11, fontFamily: "monospace",
+                 letterSpacing: "0.14em", marginTop: 18, marginBottom: customOpen ? 10 : 0 }}
+      >
+        {customOpen ? "▾" : "▸"} ADD CUSTOM SOURCE
+      </div>
+      {customOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginLeft: 16 }}>
+          {[
+            { label: "NAME",     value: customName, set: setCustomName, placeholder: "My Data Source" },
+            { label: "BASE URL", value: customUrl,  set: setCustomUrl,  placeholder: "https://..." },
+            { label: "API KEY",  value: customKey,  set: setCustomKey,  placeholder: "(optional)" },
+          ].map(({ label, value, set, placeholder }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", width: 72, letterSpacing: "0.1em" }}>{label}</span>
+              <input value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
+                     style={{ ...INPUT_STYLE, width: 240, fontSize: 12 }} />
+            </div>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", width: 72, letterSpacing: "0.1em" }}>COVERS</span>
+            <select value={customClass} onChange={e => setCustomClass(e.target.value)}
+                    style={{ ...INPUT_STYLE, width: 100, fontSize: 11, padding: "4px 6px", cursor: "pointer" }}>
+              <option value="both">BOTH</option>
+              <option value="crypto">CRYPTO</option>
+              <option value="equity">EQUITY</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <button onClick={handleCustomTest} disabled={!customUrl || customTestStatus === "testing"}
+                    style={{ padding: "4px 14px", background: "var(--bg-3)", border: "1px solid var(--line-2)",
+                             color: "var(--cyan)", fontFamily: "'JetBrains Mono', monospace",
+                             fontSize: 11, letterSpacing: "0.14em", cursor: "pointer" }}>
+              {customTestStatus === "testing" ? "TESTING…" : customTestStatus === "ok" ? "✓ OK" : customTestStatus === "error" ? "✗ ERR" : "TEST"}
+            </button>
+          </div>
+          <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, maxWidth: 400 }}>
+            Expected shape — spot: GET /spot?symbol=BTC returns {"{"}"price": 123.45{"}"} · ohlcv: GET /ohlcv?symbol=BTC&timeframe=1d&limit=10 returns {"{"}"bars": [{"{"}...{"}"}]{"}"}
+          </div>
         </div>
       )}
     </SettingsSection>
@@ -462,6 +594,9 @@ function SettingsPage({ onBack }) {
             onCgKeyTypeChange={setCgKeyType}
             onSaveCgKey={saveCgKey}
             saveStatus={cgSaveStatus}
+            onSettingsSave={async (partial) => {
+              await window.API.saveSettings(partial);
+            }}
           />
         </div>
 
