@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from dateutil import parser as date_parser
 
 from cache_utils import ttl_cache
-from shared_data import fetch_yf_history, fetch_yf_fast_info
+import data_providers as _dp
 
 # ─────────────────────────────────────────────────────────────────
 # FREE RSS NEWS FEEDS
@@ -140,14 +140,14 @@ def get_flight_data() -> dict:
     
     # 1. Single price snapshots
     for key, ticker in [("vix", "^VIX"), ("t10", "^TNX"), ("t03", "^IRX"), ("skew", "^SKEW")]:
-        data[key] = fetch_yf_fast_info(ticker)
+        data[key] = _dp.get_spot_price(ticker)
         
     # 2. Price History (used for calculating % changes)
     tickers = ["XLE", "SPY", "HYG", "IEF", "BTC-USD", "ETH-USD", "DX-Y.NYB", "GLD", "TLT", "HG=F", "XLU", "XLF", "XLK"]
     for ticker in tickers:
         key = ticker.replace("-", "_").replace(".", "_").replace("=", "_")
-        hist = fetch_yf_history(ticker, period="7d", interval="1d")
-        data[key] = hist["Close"] if not hist.empty else None
+        df = _dp.fetch_ohlcv(ticker, "1d", 7)
+        data[key] = df.set_index("timestamp")["close"] if not df.empty else None
 
     data["fetched_at"] = datetime.now()
     return data
@@ -356,13 +356,13 @@ def get_fred_extras(api_key: str | None) -> dict:
 @ttl_cache(ttl=3600)
 def get_correlation_matrix() -> pd.DataFrame | None:
     symbols = {"BTC": "BTC-USD", "SPY": "SPY", "DXY": "DX-Y.NYB", "VIX": "^VIX"}
-    prices  = {}
+    prices = {}
     for name, ticker in symbols.items():
         try:
-            hist = fetch_yf_history(ticker, period="3mo", interval="1d")
-            try: hist.index = hist.index.tz_convert(None)
-            except Exception: pass
-            prices[name] = hist["Close"]
-        except Exception: pass
-    df = pd.DataFrame(prices).ffill().dropna()
-    return df.corr() if not df.empty else None
+            df = _dp.fetch_ohlcv(ticker, "1d", 65)
+            if not df.empty:
+                prices[name] = df.set_index("timestamp")["close"]
+        except Exception:
+            pass
+    result = pd.DataFrame(prices).ffill().dropna()
+    return result.corr() if not result.empty else None
