@@ -8,7 +8,6 @@ engine duplicates API calls. No Streamlit dependency.
 
 import json
 import sys
-import yfinance as yf
 import pandas as pd
 import ccxt
 import time
@@ -88,37 +87,40 @@ def save_providers(providers: dict):
 
 
 # ─────────────────────────────────────────────────────────────────
-# 2. MARKET DATA FETCHERS (YFINANCE)
+# 2. MARKET DATA FETCHERS (PLUGGABLE PROVIDERS)
 # ─────────────────────────────────────────────────────────────────
 
 @ttl_cache(ttl=900)
 def fetch_yf_history(ticker: str, period: str, interval: str = "1d") -> pd.DataFrame:
     """
-    Fetch price history from Yahoo Finance and cache it.
-    Both the Macro engine (for SPY, VIX) and Micro engine (for stocks) use this.
+    DEPRECATED: Stub for backward compatibility during Tasks 5–6.
+    Use data_providers.fetch_ohlcv() instead.
+    Tasks 5 and 6 will remove all callers and this stub.
     """
+    import data_providers
     try:
-        # yfinance uses periods like '5d', '3mo', '2y' and intervals like '1d', '1h'
-        df = yf.Ticker(ticker).history(period=period, interval=interval)
-        return df if not df.empty else pd.DataFrame()
-    except Exception as e:
-        print(f"Error fetching YF history for {ticker}: {e}", file=sys.stderr)
-        return pd.DataFrame()
+        # Convert yfinance period to bar count. Rough approximation:
+        # '5d' -> 5 bars, '1mo' -> 21, '3mo' -> 65, '1y' -> 252
+        period_map = {"5d": 5, "1mo": 21, "3mo": 65, "6mo": 130, "1y": 252, "2y": 504, "5y": 1260}
+        bar_count = period_map.get(period, 65)
+        df = data_providers.fetch_ohlcv(ticker, interval, bar_count)
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+    return pd.DataFrame()
 
 @ttl_cache(ttl=900)
 def fetch_yf_fast_info(ticker: str) -> float | None:
     """
-    Fetch the last known price for a ticker quickly.
-    Falls back to a 5-day history check if the fast info fails.
+    DEPRECATED: Stub for backward compatibility during Tasks 5–6.
+    Use data_providers.get_spot_price() instead.
+    Tasks 5 and 6 will remove all callers and this stub.
     """
+    import data_providers
     try:
-        info = yf.Ticker(ticker).fast_info
-        return info["last_price"]
+        return data_providers.get_spot_price(ticker)
     except Exception:
-        # Fallback to fetching actual recent history
-        hist = fetch_yf_history(ticker, period="5d", interval="1d")
-        if not hist.empty and "Close" in hist.columns:
-            return float(hist["Close"].iloc[-1])
         return None
 
 def get_last_price(symbol: str) -> float | None:
@@ -178,26 +180,18 @@ def fetch_sector_closes() -> "pd.DataFrame":
     """
     Fetch ~3 months of daily closes for SPY + all 10 sector SPDRs.
     Returns DataFrame with DatetimeIndex, one column per ticker.
-
-    Data-source adapter for sector_rotation_engine — yfinance today,
-    swappable when the user supplies a different data source. The engine
-    itself never calls yfinance; it receives this DataFrame.
-
-    Cached 4 hours (14400s). First call takes 2-5s; subsequent calls instant.
+    Routes through the active provider chain — no direct yfinance import.
+    Cached 4 hours. First call costs one fetch per ticker; subsequent calls instant.
     """
+    import data_providers
     tickers = ["SPY", "XLK", "XLY", "XLI", "XLB", "XLE", "XLF", "XLV", "XLP", "XLU", "XLRE"]
-    try:
-        raw = yf.download(
-            tickers=tickers,
-            period="3mo",
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-        )
-        # yf.download with multiple tickers returns MultiIndex columns: (field, ticker)
-        closes = raw["Close"].dropna(how="all")
-        closes.index = pd.to_datetime(closes.index).tz_localize(None)
-        return closes[tickers]  # consistent column order
-    except Exception as e:
-        print(f"[fetch_sector_closes] yfinance failed: {e}", file=sys.stderr)
+    closes = {}
+    for ticker in tickers:
+        df = data_providers.fetch_ohlcv(ticker, "1d", 65)
+        if not df.empty and "close" in df.columns and "timestamp" in df.columns:
+            closes[ticker] = df.set_index("timestamp")["close"]
+    if not closes:
         return pd.DataFrame()
+    result = pd.DataFrame(closes)
+    result.index = pd.to_datetime(result.index).tz_localize(None)
+    return result.reindex(columns=tickers).dropna(how="all")
