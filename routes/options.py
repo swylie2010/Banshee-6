@@ -20,6 +20,11 @@ router = APIRouter()
 _PAPER_WHEELS_LOCK = threading.Lock()
 _PAPER_SPREADS_LOCK = threading.Lock()
 
+
+def _is_provider_error(result) -> bool:
+    """Return True when options_data returned a provider-unavailable error dict."""
+    return isinstance(result, dict) and result.get("error") == "provider_unavailable"
+
 # ── Simulated Wheel helpers (private) ─────────────────────────────────────────
 
 def _load_wheels() -> dict:
@@ -163,7 +168,14 @@ def route_options_candidate(account_size: float = None):
     for item in _OPTIONS_UNIVERSE:
         sym = item["sym"]
         try:
-            contracts, meta = options_data.fetch_chain(sym)
+            _chain = options_data.fetch_chain(sym)
+            if _is_provider_error(_chain):
+                print(f"[options] chain fetch provider unavailable for {sym}", file=sys.stderr)
+                universe_data.append({"sym": sym, "name": item["name"], "spot": None,
+                                      "contracts": [], "closes": [], "failed": True,
+                                      "message": _chain.get("user_message")})
+                continue
+            contracts, meta = _chain
         except Exception as e:
             print(f"[options] chain fetch failed for {sym}: {e}", file=sys.stderr)
             universe_data.append({"sym": sym, "name": item["name"], "spot": None,
@@ -199,7 +211,11 @@ def route_options_grade(spec: dict = Body(...)):
         return JSONResponse(status_code=400, content={"error":
             "Pick something to sell against, a strike price, and days to expiry to grade an option."})
     try:
-        contracts, meta = options_data.fetch_chain(sym)
+        _chain = options_data.fetch_chain(sym)
+        if _is_provider_error(_chain):
+            print(f"[options] grade chain fetch provider unavailable for {sym}", file=sys.stderr)
+            return JSONResponse(status_code=503, content={"error": _chain.get("user_message")})
+        contracts, meta = _chain
     except Exception as e:
         print(f"[options] grade chain fetch failed for {sym}: {e}", file=sys.stderr)
         return JSONResponse(status_code=404, content={"error":
@@ -556,9 +572,18 @@ def route_spread_candidate(tier: str = "starter", universe: str = ""):
     universe_data = []
     for sym in all_tickers:
         try:
-            contracts, meta = options_data.fetch_chain(sym)
+            _chain = options_data.fetch_chain(sym)
+            if _is_provider_error(_chain):
+                print(f"[spread-candidate] chain fetch provider unavailable for {sym}", file=sys.stderr)
+                universe_data.append({"sym": sym, "spot": None, "contracts": [],
+                                       "closes": [], "earnings_date": None, "failed": True,
+                                       "message": _chain.get("user_message")})
+                continue
+            contracts, meta = _chain
             closes = options_data.fetch_closes(sym)
             earnings_raw = options_data.fetch_earnings_date(sym)
+            if _is_provider_error(earnings_raw):
+                earnings_raw = None
             earnings_iso = earnings_raw.isoformat() if earnings_raw else None
             universe_data.append({
                 "sym": sym,
@@ -593,7 +618,11 @@ def route_grade_spread(body: dict = Body(...)):
     market_ctx: dict = {"spot": None, "ivr": None, "short_delta": None,
                         "short_oi": None, "long_oi": None, "earnings_date": None}
     try:
-        contracts, meta = options_data.fetch_chain(underlying)
+        _chain = options_data.fetch_chain(underlying)
+        if _is_provider_error(_chain):
+            print(f"[grade-spread] chain fetch provider unavailable for {underlying}", file=sys.stderr)
+            return JSONResponse(status_code=503, content={"error": _chain.get("user_message")})
+        contracts, meta = _chain
         closes = options_data.fetch_closes(underlying)
         spot = meta.get("spot")
         market_ctx["spot"] = spot
@@ -629,6 +658,8 @@ def route_grade_spread(body: dict = Body(...)):
             market_ctx["long_oi"] = long_leg.get("open_interest")
 
         earnings_raw = options_data.fetch_earnings_date(underlying)
+        if _is_provider_error(earnings_raw):
+            earnings_raw = None
         market_ctx["earnings_date"] = earnings_raw.isoformat() if earnings_raw else None
 
     except Exception as e:
