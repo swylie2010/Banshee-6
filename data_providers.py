@@ -250,8 +250,22 @@ def _yfinance_spot(symbol: str) -> float | None:
 
 
 def _custom_spot(symbol: str) -> float | None:
-    """Spot price from custom HTTP data source. Stub — full implementation in Task 3."""
-    return None
+    try:
+        keys = _load_keys()
+        c = keys.get("CUSTOM_DATA", {})
+        if not c.get("base_url"):
+            return None
+        import requests as _req
+        r = _req.get(
+            f"{c['base_url'].rstrip('/')}/spot",
+            params={"symbol": symbol, "apikey": c.get("api_key", "")},
+            timeout=5,
+        )
+        r.raise_for_status()
+        price = r.json().get("price")
+        return float(price) if price else None
+    except Exception:
+        return None
 
 
 _SPOT_FNS: dict = {
@@ -387,8 +401,29 @@ def _yfinance_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
 
 
 def _custom_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
-    """OHLCV from custom HTTP data source. Stub — full implementation in Task 3."""
-    return pd.DataFrame()
+    try:
+        keys = _load_keys()
+        c = keys.get("CUSTOM_DATA", {})
+        if not c.get("base_url"):
+            return pd.DataFrame()
+        import requests as _req
+        r = _req.get(
+            f"{c['base_url'].rstrip('/')}/ohlcv",
+            params={"symbol": symbol, "timeframe": timeframe,
+                    "limit": limit, "apikey": c.get("api_key", "")},
+            timeout=10,
+        )
+        r.raise_for_status()
+        bars = r.json().get("bars", [])
+        if not bars:
+            return pd.DataFrame()
+        df = pd.DataFrame(bars)
+        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_localize(None)
+        for col in ("open", "high", "low", "close", "volume"):
+            df[col] = df[col].astype(float)
+        return df[["timestamp", "open", "high", "low", "close", "volume"]].tail(limit).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
 
 
 _OHLCV_FNS: dict = {
@@ -433,26 +468,36 @@ def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> pd.DataFrame:
 
 
 def has_capability(capability: str) -> bool:
-    """Return True if the named capability is available given current provider settings.
-
-    Capabilities:
-      options_chain — requires yfinance (only source of options data currently)
-    """
-    if capability == "options_chain":
-        return _is_enabled("yfinance", "equity")
+    """True if any currently-enabled provider declares this capability."""
+    keys = _load_keys()
+    _CAPS = {
+        "coinbase":  {"spot", "ohlcv"},
+        "alpaca":    {"spot", "ohlcv"},
+        "coingecko": {"spot"},
+        "yfinance":  {"spot", "ohlcv", "options_chain", "earnings_calendar"},
+        "custom":    set(keys.get("CUSTOM_DATA", {}).get("capabilities", [])),
+    }
+    for name, caps in _CAPS.items():
+        if capability not in caps:
+            continue
+        for ac in ("crypto", "equity", "both"):
+            if _is_enabled(name, ac):
+                return True
     return False
 
 
 def get_speed_report() -> dict:
-    """Return latency summary for all providers. Called by /settings/data-sources/speed."""
+    """Return latency summary for all providers including enabled state."""
     result = {}
-    for name in ("coinbase", "alpaca", "coingecko", "yfinance"):
+    for name in ("coinbase", "alpaca", "coingecko", "yfinance", "custom"):
         avg = _mean_latency(name)
         samples = len(_latency.get(name, []))
+        enabled = any(_is_enabled(name, ac) for ac in ("crypto", "equity"))
         result[name] = {
             "avg_ms": round(avg) if avg != float("inf") else None,
             "samples": samples,
             "tier": _tier(avg),
+            "enabled": enabled,
         }
     return result
 
@@ -466,6 +511,19 @@ def probe_coingecko_latency() -> dict:
         price = _coingecko_spot("BTC")
         if price:
             _record_latency("coingecko", (time.monotonic() - t0) * 1000)
+    except Exception:
+        pass
+    return {"price": price, "speed": get_speed_report()}
+
+
+def probe_custom_latency() -> dict:
+    """Fire a timed custom provider spot fetch to populate latency data."""
+    t0 = time.monotonic()
+    price = None
+    try:
+        price = _custom_spot("BTC")
+        if price:
+            _record_latency("custom", (time.monotonic() - t0) * 1000)
     except Exception:
         pass
     return {"price": price, "speed": get_speed_report()}
