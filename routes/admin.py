@@ -221,6 +221,17 @@ async def route_data_sources_test_coingecko():
         return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
 
 
+@router.post("/settings/data-sources/test-custom")
+async def route_data_sources_test_custom():
+    """Fire a timed custom provider fetch to populate latency, then return speed report."""
+    import asyncio
+    import data_providers
+    try:
+        return await asyncio.to_thread(data_providers.probe_custom_latency)
+    except Exception as exc:
+        return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PREDATOR
 # ─────────────────────────────────────────────────────────────────────────────

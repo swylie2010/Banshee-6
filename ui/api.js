@@ -800,6 +800,14 @@ async function testCoinGecko() {
   return r.ok ? r.json() : null;
 }
 
+/* test custom provider connectivity */
+async function testCustomSource() {
+  const r = await _fetch(`${API_BASE}/settings/data-sources/test-custom`, {
+    method: "POST", body: "{}", headers: { "Content-Type": "application/json" },
+  });
+  return r.ok ? r.json() : null;
+}
+
 async function fetchAuditEntries({ limit = 50, tool = "", since = "", offset = 0 } = {}) {
   try {
     const q = new URLSearchParams();
@@ -825,4 +833,4 @@ async function fetchAuditSummary(days = 7) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, fetchAuditEntries, fetchAuditSummary };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary };
