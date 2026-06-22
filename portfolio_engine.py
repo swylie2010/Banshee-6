@@ -14,7 +14,7 @@ import sector_rotation_engine
 import banshee_ai
 import ledger_engine
 from core_state import _load_macro_cache, _sanitize
-import yfinance as yf
+import data_providers as _dp
 from cache_utils import ttl_cache
 
 _SECTOR_ETF_MAP = {
@@ -264,18 +264,27 @@ def _build_rotation_note(fred_key) -> dict | None:
 
 @ttl_cache(ttl=3600)
 def _fetch_1y_closes(syms_key: tuple) -> pd.DataFrame:
-    """Cached 1-year price history from yfinance.
+    """1-year price history via pluggable provider chain. One fetch per symbol, combined.
 
-    Args:
-        syms_key: tuple of sorted symbol strings (hashable for cache)
-
-    Returns:
-        DataFrame with Close prices, cached for 1 hour.
+    syms_key: tuple of symbols in yfinance form (e.g. "BTC-USD", "SPY", "AAPL").
+    Returns DataFrame with symbol columns and DatetimeIndex matching the old yfinance shape.
     """
-    tickers = yf.download(list(syms_key), period="1y", progress=False, auto_adjust=True)
-    # yf.download with a list always returns MultiIndex columns; extract Close and copy
-    # so callers cannot mutate the cached object.
-    return tickers["Close"].copy()
+    def _to_dp(s: str) -> str:
+        if s.endswith("-USD"):
+            return s[:-4] + "/USD"
+        return s
+
+    closes = {}
+    for sym in syms_key:
+        try:
+            df = _dp.fetch_ohlcv(_to_dp(sym), "1d", 260)
+            if not df.empty and "close" in df.columns:
+                closes[sym] = df.set_index("timestamp")["close"]
+        except Exception:
+            pass
+    if not closes:
+        return pd.DataFrame()
+    return pd.DataFrame(closes)
 
 
 def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
@@ -467,10 +476,12 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
             # Entries can predate the 1y window (e.g. a 2022 dip buy) — fetch SPY
             # history back to the earliest entry so the benchmark spans the real period.
             start = (min(ts for _, ts in dated) - pd.Timedelta(days=5)).strftime("%Y-%m-%d")
-            spy_hist = yf.download("SPY", start=start, progress=False, auto_adjust=True)
-            spy_long = spy_hist["Close"] if "Close" in spy_hist else None
-            if isinstance(spy_long, pd.DataFrame):
-                spy_long = spy_long.iloc[:, 0]
+            spy_df = _dp.fetch_ohlcv("SPY", "1d", 260)
+            spy_long = None
+            if not spy_df.empty:
+                spy_df = spy_df[spy_df["timestamp"] >= pd.Timestamp(start)]
+                if not spy_df.empty:
+                    spy_long = spy_df.set_index("timestamp")["close"]
             if spy_long is not None and len(spy_long):
                 spy_now = float(spy_long.iloc[-1])
                 ov_you = ov_spy = ov_w = 0.0
