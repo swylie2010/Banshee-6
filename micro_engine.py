@@ -9,7 +9,7 @@ Data is sourced from the unified shared_data cache.
 import time
 import numpy as np
 import pandas as pd
-from shared_data import fetch_crypto_ohlcv, fetch_yf_history, fetch_funding_rate
+from shared_data import fetch_crypto_ohlcv, fetch_funding_rate
 from asset_profiles import get_weight, is_enabled, MOMENTUM_INDICATORS, get_profile, get_effective_profile
 
 # ─── SETTINGS ──────────────────────────────────────────────────────────────────
@@ -46,32 +46,19 @@ MODE_CONFIG = {
 # ─── DATA LOADING VIA SHARED_DATA ───────────────────────────────────────────────
 
 def fetch_stock(symbol: str, timeframe: str) -> tuple[pd.DataFrame, str | None]:
-    cfg = {
-        "1wk": ("1wk", "10y"),
-        "1d":  ("1d",  "2y"),
-        "4h":  ("1h",  "730d"),
-        "1h":  ("1h",  "60d"),
-        "15m": ("15m", "60d"),
-    }
-    if timeframe not in cfg: return pd.DataFrame(), f"Invalid timeframe {timeframe}"
-    interval, period = cfg[timeframe]
-    df = fetch_yf_history(symbol, period, interval)
+    import data_providers
+    limits = {"1wk": 520, "1d": 500, "4h": 300, "1h": 300, "15m": 300}
+    if timeframe not in limits:
+        return pd.DataFrame(), f"Invalid timeframe {timeframe}"
+    df = data_providers.fetch_ohlcv(symbol, timeframe, limits[timeframe])
     if df.empty:
-        return pd.DataFrame(), f"Yahoo Finance returned no data for {symbol} {timeframe}"
+        return pd.DataFrame(), f"No data available for {symbol} {timeframe} — check Settings → Data Sources"
     df_raw = df.copy()
     try:
-        df = df.reset_index()
-        df.columns = [c.lower() for c in df.columns]
-        ts_col = "date" if "date" in df.columns else "datetime"
-        df = df.rename(columns={ts_col: "timestamp"})
-        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_localize(None)
-        df = df[["timestamp", "open", "high", "low", "close", "volume"]]
-
-        if timeframe == "4h":
-            df = (df.set_index("timestamp").resample("4h")
-                  .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
-                  .dropna().reset_index())
-        return df.reset_index(drop=True), None
+        required = {"timestamp", "open", "high", "low", "close", "volume"}
+        if not required.issubset(df.columns):
+            raise ValueError(f"Missing columns: {required - set(df.columns)}")
+        return df[list(required)].reset_index(drop=True), None
     except Exception as e:
         try:
             from shared_data import load_providers
@@ -86,8 +73,7 @@ def fetch_stock(symbol: str, timeframe: str) -> tuple[pd.DataFrame, str | None]:
 
             ai_cfg = providers.get("AI_API")
             if ai_cfg and ai_cfg.get("type") and ai_cfg.get("key"):
-                # Grab the raw text of the error and the first 5 rows of raw data
-                raw_data = str(df_raw.reset_index().head().to_dict(orient="records"))
+                raw_data = str(df_raw.head().to_dict(orient="records"))
                 prompt = (f"The data format changed and broke my pandas script. Error: {e}\n"
                           f"Look at this raw data: {raw_data}\n"
                           f"Tell me the new column names for Date, Open, High, Low, Close, and Volume. "
@@ -95,32 +81,19 @@ def fetch_stock(symbol: str, timeframe: str) -> tuple[pd.DataFrame, str | None]:
                           f"Do not include any other text.")
                 _log_error("ai-rescue", e)
                 response = banshee_ai.call_ai(ai_cfg, prompt)
-
                 match = re.search(r'\{.*\}', response, re.DOTALL)
                 if match:
                     rename_map = json.loads(match.group(0))
-
                     _VALID_OHLCV_COLS = {"open", "high", "low", "close", "volume", "timestamp"}
                     bad_cols = [v for v in rename_map.values() if v not in _VALID_OHLCV_COLS]
                     if bad_cols:
-                        return pd.DataFrame(), (
-                            f"AI rescue rejected: invalid column names returned: {bad_cols}"
-                        )
-
-                    # Apply dictionary to fix the dataframe and continue
-                    df = df_raw.reset_index().rename(columns=rename_map)
-                    
+                        return pd.DataFrame(), f"AI rescue rejected: invalid column names returned: {bad_cols}"
+                    df = df_raw.rename(columns=rename_map)
                     df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_localize(None)
                     df = df[["timestamp", "open", "high", "low", "close", "volume"]]
-
-                    if timeframe == "4h":
-                        df = (df.set_index("timestamp").resample("4h")
-                              .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
-                              .dropna().reset_index())
                     return df.reset_index(drop=True), None
         except Exception as ai_err:
             return pd.DataFrame(), f"Data parsing failed, and self-healing AI rescue failed: {ai_err}"
-            
         return pd.DataFrame(), f"Data parsing failed due to format change: {e}"
 
 

@@ -36,7 +36,7 @@ def test_rescue_skipped_when_disabled():
     import micro_engine
     import banshee_ai
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={"allow_ai_data_rescue": False}), \
          patch.object(banshee_ai, "call_ai") as mock_ai:
 
@@ -54,7 +54,7 @@ def test_rescue_enabled_by_default():
 
     valid_map_json = str(_good_rename_map()).replace("'", '"')
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={
              "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
          }), \
@@ -82,7 +82,7 @@ def test_rescue_logs_before_ai_call():
         call_order.append("ai")
         return str(_good_rename_map()).replace("'", '"')
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={
              "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
          }), \
@@ -104,7 +104,7 @@ def test_rescue_rejects_invalid_column_names():
 
     bad_map_json = str(_bad_rename_map()).replace("'", '"')
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={
              "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
          }), \
@@ -125,7 +125,7 @@ def test_rescue_accepts_valid_column_names():
 
     good_map_json = str(_good_rename_map()).replace("'", '"')
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={
              "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
          }), \
@@ -144,7 +144,7 @@ def test_rescue_handles_ai_returning_no_json():
     import micro_engine
     import banshee_ai
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={
              "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
          }), \
@@ -166,7 +166,7 @@ def test_rescue_handles_malformed_json():
     # Python dict repr uses single quotes — json.loads rejects this
     single_quoted = str(_good_rename_map())  # e.g. "{'WEIRD_DATE': 'timestamp', ...}"
 
-    with patch("micro_engine.fetch_yf_history", return_value=_bad_df()), \
+    with patch("data_providers.fetch_ohlcv", return_value=_bad_df()), \
          patch("shared_data.load_providers", return_value={
              "AI_API": {"type": "openai", "key": "sk-test", "model": "gpt-4o"}
          }), \
