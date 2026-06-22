@@ -4,6 +4,18 @@ import pytest
 from unittest.mock import patch
 
 
+def _all_enabled_keys():
+    """Keys dict with all providers enabled — used to satisfy _active_chain in chain tests."""
+    return {
+        "COINBASE":   {"enabled": True},
+        "ALPACA_KEY": {"key": "test_key", "enabled": True},
+        "ALPACA_SECRET": {"key": "test_secret"},
+        "COINGECKO":  {"enabled": True},
+        "YFINANCE":   {"enabled": True},
+        "CUSTOM_DATA": {"enabled": False, "base_url": "", "asset_class": "both"},
+    }
+
+
 def test_asset_class_crypto_slash():
     import data_providers
     assert data_providers._asset_class("BTC/USD") == "crypto"
@@ -72,19 +84,21 @@ def _exc(*a, **kw):
 def test_spot_price_crypto_success_first_provider():
     """If the first provider returns a price, it's returned immediately."""
     import data_providers
-    with patch.dict(data_providers._SPOT_FNS, {"coinbase": lambda s: 50000.0}):
-        result = data_providers.get_spot_price("BTC-USD-TEST1")
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._SPOT_FNS, {"coinbase": lambda s: 50000.0}):
+            result = data_providers.get_spot_price.__wrapped__("BTC-USD-TEST1")
     assert result == 50000.0
 
 def test_spot_price_crypto_falls_through_to_second():
     """If Coinbase raises, CoinGecko is tried next."""
     import data_providers
-    with patch.dict(data_providers._SPOT_FNS, {
-        "coinbase":  _exc,
-        "coingecko": lambda s: 50001.0,
-        "yfinance":  lambda s: 0.0,
-    }):
-        result = data_providers.get_spot_price("BTC-USD-TEST2")
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._SPOT_FNS, {
+            "coinbase":  _exc,
+            "coingecko": lambda s: 50001.0,
+            "yfinance":  lambda s: 0.0,
+        }):
+            result = data_providers.get_spot_price.__wrapped__("BTC-USD-TEST2")
     assert result == 50001.0
 
 def test_spot_price_crypto_total_failure_returns_none():
@@ -103,12 +117,13 @@ def test_spot_price_equity_skips_coinbase_and_coingecko():
     import data_providers
     coinbase_called = []
     coingecko_called = []
-    with patch.dict(data_providers._SPOT_FNS, {
-        "coinbase":  lambda s: coinbase_called.append(s) or None,
-        "coingecko": lambda s: coingecko_called.append(s) or None,
-        "alpaca":    lambda s: 150.0,
-    }):
-        result = data_providers.get_spot_price("AAPL-TEST4")
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._SPOT_FNS, {
+            "coinbase":  lambda s: coinbase_called.append(s) or None,
+            "coingecko": lambda s: coingecko_called.append(s) or None,
+            "alpaca":    lambda s: 150.0,
+        }):
+            result = data_providers.get_spot_price.__wrapped__("AAPL-TEST4")
     assert result == 150.0
     assert len(coinbase_called) == 0
     assert len(coingecko_called) == 0
@@ -116,12 +131,13 @@ def test_spot_price_equity_skips_coinbase_and_coingecko():
 def test_coingecko_skipped_for_unknown_crypto_symbol():
     """CoinGecko returns None if symbol not in _CG_IDS; chain continues to yfinance."""
     import data_providers
-    with patch.dict(data_providers._SPOT_FNS, {
-        "coinbase":  _exc,
-        "coingecko": lambda s: None,   # explicit mock — symbol not in _CG_IDS
-        "yfinance":  lambda s: 999.0,
-    }):
-        result = data_providers.get_spot_price("UNKNOWNCOIN-USD-TEST5")
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._SPOT_FNS, {
+            "coinbase":  _exc,
+            "coingecko": lambda s: None,   # explicit mock — symbol not in _CG_IDS
+            "yfinance":  lambda s: 999.0,
+        }):
+            result = data_providers.get_spot_price.__wrapped__("UNKNOWNCOIN-USD-TEST5")
     assert result == 999.0
 
 def test_latency_recorded_on_spot_success():
@@ -131,12 +147,13 @@ def test_latency_recorded_on_spot_success():
     data_providers._latency["yfinance"].clear()
     # Use a unique symbol each run so ttl_cache never serves a stale hit
     test_sym = f"ETH-USD-LATENCY-{uuid.uuid4().hex}"
-    with patch.dict(data_providers._SPOT_FNS, {
-        "coinbase":  _exc,
-        "coingecko": _exc,
-        "yfinance":  lambda s: 42.0,
-    }):
-        data_providers.get_spot_price(test_sym)
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._SPOT_FNS, {
+            "coinbase":  _exc,
+            "coingecko": _exc,
+            "yfinance":  lambda s: 42.0,
+        }):
+            data_providers.get_spot_price.__wrapped__(test_sym)
     assert len(data_providers._latency["yfinance"]) == 1
     data_providers._latency["yfinance"].clear()
 
@@ -161,27 +178,30 @@ def test_ohlcv_returns_normalized_columns():
     """fetch_ohlcv always returns the canonical 6-column shape."""
     import data_providers
     sym = f"BTC/USD-NORM-{uuid.uuid4().hex}"
-    with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
-        df = data_providers.fetch_ohlcv(sym, "1d", 10)
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
+            df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert list(df.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
 
 def test_ohlcv_no_timezone():
     """Timestamps must be timezone-naive."""
     import data_providers
     sym = f"BTC/USD-NOTZ-{uuid.uuid4().hex}"
-    with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
-        df = data_providers.fetch_ohlcv(sym, "1d", 10)
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
+            df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert df["timestamp"].dt.tz is None
 
 def test_ohlcv_falls_through_on_empty():
     """If first provider returns empty, the next is tried."""
     import data_providers
     sym = f"BTC/USD-FALL-{uuid.uuid4().hex}"
-    with patch.dict(data_providers._OHLCV_FNS, {
-        "coinbase":  lambda *a: pd.DataFrame(),
-        "yfinance":  lambda *a: _fake_ohlcv(),
-    }):
-        df = data_providers.fetch_ohlcv(sym, "1d", 10)
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._OHLCV_FNS, {
+            "coinbase":  lambda *a: pd.DataFrame(),
+            "yfinance":  lambda *a: _fake_ohlcv(),
+        }):
+            df = data_providers.fetch_ohlcv(sym, "1d", 10)
     assert not df.empty
 
 def test_ohlcv_equity_skips_coinbase():
@@ -212,8 +232,9 @@ def test_ohlcv_latency_recorded_on_success():
     import data_providers
     sym = f"BTC/USD-LAT-{uuid.uuid4().hex}"
     data_providers._latency["coinbase"].clear()
-    with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
-        data_providers.fetch_ohlcv(sym, "1d", 10)
+    with patch("data_providers._load_keys", return_value=_all_enabled_keys()):
+        with patch.dict(data_providers._OHLCV_FNS, {"coinbase": lambda *a: _fake_ohlcv()}):
+            data_providers.fetch_ohlcv(sym, "1d", 10)
     assert len(data_providers._latency["coinbase"]) == 1
     data_providers._latency["coinbase"].clear()
 

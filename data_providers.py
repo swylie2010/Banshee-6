@@ -23,12 +23,52 @@ from cache_utils import ttl_cache
 
 _KEYS_FILE = Path.home() / ".banshee_keys.json"
 
+_keys_cache: dict = {}
+_keys_cache_ts: float = 0.0
+_KEYS_TTL = 30.0
+
 
 def _load_keys() -> dict:
+    global _keys_cache, _keys_cache_ts
+    if _keys_cache and time.monotonic() - _keys_cache_ts < _KEYS_TTL:
+        return _keys_cache
     try:
-        return json.loads(_KEYS_FILE.read_text())
+        _keys_cache = json.loads(_KEYS_FILE.read_text())
     except Exception:
-        return {}
+        _keys_cache = {}
+    _keys_cache_ts = time.monotonic()
+    return _keys_cache
+
+
+def _is_enabled(name: str, asset_class: str) -> bool:
+    """Return True if this provider is enabled for the given asset class."""
+    keys = _load_keys()
+    if name == "coinbase":
+        return bool(keys.get("COINBASE", {}).get("enabled", False)) and asset_class == "crypto"
+    if name == "alpaca":
+        return bool(keys.get("ALPACA_KEY", {}).get("key")) and bool(keys.get("ALPACA_KEY", {}).get("enabled", False))
+    if name == "coingecko":
+        return bool(keys.get("COINGECKO", {}).get("enabled", False)) and asset_class == "crypto"
+    if name == "yfinance":
+        return bool(keys.get("YFINANCE", {}).get("enabled", False))
+    if name == "custom":
+        c = keys.get("CUSTOM_DATA", {})
+        if not c.get("enabled", False) or not c.get("base_url"):
+            return False
+        ac = c.get("asset_class", "both")
+        return ac == "both" or ac == asset_class
+    return False
+
+
+def _active_chain(call_type: str, asset_class: str) -> list[str]:
+    """Return speed-ordered list of enabled provider names for this call type + asset class."""
+    candidates = {
+        "spot":  {"crypto": ["coinbase", "coingecko", "custom", "yfinance"],
+                  "equity": ["alpaca", "custom", "yfinance"]},
+        "ohlcv": {"crypto": ["coinbase", "custom", "yfinance"],
+                  "equity": ["alpaca", "custom", "yfinance"]},
+    }[call_type][asset_class]
+    return _by_speed([n for n in candidates if _is_enabled(n, asset_class)])
 
 
 # ── CoinGecko symbol map ───────────────────────────────────────────────────────
@@ -72,6 +112,7 @@ _latency: dict[str, deque] = {
     "alpaca":    deque(maxlen=10),
     "coingecko": deque(maxlen=10),
     "yfinance":  deque(maxlen=10),
+    "custom":    deque(maxlen=10),
 }
 
 
@@ -208,21 +249,25 @@ def _yfinance_spot(symbol: str) -> float | None:
     return None
 
 
+def _custom_spot(symbol: str) -> float | None:
+    """Spot price from custom HTTP data source. Stub — full implementation in Task 3."""
+    return None
+
+
 _SPOT_FNS: dict = {
     "coinbase":  _coinbase_spot,
     "coingecko": _coingecko_spot,
     "alpaca":    _alpaca_spot,
     "yfinance":  _yfinance_spot,
+    "custom":    _custom_spot,
 }
-_SPOT_CRYPTO = ["coinbase", "coingecko", "yfinance"]
-_SPOT_EQUITY = ["alpaca", "yfinance"]
 
 
 @ttl_cache(ttl=60, skip_none=True)
 def get_spot_price(symbol: str) -> float | None:
     """Last known price via the fastest available provider. 60s cache."""
-    chain = _SPOT_CRYPTO if _asset_class(symbol) == "crypto" else _SPOT_EQUITY
-    for name in _by_speed(chain):
+    chain = _active_chain("spot", _asset_class(symbol))
+    for name in chain:
         fn = _SPOT_FNS[name]
         try:
             t0 = time.monotonic()
@@ -341,19 +386,23 @@ def _yfinance_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _custom_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    """OHLCV from custom HTTP data source. Stub — full implementation in Task 3."""
+    return pd.DataFrame()
+
+
 _OHLCV_FNS: dict = {
     "coinbase": _coinbase_ohlcv,
     "alpaca":   _alpaca_ohlcv,
     "yfinance": _yfinance_ohlcv,
+    "custom":   _custom_ohlcv,
 }
-_OHLCV_CRYPTO = ["coinbase", "yfinance"]
-_OHLCV_EQUITY = ["alpaca", "yfinance"]
 
 
 def _fetch_ohlcv_impl(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
     """Shared implementation — routes through provider chain."""
-    chain = _OHLCV_CRYPTO if _asset_class(symbol) == "crypto" else _OHLCV_EQUITY
-    for name in _by_speed(chain):
+    chain = _active_chain("ohlcv", _asset_class(symbol))
+    for name in chain:
         fn = _OHLCV_FNS[name]
         try:
             t0 = time.monotonic()
@@ -381,6 +430,17 @@ def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> pd.DataFrame:
     if timeframe in ("1d", "1wk"):
         return _fetch_ohlcv_daily(symbol, timeframe, limit).copy()
     return _fetch_ohlcv_intraday(symbol, timeframe, limit).copy()
+
+
+def has_capability(capability: str) -> bool:
+    """Return True if the named capability is available given current provider settings.
+
+    Capabilities:
+      options_chain — requires yfinance (only source of options data currently)
+    """
+    if capability == "options_chain":
+        return _is_enabled("yfinance", "equity")
+    return False
 
 
 def get_speed_report() -> dict:
