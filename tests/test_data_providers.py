@@ -256,3 +256,63 @@ def test_ohlcv_weekly_routes_to_daily_cache():
         data_providers._fetch_ohlcv_intraday = orig_intraday
     assert len(daily_calls) == 1
     assert len(intraday_calls) == 0
+
+
+# ── yfinance symbol normalization ─────────────────────────────────────────────
+
+def test_yfinance_ohlcv_normalizes_crypto_slash_to_dash():
+    """_yfinance_ohlcv must convert BTC/USD -> BTC-USD before calling yf.Ticker."""
+    import data_providers
+    captured = {}
+
+    class _FakeTicker:
+        def __init__(self, sym):
+            captured["sym"] = sym
+
+        def history(self, **kwargs):
+            return pd.DataFrame()  # empty is fine; we only assert the symbol passed
+
+    with patch("yfinance.Ticker", _FakeTicker):
+        data_providers._yfinance_ohlcv("BTC/USD", "1d", 10)
+
+    assert captured.get("sym") == "BTC-USD"
+
+
+def test_yfinance_ohlcv_equity_symbol_unchanged():
+    """_yfinance_ohlcv must NOT alter equity symbols that have no slash."""
+    import data_providers
+    captured = {}
+
+    class _FakeTicker:
+        def __init__(self, sym):
+            captured["sym"] = sym
+
+        def history(self, **kwargs):
+            return pd.DataFrame()
+
+    with patch("yfinance.Ticker", _FakeTicker):
+        data_providers._yfinance_ohlcv("AAPL", "1d", 10)
+
+    assert captured.get("sym") == "AAPL"
+
+
+def test_yfinance_spot_normalizes_crypto_slash_to_dash():
+    """_yfinance_spot must convert BTC/USD -> BTC-USD before calling yf.Ticker."""
+    import data_providers
+    captured = {}
+
+    class _FakeFastInfo:
+        last_price = None  # triggers fallback to history()
+
+    class _FakeTicker:
+        def __init__(self, sym):
+            captured["sym"] = sym
+            self.fast_info = _FakeFastInfo()
+
+        def history(self, **kwargs):
+            return pd.DataFrame()
+
+    with patch("yfinance.Ticker", _FakeTicker):
+        data_providers._yfinance_spot("BTC/USD")
+
+    assert captured.get("sym") == "BTC-USD"

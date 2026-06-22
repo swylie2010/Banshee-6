@@ -43,6 +43,8 @@ def get_portfolio_analysis(portfolio_id: str):
         _bc._save_portfolios(data)
 
     result = portfolio_engine.run_portfolio_analysis(portfolio, _date.today().isoformat())
+    if isinstance(result, dict) and result.get("error") == "provider_unavailable":
+        return JSONResponse(status_code=503, content=result)
     if "error" in result:
         return JSONResponse(status_code=400, content=result)
     return JSONResponse(content=result)

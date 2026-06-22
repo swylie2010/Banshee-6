@@ -331,6 +331,14 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
     except Exception as e:
         return {"error": f"Price fetch failed: {e}"}
 
+    # Guard: if all providers are disabled / unavailable, closes will be empty and
+    # every holding would show $0 — surface an actionable error instead.
+    if closes.empty and positions:
+        return {
+            "error": "provider_unavailable",
+            "user_message": "Enable a data provider to run portfolio analysis — Settings → Data Sources",
+        }
+
     # Banshee's own radar prices assets that Yahoo can't (TAO/USD, SUI/USD are
     # absent from yfinance — "possibly delisted"). Fetch once; use it as a price
     # fallback here and for momentum scoring below.

@@ -232,6 +232,8 @@ def _alpaca_spot(symbol: str) -> float | None:
 
 
 def _yfinance_spot(symbol: str) -> float | None:
+    if "/" in symbol:
+        symbol = symbol.replace("/", "-")   # BTC/USD -> BTC-USD for yfinance
     import yfinance as yf
     try:
         info = yf.Ticker(symbol).fast_info
@@ -367,6 +369,8 @@ def _alpaca_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
 
 def _yfinance_ohlcv(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
     """Universal OHLCV fallback via yfinance."""
+    if "/" in symbol:
+        symbol = symbol.replace("/", "-")   # BTC/USD -> BTC-USD for yfinance
     try:
         import yfinance as yf
         yf_intervals = {

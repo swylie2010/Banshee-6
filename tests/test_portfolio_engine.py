@@ -148,6 +148,7 @@ def test_score_perfect_portfolio():
 
 def test_run_portfolio_analysis_returns_required_keys():
     """run_portfolio_analysis must return a dict with the expected top-level keys."""
+    from unittest.mock import patch
     import portfolio_engine as pe
     portfolio = {
         "id": "test",
@@ -157,6 +158,12 @@ def test_run_portfolio_analysis_returns_required_keys():
             {"type": "BUY", "sym": "SPY", "shares": 1, "price": 400.0, "date": "2024-01-02"}
         ],
     }
-    result = pe.run_portfolio_analysis(portfolio, "2025-01-01")
+    # Build a minimal closes DataFrame so the provider-unavailable guard doesn't
+    # trigger — the guard only fires when closes is empty AND there are positions.
+    dates = pd.date_range("2024-01-01", periods=260, freq="D")
+    fake_closes = pd.DataFrame({"SPY": [400.0 + i * 0.1 for i in range(260)]}, index=dates)
+
+    with patch("portfolio_engine._fetch_1y_closes", return_value=fake_closes):
+        result = pe.run_portfolio_analysis(portfolio, "2025-01-01")
     for key in ("holdings", "sector_weights", "risk", "grade", "performance"):
         assert key in result, f"Missing key: {key}"
