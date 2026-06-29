@@ -316,3 +316,46 @@ def test_yfinance_spot_normalizes_crypto_slash_to_dash():
         data_providers._yfinance_spot("BTC/USD")
 
     assert captured.get("sym") == "BTC-USD"
+
+
+# ── Deep chain tests ──────────────────────────────────────────────────────────
+
+def _crypto_all_on():
+    return {
+        "COINBASE":   {"enabled": True},
+        "YFINANCE":   {"enabled": True},
+        "COINGECKO":  {"enabled": True},
+        "ALPACA_KEY": {"key": "k", "enabled": True},
+        "ALPACA_SECRET": {"key": "s"},
+        "CUSTOM_DATA": {"enabled": True, "base_url": "http://x", "asset_class": "both",
+                        "capabilities": ["ohlcv"]},
+    }
+
+def test_deep_chain_ranks_deepest_first_and_excludes_fast():
+    import data_providers
+    with patch.object(data_providers, "_load_keys", _crypto_all_on):
+        # coinbase is the fast Stage-1 provider → excluded; deepest-first among the rest
+        chain = data_providers._deep_chain("crypto", exclude="coinbase")
+    assert chain[0] in ("yfinance", "custom")   # rank-3/2 ahead of shallow
+    assert "coinbase" not in chain
+    assert "coingecko" not in chain             # spot-only → never in OHLCV deep poll
+
+def test_deep_chain_respects_cap():
+    import data_providers
+    with patch.object(data_providers, "_load_keys", _crypto_all_on):
+        chain = data_providers._deep_chain("crypto", exclude=None, cap=2)
+    assert len(chain) <= 2
+
+def test_deep_chain_skips_disabled():
+    import data_providers
+    keys = {"YFINANCE": {"enabled": False}, "COINBASE": {"enabled": True}}
+    with patch.object(data_providers, "_load_keys", lambda: keys):
+        chain = data_providers._deep_chain("crypto", exclude="coinbase")
+    assert chain == []   # only coinbase enabled, and it's excluded → nothing deeper
+
+def test_deep_chain_coinbase_only_is_empty():
+    import data_providers
+    keys = {"COINBASE": {"enabled": True}}
+    with patch.object(data_providers, "_load_keys", lambda: keys):
+        chain = data_providers._deep_chain("crypto", exclude="coinbase")
+    assert chain == []   # no-op path: nothing to upgrade to

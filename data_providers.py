@@ -438,6 +438,31 @@ _OHLCV_FNS: dict = {
 }
 
 
+# ── Depth rank (for fast-then-complete Stage 2) ────────────────────────────────
+# How much OHLCV history a provider can return. "deep" sources return long history
+# (yfinance ~2y, Alpaca long, custom assumed-deep); shallow sources are per-request
+# capped (Coinbase ~300, no pagination). coingecko is spot-only in our integration
+# and is intentionally absent → never an OHLCV deep candidate.
+_DEPTH_RANK: dict[str, int] = {
+    "yfinance": 3,
+    "alpaca":   3,
+    "custom":   2,   # user's own source — assume deep; pick-best sorts it out
+    "coinbase": 1,   # shallow, per-request cap
+}
+
+
+def _deep_chain(asset_class: str, exclude: str | None = None, cap: int = 3) -> list[str]:
+    """Enabled, OHLCV-capable providers ranked by history depth (deepest first),
+    excluding `exclude` (the provider Stage 1 already used), capped at `cap`.
+    Empty when nothing deeper than the fast source is available (the no-op path)."""
+    names = [
+        n for n in _DEPTH_RANK
+        if n != exclude and n in _OHLCV_FNS and _is_enabled(n, asset_class)
+    ]
+    names.sort(key=lambda n: _DEPTH_RANK[n], reverse=True)
+    return names[:cap]
+
+
 def _fetch_ohlcv_impl(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
     """Shared implementation — routes through provider chain."""
     chain = _active_chain("ohlcv", _asset_class(symbol))
