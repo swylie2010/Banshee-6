@@ -71,13 +71,15 @@ async function _fetch(url, opts = {}) {
   return fetch(url, { ...opts, headers: h });
 }
 
-/* fetch OHLCV for a symbol+tf from Core; returns LW-formatted candles */
-async function fetchOHLCV(sym, tf) {
+/* fetch OHLCV for a symbol+tf from Core; returns LW-formatted candles.
+   opts.deep=true requests the fast-then-complete Stage-2 upgrade. */
+async function fetchOHLCV(sym, tf, opts = {}) {
   const mode    = TF_TO_MODE[tf] || "swing";
   const coreKey = TF_CORE_KEY[tf] || tf.toLowerCase();
   const pair    = coreSymbol(sym);
+  const deepQS  = opts.deep ? "&deep=1" : "";
   try {
-    const res  = await _fetch(`${API_BASE}/ohlcv?symbol=${encodeURIComponent(pair)}&mode=${mode}`);
+    const res  = await _fetch(`${API_BASE}/ohlcv?symbol=${encodeURIComponent(pair)}&mode=${mode}${deepQS}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);

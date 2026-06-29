@@ -1340,6 +1340,9 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const [indicatorData, setIndicatorData] = useState(null);
   const [stochHeight, setStochHeight] = useState(100);
   const stochDragRef = useRef({ dragging: false, startY: 0, startH: 0 });
+  const paintedCandlesRef = useRef(null);   // Stage-1 candles, for the deep diff
+  const deepCandlesRef    = useRef(null);   // pending deep upgrade awaiting user click
+  const [deepBadge, setDeepBadge] = useState(null);   // {bars, painted} or null
 
   const ACCENT_MAP = {
     "--buy":     "#5eead4",
@@ -1552,29 +1555,66 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     };
   }, [height]);
 
-  /* reload data when symbol or tf changes */
+  /* reload data when symbol or tf changes — Stage 1 (fast) then Stage 2 (deep upgrade) */
   useEffect(() => {
     if (!seriesRef.current) return;
     let cancelled = false;
     setDataSource("…");
-
     setIndicatorData(null);
+    setDeepBadge(null);
+    deepCandlesRef.current = null;
+
+    const applyCandles = (candles, indicators, fit) => {
+      seriesRef.current.setData(candles);
+      lastCandleTimeRef.current = candles[candles.length - 1].time;
+      ghBarsRef.current = { t0: candles[0].time, tN: candles[candles.length - 1].time, n: candles.length };
+      if (fit) chartRef.current.timeScale().fitContent();   // Stage 1 only — keep range on swap
+      setIndicatorData(indicators || null);
+    };
+
+    // Stage 1 — fast paint (unchanged behaviour)
     window.API.fetchOHLCV(symbol, tf).then(({ candles, indicators, source }) => {
       if (cancelled || !seriesRef.current || !candles.length) return;
-      seriesRef.current.setData(candles);
-      lastCandleTimeRef.current = candles[candles.length - 1].time; // Unix int seconds
-      ghBarsRef.current = {                                          // for GH off-window arc extrapolation
-        t0: candles[0].time,
-        tN: candles[candles.length - 1].time,
-        n:  candles.length,
-      };
-      chartRef.current.timeScale().fitContent();
+      paintedCandlesRef.current = candles;
+      applyCandles(candles, indicators, true);
       setDataSource(source);
-      setIndicatorData(indicators || null);
+
+      // Stage 2 — deep upgrade in the background
+      window.API.fetchOHLCV(symbol, tf, { deep: true }).then((deep) => {
+        if (cancelled || !seriesRef.current || !deep || !deep.candles.length) return;
+        const painted = paintedCandlesRef.current || [];
+        if (!painted.length) return;
+        const deeper  = deep.candles.length > painted.length;
+        const fresher = deep.candles[deep.candles.length - 1].time > painted[painted.length - 1].time;
+        if (!deeper && !fresher) return;   // nothing better → no-op
+
+        const pLast = painted[painted.length - 1].close;
+        const dLast = deep.candles[deep.candles.length - 1].close;
+        const delta = pLast ? Math.abs(dLast - pLast) / pLast : 0;
+
+        if (delta < 0.005) {
+          applyCandles(deep.candles, deep.indicators, false);   // additive → silent swap, keep range
+        } else {
+          deepCandlesRef.current = deep;                        // contradictory → let the user choose
+          setDeepBadge({ bars: deep.candles.length, painted: painted.length });
+        }
+      }).catch(() => {});   // deep failure is silent — fast paint already succeeded
     });
 
     return () => { cancelled = true; };
   }, [symbol, tf]);
+
+  /* user accepts the deep upgrade from the badge */
+  const acceptDeep = () => {
+    const deep = deepCandlesRef.current;
+    if (!deep || !seriesRef.current) return;
+    seriesRef.current.setData(deep.candles);
+    lastCandleTimeRef.current = deep.candles[deep.candles.length - 1].time;
+    ghBarsRef.current = { t0: deep.candles[0].time, tN: deep.candles[deep.candles.length - 1].time, n: deep.candles.length };
+    setIndicatorData(deep.indicators || null);
+    setDeepBadge(null);
+    deepCandlesRef.current = null;
+  };
 
   /* SMC overlay — attach/detach zone primitive when data or toggle changes */
   useEffect(() => {
@@ -2115,6 +2155,22 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
             padding: "2px 7px", cursor: "pointer",
           }}>
           {showStoch ? "STOCH ◆" : "STOCH ○"}
+        </button>
+      )}
+      {/* deep data upgrade badge — top right, above EMA/VWAP/STOCH toggles */}
+      {deepBadge && (
+        <button
+          onClick={acceptDeep}
+          style={{
+            position: "absolute", top: 8, right: 8, zIndex: 5,
+            font: "11px ui-monospace, monospace", textTransform: "uppercase",
+            letterSpacing: "0.04em", cursor: "pointer",
+            background: "var(--bg-2)", color: "var(--ink)",
+            border: "1px solid var(--cyan)", borderRadius: 4, padding: "4px 8px",
+          }}
+          title="The fast source's last price differs from the deeper source — click to load the deeper/fresher history."
+        >
+          ⚡ FAST · {deepBadge.painted} bars · load {deepBadge.bars} ▸
         </button>
       )}
     </div>
