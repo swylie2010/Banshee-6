@@ -1,24 +1,35 @@
 import micro_engine as me
 
 
-def test_conflict_stays_wait_when_conservative():
-    # bear HTF, bull LTF -> conservative collapses to WAIT
+def test_deadzone_stays_wait_when_conservative():
+    # mixed HTF (range) + actionable LTF short -> conservative naturally WAITs
     v, *_ = me.compute_verdict(
-        "DOWNTREND", "DOWNTREND", "UPTREND",
-        s_bull=0, s_bear=3, m_bull=0, m_bear=3, f_bull=3, f_bear=0,
+        "RANGE", "RANGE", "DOWNTREND",
+        s_bull=1, s_bear=1, m_bull=1, m_bear=1, f_bull=0, f_bear=2,
         unleashed=False,
     )
     assert v == "WAIT — NO TRADE"
 
 
-def test_conflict_surfaces_trigger_when_unleashed():
-    # same inputs, unleashed -> the LTF long Trigger is surfaced as a setup
+def test_deadzone_surfaces_trigger_when_unleashed():
+    # same inputs, unleashed -> the buried LTF short Trigger is surfaced
+    v, *_ = me.compute_verdict(
+        "RANGE", "RANGE", "DOWNTREND",
+        s_bull=1, s_bear=1, m_bull=1, m_bear=1, f_bull=0, f_bear=2,
+        unleashed=True,
+    )
+    assert v == "SELL SETUP"
+
+
+def test_conservative_conflict_verdict_unchanged():
+    # HTF strongly bearish + LTF bull bounce: conservative must KEEP its directional
+    # verdict (NOT collapse to WAIT). Guards the byte-identical-when-off contract.
     v, *_ = me.compute_verdict(
         "DOWNTREND", "DOWNTREND", "UPTREND",
         s_bull=0, s_bear=3, m_bull=0, m_bear=3, f_bull=3, f_bear=0,
-        unleashed=True,
+        unleashed=False,
     )
-    assert v in ("BUY SETUP", "STRONG BUY")
+    assert v in ("SELL SETUP", "STRONG SELL")
 
 
 def test_entry_gate_vetoes_extended_short_when_conservative():

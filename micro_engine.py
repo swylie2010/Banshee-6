@@ -783,19 +783,19 @@ def compute_verdict(trend_slow, trend_mid, trend_fast,
         elif bear_count >= 2 and s_bear > s_bull and -2 < edge < 0:
             pre_signal = "PRE-SIGNAL SHORT"
 
-    # ── Conflict dead-zone lens ───────────────────────────────────────────────
-    # Conservative: HTF/LTF conflict collapses to WAIT (the veto).
-    # Unleashed: the counter-bias LTF trigger is surfaced as a setup instead.
-    _bta_cv = compute_bias_trigger_alignment(
-        trend_slow, trend_mid, trend_fast,
-        s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
-        entry_quality={"quality": "", "reasons": []},
-    )
-    if _bta_cv["alignment"] == "conflict":
-        if unleashed:
+    # ── Dead-zone lens: surface a buried LTF trigger when Unleashed ────────────
+    # Conservative is UNCHANGED. When the conservative verdict is WAIT (weak/mixed
+    # edge) but an actionable lower-timeframe Trigger exists, Unleashed surfaces it
+    # as a setup (the buried short-term read). Non-WAIT verdicts are left intact in
+    # both modes — Unleashed never flips or downgrades a verdict the engine produced.
+    if unleashed and verdict == "WAIT — NO TRADE":
+        _bta_cv = compute_bias_trigger_alignment(
+            trend_slow, trend_mid, trend_fast,
+            s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
+            entry_quality={"quality": "", "reasons": []},
+        )
+        if _bta_cv["trigger"]["actionable"]:
             verdict = "BUY SETUP" if _bta_cv["trigger"]["direction"] == "LONG" else "SELL SETUP"
-        else:
-            verdict = "WAIT — NO TRADE"
 
     return verdict, total_bull, total_bear, pre_signal
 
