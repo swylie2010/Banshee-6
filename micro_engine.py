@@ -99,19 +99,24 @@ def fetch_stock(symbol: str, timeframe: str) -> tuple[pd.DataFrame, str | None]:
 
 ALL_TIMEFRAMES = ["1wk", "1d", "4h", "1h", "15m"]
 
-def load_and_prepare(symbol: str, mode: str = "active", is_crypto: bool = None) -> dict:
+def load_and_prepare(symbol: str, mode: str = "active", is_crypto: bool = None,
+                     deep: bool = False) -> dict:
     """Fetch and prepare all 5 timeframes regardless of mode.
-    Storing all TFs enables free mode switching without re-fetching."""
+    Storing all TFs enables free mode switching without re-fetching.
+    When deep=True, fetch via the fast-then-complete deep poll (Stage 2)."""
     if is_crypto is None:
         is_crypto = ("/" in symbol) or ("-USD" in symbol)
 
     # Match equity depth so crypto charts show more history. Deeper sources honour the higher
     # limit; per-request-capped sources (e.g. Coinbase ~300) simply return what they can.
-    _crypto_limits = {"1wk": 520, "1d": 500, "4h": 300, "1h": 300, "15m": 300}
+    _limits = {"1wk": 520, "1d": 500, "4h": 300, "1h": 300, "15m": 300}
     tfs = {}
     for tf in ALL_TIMEFRAMES:
-        if is_crypto:
-            df, _ = fetch_crypto_ohlcv(symbol, tf, _crypto_limits.get(tf, 300))
+        if deep:
+            import data_providers
+            df = data_providers.fetch_ohlcv_deep(symbol, tf, _limits.get(tf, 500))
+        elif is_crypto:
+            df, _ = fetch_crypto_ohlcv(symbol, tf, _limits.get(tf, 300))
         else:
             df, _ = fetch_stock(symbol, tf)
         tfs[tf] = add_all_indicators(df) if not df.empty else df

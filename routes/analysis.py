@@ -37,15 +37,16 @@ router = APIRouter()
 # Private / shared helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_ohlcv_cached(symbol: str, mode: str) -> dict:
+def get_ohlcv_cached(symbol: str, mode: str, deep: bool = False) -> dict:
     """Fetch TF DataFrames with a 5-minute in-memory cache.
+    deep=True routes through the fast-then-complete Stage-2 poll and caches separately.
     Public name — imported by banshee_core's background prewarm job."""
-    key   = (symbol.upper(), mode)
+    key   = (symbol.upper(), mode, deep)
     entry = _OHLCV_CACHE.get(key)
     now   = datetime.now(timezone.utc).timestamp()
     if entry and (now - entry["ts"]) < _OHLCV_TTL:
         return entry["tfs"]
-    tfs = micro_engine.load_and_prepare(symbol, mode)
+    tfs = micro_engine.load_and_prepare(symbol, mode, deep=deep)
     # Only cache a result that actually has data — caching an empty/failed fetch would pin the
     # failure for the full TTL, turning a transient provider blip into minutes of stale UI.
     has_data = isinstance(tfs, dict) and any(
@@ -875,17 +876,19 @@ def route_strategies_data():
 def route_ohlcv(
     symbol: str = Query(...),
     mode: str = Query("swing"),
+    deep: bool = Query(False),
 ):
-    """OHLCV + indicator DataFrames for all mode TFs — used by UI chart rendering."""
+    """OHLCV + indicator DataFrames for all mode TFs — used by UI chart rendering.
+    deep=1 returns the fast-then-complete Stage-2 upgrade (freshest/deepest providers)."""
     mode = MODE_ALIASES.get(mode.lower(), "swing")
-    tfs  = get_ohlcv_cached(symbol, mode)
+    tfs  = get_ohlcv_cached(symbol, mode, deep=deep)
     if not tfs or "error" in tfs:
         return JSONResponse(content={"error": f"failed to load {symbol}", "tfs": {}})
     result = {}
     for tf_key, df in tfs.items():
         if isinstance(df, pd.DataFrame) and not df.empty:
             result[tf_key] = _df_to_records(df)
-    return JSONResponse(content={"symbol": symbol, "mode": mode, "tfs": result})
+    return JSONResponse(content={"symbol": symbol, "mode": mode, "deep": deep, "tfs": result})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
