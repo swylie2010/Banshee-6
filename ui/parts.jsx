@@ -1574,7 +1574,14 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
 
     // Stage 1 — fast paint (unchanged behaviour)
     window.API.fetchOHLCV(symbol, tf).then(({ candles, indicators, source }) => {
-      if (cancelled || !seriesRef.current || !candles.length) return;
+      if (cancelled || !seriesRef.current) return;
+      if (!candles.length) {                 // honest "no real data" — never paint fabricated candles
+        seriesRef.current.setData([]);
+        paintedCandlesRef.current = null;
+        setIndicatorData(null);
+        setDataSource("nodata");
+        return;
+      }
       paintedCandlesRef.current = candles;
       applyCandles(candles, indicators, true);
       setDataSource(source);
@@ -2028,14 +2035,27 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
         position: "absolute", top: 6, left: 8,
         fontSize: 12, letterSpacing: "0.16em", pointerEvents: "none",
         background: "rgba(6,8,12,0.7)", padding: "2px 6px",
-        color: dataSource === "live" ? "#5eead4" : dataSource === "mock" ? "#f59e0b" : "#4a5364",
+        color: dataSource === "live" ? "#5eead4" : dataSource === "nodata" ? "#f87171" : "#4a5364",
       }}>
         {diagMsg
           ? "⚠ " + diagMsg
           : dataSource === "live" ? "◆ LIVE"
-          : dataSource === "mock" ? "◇ MOCK"
+          : dataSource === "nodata" ? "○ NO REAL DATA"
           : "◇ LOADING…"}
       </div>
+      {/* honest empty state — shown instead of fabricated candles when no provider returns bars */}
+      {dataSource === "nodata" && !diagMsg && (
+        <div className="mono" style={{
+          position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", textAlign: "center",
+          pointerEvents: "none", color: "#94a3b8", fontSize: 12,
+          letterSpacing: "0.06em", lineHeight: 1.7, padding: 24,
+        }}>
+          <div style={{ color: "#f87171", fontSize: 13, marginBottom: 6 }}>○ NO REAL DATA FOR {tf}</div>
+          <div>No data provider returned bars for this symbol / timeframe.</div>
+          <div>Enable or refresh a source in Settings → Data Sources.</div>
+        </div>
+      )}
       {/* SMC toggle */}
       {smcBadge && (
         <button

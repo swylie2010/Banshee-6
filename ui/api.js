@@ -1,8 +1,10 @@
 /* Banshee — API client
- * Fetches from Core (:8765). Falls back to mock data on failure so the UI
- * stays usable even when Core is down or a symbol isn't supported.
+ * Fetches from Core (:8765). When Core returns no real bars for a symbol+timeframe,
+ * the chart shows an honest "no real data" state — it NEVER fabricates candles.
  *
- * TF normalisation: UI uses "1H","4H","1D","1W"; Core uses "1h","4h","1d","1w"
+ * TF normalisation: UI uses "1H","4H","1D","1W"; Core keys are "1h","4h","1d","1wk".
+ * (Weekly is "1wk", not "1w" — getting this wrong silently routed every weekly
+ *  request to the old mock fallback.)
  */
 
 const API_BASE = "http://localhost:8765";
@@ -17,7 +19,7 @@ const TF_TO_MODE = {
 /* UI tf label → Core tf key returned in /ohlcv response */
 const TF_CORE_KEY = {
   "1m": "1m", "5m": "5m", "15m": "15m",
-  "1H": "1h", "4H": "4h", "1D": "1d", "1W": "1w",
+  "1H": "1h", "4H": "4h", "1D": "1d", "1W": "1wk",
 };
 
 /* symbol normalisation: "BTC" → "BTC/USD", equities stay as-is */
@@ -97,17 +99,11 @@ async function fetchOHLCV(sym, tf, opts = {}) {
       source: "live",
     };
   } catch (err) {
-    console.warn(`[api] OHLCV fallback for ${sym}/${tf}:`, err.message);
-    /* fall back to mock candles so the chart still renders */
-    const mockRaw = window.buildCandles(sym, tf, 80);
-    const now = Math.floor(Date.now() / 1000);
-    const TF_SEC = { "1m":60,"5m":300,"15m":900,"1H":3600,"4H":14400,"1D":86400,"1W":604800 };
-    const step = TF_SEC[tf] || 3600;
-    const candles = mockRaw.map((c, i) => ({
-      time:  now - (mockRaw.length - 1 - i) * step,
-      open:  c.o, high: c.h, low: c.l, close: c.c,
-    }));
-    return { candles, indicators: null, source: "mock" };
+    /* No real bars for this symbol+timeframe (Core down, unsupported symbol, or a
+       provider returned nothing). NEVER fabricate candles on a trading chart — an
+       honest empty state is safer than fake prices. The caller renders "no real data". */
+    console.warn(`[api] no real OHLCV for ${sym}/${tf}:`, err.message);
+    return { candles: [], indicators: null, source: "nodata" };
   }
 }
 
