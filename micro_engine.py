@@ -741,7 +741,7 @@ def compute_bias_trigger_alignment(trend_slow, trend_mid, trend_fast,
 
 def compute_verdict(trend_slow, trend_mid, trend_fast,
                     s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
-                    slow_adx=None, rsi_divergence=None) -> tuple:
+                    slow_adx=None, rsi_divergence=None, unleashed: bool = False) -> tuple:
     total_bull = s_bull * 0.40 + m_bull * 0.35 + f_bull * 0.25
     total_bear = s_bear * 0.40 + m_bear * 0.35 + f_bear * 0.25
 
@@ -762,7 +762,7 @@ def compute_verdict(trend_slow, trend_mid, trend_fast,
     elif edge <= -2: verdict = "SELL SETUP"
     else:            verdict = "WAIT — NO TRADE"
 
-    if slow_adx is not None and not np.isnan(slow_adx) and slow_adx < 20:
+    if not unleashed and slow_adx is not None and not np.isnan(slow_adx) and slow_adx < 20:
         if verdict == "STRONG BUY": verdict = "BUY SETUP"
         elif verdict == "STRONG SELL": verdict = "SELL SETUP"
 
@@ -783,9 +783,24 @@ def compute_verdict(trend_slow, trend_mid, trend_fast,
         elif bear_count >= 2 and s_bear > s_bull and -2 < edge < 0:
             pre_signal = "PRE-SIGNAL SHORT"
 
+    # ── Conflict dead-zone lens ───────────────────────────────────────────────
+    # Conservative: HTF/LTF conflict collapses to WAIT (the veto).
+    # Unleashed: the counter-bias LTF trigger is surfaced as a setup instead.
+    _bta_cv = compute_bias_trigger_alignment(
+        trend_slow, trend_mid, trend_fast,
+        s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
+        entry_quality={"quality": "", "reasons": []},
+    )
+    if _bta_cv["alignment"] == "conflict":
+        if unleashed:
+            verdict = "BUY SETUP" if _bta_cv["trigger"]["direction"] == "LONG" else "SELL SETUP"
+        else:
+            verdict = "WAIT — NO TRADE"
+
     return verdict, total_bull, total_bear, pre_signal
 
-def compute_entry_quality(verdict: str, fast_df: pd.DataFrame, slow_adx: float, funding: dict) -> dict:
+def compute_entry_quality(verdict: str, fast_df: pd.DataFrame, slow_adx: float, funding: dict,
+                          unleashed: bool = False) -> dict:
     if fast_df.empty or verdict == "WAIT — NO TRADE":
         return {"quality": "WAIT", "reasons": ["No directional edge — signals are conflicting."]}
 
@@ -798,13 +813,13 @@ def compute_entry_quality(verdict: str, fast_df: pd.DataFrame, slow_adx: float, 
     if "stoch_k" in fast_df.columns:
         k = float(last.get("stoch_k", 50))
         if not np.isnan(k):
-            if is_bearish and k < 25: wait_reasons.append("Stoch RSI is already oversold for shorts.")
-            elif is_bullish and k > 75: wait_reasons.append("Stoch RSI is already overbought for longs.")
+            if is_bearish and k < 25 and not unleashed: wait_reasons.append("Stoch RSI is already oversold for shorts.")
+            elif is_bullish and k > 75 and not unleashed: wait_reasons.append("Stoch RSI is already overbought for longs.")
     if "rsi" in fast_df.columns:
         rsi = float(last.get("rsi", 50))
         if not np.isnan(rsi):
-            if is_bearish and rsi < 35: wait_reasons.append("Fast RSI is oversold.")
-            elif is_bullish and rsi > 65: wait_reasons.append("Fast RSI is overbought.")
+            if is_bearish and rsi < 35 and not unleashed: wait_reasons.append("Fast RSI is oversold.")
+            elif is_bullish and rsi > 65 and not unleashed: wait_reasons.append("Fast RSI is overbought.")
             
     if slow_adx is not None and not np.isnan(float(slow_adx)) and float(slow_adx) < 20:
         caution_reasons.append("Choppy market (ADX < 20). False breakouts abound.")
@@ -818,7 +833,8 @@ def compute_entry_quality(verdict: str, fast_df: pd.DataFrame, slow_adx: float, 
     elif caution_reasons: return {"quality": "CAUTION", "reasons": caution_reasons}
     return {"quality": "READY", "reasons": ["All timing conditions are clear."]}
 
-def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, sensors: dict = None) -> dict:
+def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, sensors: dict = None,
+                 unleashed: bool = False) -> dict:
     """Full quantitative analysis given a set of pre-calculated dataframes per timeframe.
 
     When `sensors` is provided (full macro_engine output), regime gating is applied:
@@ -866,7 +882,7 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
     verdict, total_bull, total_bear, pre_signal = compute_verdict(
         trend_slow, trend_mid, trend_fast,
         s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
-        slow_adx=slow_adx, rsi_divergence=rsi_divergence,
+        slow_adx=slow_adx, rsi_divergence=rsi_divergence, unleashed=unleashed,
     )
     
     # ── ETH/BTC Regime Gate ───────────────────────────────────────────────────
@@ -885,13 +901,14 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
                     eth_btc_regime = "OUTPERFORMING"
                 else:
                     eth_btc_regime = "BTC_DOMINANCE"
-                    # Suppress long signals — ETH underperforming BTC
-                    if verdict == "STRONG BUY":
-                        verdict = "BUY SETUP"
-                    elif verdict == "BUY SETUP":
-                        verdict = "WAIT — NO TRADE"
-                    if pre_signal == "PRE-SIGNAL LONG":
-                        pre_signal = None
+                    # Suppress long signals — ETH underperforming BTC (conservative only)
+                    if not unleashed:
+                        if verdict == "STRONG BUY":
+                            verdict = "BUY SETUP"
+                        elif verdict == "BUY SETUP":
+                            verdict = "WAIT — NO TRADE"
+                        if pre_signal == "PRE-SIGNAL LONG":
+                            pre_signal = None
             else:
                 eth_btc_regime = "UNAVAILABLE"
         except Exception:
@@ -901,7 +918,7 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
     funding = {"available": True, "rate_pct": fetch_funding_rate(symbol)} if is_crypto else {}
     if funding.get("rate_pct") is None: funding = {"available": False}
     
-    entry_quality = compute_entry_quality(verdict, df_fast, slow_adx, funding)
+    entry_quality = compute_entry_quality(verdict, df_fast, slow_adx, funding, unleashed=unleashed)
 
     # ATR plan — stop/target multipliers come from the asset profile's risk_model
     risk_model  = profile.get("risk_model", {})
@@ -1003,5 +1020,21 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
 
     from smc_engine import get_session_weight
     payload["session_weight"] = get_session_weight(pd.Timestamp.now(tz="UTC"))
+
+    bta = compute_bias_trigger_alignment(
+        trend_slow, trend_mid, trend_fast,
+        s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
+        entry_quality=entry_quality,
+    )
+    payload["bias"] = bta["bias"]
+    payload["trigger"] = bta["trigger"]
+    payload["alignment"] = bta["alignment"]
+    payload["unleashed"] = bool(unleashed)
+    payload["frame"] = (
+        "UNLEASHED MODE: short-term Triggers are surfaced even against Bias. "
+        "Banshee cannot keep pace with the market — these are actionable reads, not "
+        "instructions. Verify and size before acting. This is on you."
+        if unleashed else ""
+    )
 
     return payload
