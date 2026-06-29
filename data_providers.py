@@ -61,13 +61,20 @@ def _is_enabled(name: str, asset_class: str) -> bool:
     return False
 
 
+# ── OHLCV candidate lists — single source of truth used by both _active_chain and _deep_chain ──
+# Alpaca is intentionally absent from crypto: it is an equity-only OHLCV source.
+_OHLCV_CANDIDATES: dict[str, list[str]] = {
+    "crypto": ["coinbase", "custom", "yfinance"],
+    "equity": ["alpaca", "custom", "yfinance"],
+}
+
+
 def _active_chain(call_type: str, asset_class: str) -> list[str]:
     """Return speed-ordered list of enabled provider names for this call type + asset class."""
     candidates = {
         "spot":  {"crypto": ["coinbase", "coingecko", "custom", "yfinance"],
                   "equity": ["alpaca", "custom", "yfinance"]},
-        "ohlcv": {"crypto": ["coinbase", "custom", "yfinance"],
-                  "equity": ["alpaca", "custom", "yfinance"]},
+        "ohlcv": _OHLCV_CANDIDATES,
     }[call_type][asset_class]
     return _by_speed([n for n in candidates if _is_enabled(n, asset_class)])
 
@@ -455,10 +462,12 @@ _DEPTH_RANK: dict[str, int] = {
 def _deep_chain(asset_class: str, exclude: str | None = None, cap: int = 3) -> list[str]:
     """Enabled, OHLCV-capable providers ranked by history depth (deepest first),
     excluding `exclude` (the provider Stage 1 already used), capped at `cap`.
+    Only admits providers that are valid OHLCV candidates for this asset class.
     Empty when nothing deeper than the fast source is available (the no-op path)."""
+    valid_for_class = _OHLCV_CANDIDATES.get(asset_class, [])
     names = [
         n for n in _DEPTH_RANK
-        if n != exclude and n in _OHLCV_FNS and _is_enabled(n, asset_class)
+        if n != exclude and n in _OHLCV_FNS and n in valid_for_class and _is_enabled(n, asset_class)
     ]
     names.sort(key=lambda n: _DEPTH_RANK[n], reverse=True)
     return names[:cap]

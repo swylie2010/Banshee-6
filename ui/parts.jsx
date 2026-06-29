@@ -1592,12 +1592,13 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
         const dLast = deep.candles[deep.candles.length - 1].close;
         const delta = pLast ? Math.abs(dLast - pLast) / pLast : 0;
 
-        if (delta < 0.005) {
-          applyCandles(deep.candles, deep.indicators, false);   // additive → silent swap, keep range
-        } else {
-          deepCandlesRef.current = deep;                        // contradictory → let the user choose
+        if (delta >= 0.005) {
+          deepCandlesRef.current = deep;                        // contradictory price → let the user choose
           setDeepBadge({ bars: deep.candles.length, painted: painted.length });
+        } else if (deeper) {
+          applyCandles(deep.candles, deep.indicators, false);   // strictly more history + sub-threshold → silent swap
         }
+        // else: sub-threshold price but same/fewer bars → no-op (never shrink painted history)
       }).catch(() => {});   // deep failure is silent — fast paint already succeeded
     });
 

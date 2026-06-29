@@ -344,7 +344,21 @@ def test_deep_chain_respects_cap():
     import data_providers
     with patch.object(data_providers, "_load_keys", _crypto_all_on):
         chain = data_providers._deep_chain("crypto", exclude=None, cap=2)
-    assert len(chain) <= 2
+    assert len(chain) == 2   # 3 valid crypto providers (coinbase/custom/yfinance), cap=2 → exactly 2
+
+
+def test_deep_chain_excludes_alpaca_for_crypto():
+    """Alpaca is equity-only in OHLCV; it must never appear in a crypto deep chain even when enabled."""
+    import data_providers
+    keys = {
+        "ALPACA_KEY":    {"key": "k", "enabled": True},
+        "ALPACA_SECRET": {"key": "s"},
+        "COINBASE":      {"enabled": True},
+        "YFINANCE":      {"enabled": True},
+    }
+    with patch.object(data_providers, "_load_keys", lambda: keys):
+        chain = data_providers._deep_chain("crypto", exclude="coinbase")
+    assert "alpaca" not in chain
 
 def test_deep_chain_skips_disabled():
     import data_providers

@@ -32,7 +32,7 @@ MODE_ALIASES = {
 }
 
 _OHLCV_TTL   = 5 * 60   # 5 minutes — shared symbol cache across UI + MCP calls
-_OHLCV_CACHE: dict = {}  # (symbol_upper, mode) → {"tfs": dict, "ts": float}
+_OHLCV_CACHE: dict = {}  # (symbol_upper, mode, deep) → {"tfs": dict, "ts": float}
 
 # Response-level cache for slow compute endpoints (radar analysis, SMC engine)
 # Key: str cache key  →  {"ts": float, "body": str}
