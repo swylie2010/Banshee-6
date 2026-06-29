@@ -5,7 +5,7 @@ const TOOLS = [
   "", "get_macro_weather", "read_market_intel", "get_regime", "get_watchlist",
   "get_asset_radar", "scan_assets", "synthesize_nexus", "build_execution_plan",
   "get_smc_structure", "open_paper_trade", "log_signal_outcome", "check_kill_switch",
-  "get_signal_log", "get_feedback_synthesis", "get_geo_harmonic", "generate_gh_pine",
+  "get_signal_log", "get_feedback_synthesis", "get_geo_harmonic",
   "scan_xabcd", "get_options_candidate", "get_paper_wheels", "open_paper_wheel",
   "analyze_gridbot", "deploy_paper_gridbot", "get_paper_gridbot", "stop_paper_gridbot",
   "get_audit_log", "get_audit_summary",

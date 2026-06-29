@@ -49,6 +49,12 @@ function MacroPage({ macroData, onBack, manualStories = [] }) {
   const [rotationLoading, setRotationLoading] = useState(true);
 
   const sensors = macroData?.sensors;
+  // With every data provider toggled off, sensors come back empty (no numeric/array
+  // values). Surface a hint pointing to Settings instead of a wall of "N/A" cards.
+  const hasSensorData = sensors && Object.values(sensors).some(
+    s => s && typeof s === "object" &&
+      (typeof s.value === "number" || (Array.isArray(s.value) && s.value.some(v => v != null)))
+  );
   const macroTop = macroData ? window.sensorsToTopBar(macroData) : window.MACRO;
   const riskScore = typeof sensors?.risk_score === "number" ? sensors.risk_score : 0;
   const riskColor = riskScore > 70 ? "var(--sell)" : riskScore > 40 ? "var(--wait)" : "var(--buy)";
@@ -119,6 +125,13 @@ function MacroPage({ macroData, onBack, manualStories = [] }) {
                   text={`[${ca.severity}] ${ca.name} — ${ca.description}`} />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* no-provider hint — every data source toggled off */}
+        {!hasSensorData && (
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--amber)", borderLeft: "3px solid var(--amber)", padding: "12px 16px", fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6 }}>
+            No market data — enable a data provider in Settings → Data Sources to populate the macro sensors.
           </div>
         )}
 

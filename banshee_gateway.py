@@ -166,9 +166,7 @@ class GeoHarmonicSchema(BaseModel):
         return v
 
 
-class GHPineSchema(BaseModel):
-    symbol: str = Field(..., min_length=1, max_length=20)
-    arithmetic_mid: bool = Field(False)
+# GHPineSchema removed with the Pine Script export feature.
 
 
 class XABCDSchema(BaseModel):

@@ -22,6 +22,9 @@ _SD_TV_SYMBOL_MAP = {
     "ETH-BTC": "ETHBTC",
 }
 _SD_TV_TF_MAP = {"1wk": "1W", "1d": "1D", "4h": "4H", "1h": "1H"}
+# Max age (hours) before a local TV snapshot is too stale to present as "live" data, per TF.
+# Beyond this we refuse the snapshot rather than silently show a months-old date on the chart.
+_SD_TV_MAX_AGE_H = {"1wk": 24 * 10, "1d": 24 * 3, "4h": 12, "1h": 4, "15m": 1.5}
 
 def _load_sd_tv_ohlcv(symbol: str, timeframe: str) -> pd.DataFrame:
     """Load most recent TV-extracted OHLCV JSON for symbol/timeframe. Returns empty df on miss."""
@@ -115,11 +118,22 @@ def fetch_crypto_ohlcv(symbol: str, timeframe: str, limit: int = 300) -> tuple[p
     df = data_providers.fetch_ohlcv(symbol, timeframe, limit)
     if not df.empty:
         return df, None
-    # Last resort: locally extracted TV JSON files (offline; useful for ETH/BTC etc.)
+    # Last resort: locally extracted TV JSON files (offline; useful for ETH/BTC etc.).
+    # Freshness guard — never present a months-old snapshot as if it were current. If the
+    # snapshot is older than its timeframe's threshold, refuse it with an actionable message
+    # instead of silently showing a stale date on the chart.
     try:
         tv_df = _load_sd_tv_ohlcv(symbol, timeframe)
         if not tv_df.empty:
-            return tv_df.tail(limit).reset_index(drop=True), "Using TV extracted data (may be stale)."
+            last_ts = pd.Timestamp(tv_df["timestamp"].iloc[-1])
+            age_h   = (pd.Timestamp(time.time(), unit="s") - last_ts).total_seconds() / 3600.0
+            as_of   = last_ts.date().isoformat()
+            if age_h <= _SD_TV_MAX_AGE_H.get(timeframe, 48):
+                return tv_df.tail(limit).reset_index(drop=True), f"Using offline TV snapshot (as of {as_of})."
+            return pd.DataFrame(), (
+                f"Live providers unavailable; the only offline snapshot is stale (as of {as_of}). "
+                f"Enable or refresh a source in Settings → Data Sources."
+            )
     except Exception:
         pass
     return pd.DataFrame(), "All data providers failed."

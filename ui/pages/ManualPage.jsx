@@ -227,7 +227,7 @@ function ManualPage({ onBack }) {
               <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.75 }}>
                 <strong style={{ color: "var(--ink-3)" }}>1.</strong> Check the GH tab hot zones table — note any floor/ceiling levels within 3–5% of current price.<br/>
                 <strong style={{ color: "var(--ink-3)" }}>2.</strong> Switch to the SMC tab. If a hot zone aligns with an OB or FVG, that's geometric confluence — conviction goes up.<br/>
-                <strong style={{ color: "var(--ink-3)" }}>3.</strong> Use the Pine Script button (GH tab, bottom panel, collapsed by default) to export arcs to TradingView. Paste directly into the TV Pine editor to see the circles on your live chart.
+                <strong style={{ color: "var(--ink-3)" }}>3.</strong> Use the GH tab's circle-coordinate table (center date/price + shared endpoint) to plot the levels by hand in TradingView with its native Fib Circle tool — anchor each circle on its High/Low row and drag the radius out to the Endpoint.
               </div>
             </div>
             <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.06em", lineHeight: 1.7 }}>

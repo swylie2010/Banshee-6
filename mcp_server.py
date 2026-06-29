@@ -49,7 +49,7 @@ from mcp.server.fastmcp import FastMCP
 from banshee_gateway import (
     BansheeGateway,
     AuditLogSchema, AuditSummarySchema,
-    ExecutionPlanSchema, GeoHarmonicSchema, GHPineSchema,
+    ExecutionPlanSchema, GeoHarmonicSchema,
     GridbotSchema, NexusSchema, OptionsCandidateSchema,
     PaperTradeSchema, PaperWheelSchema, RadarSchema,
     SMCSchema, ScanSchema, SignalOutcomeSchema,
@@ -467,32 +467,9 @@ def get_geo_harmonic(symbol: str, n_local: int = 233) -> str:
     )
 
 
-@mcp.tool()
-def generate_gh_pine(symbol: str, arithmetic_mid: bool = False) -> str:
-    """
-    Generate a paste-ready Pine Script v5 indicator that draws Banshee's
-    Geo Harmonic Fibonacci arc circles on a TradingView 1D chart.
-
-    Draws all GH circles at 6 Fib levels (0.382, 0.5, 0.618, 0.786, 1.0, 1.618)
-    as 60-point polylines. Teal = floor support, red = ceiling resistance.
-    Macro anchors (ATL/ATH) at 20% transparency, local ZigZag pivots at 60%.
-
-    Paste the returned script into TradingView's Pine Editor and run it on a 1D
-    chart. Log scale is recommended. Values are baked in — re-run after
-    significant price moves.
-
-    Args:
-        symbol:         Ticker — crypto 'BTC/USD', stocks 'NVDA', futures 'GC=F'.
-        arithmetic_mid: Use (ATH+ATL)/2 as radius endpoint instead of sqrt(ATH*ATL).
-
-    Returns: Complete Pine Script v5 string ready to paste into TradingView.
-    """
-    return gateway.call(
-        "generate_gh_pine",
-        {"symbol": symbol, "arithmetic_mid": arithmetic_mid},
-        GHPineSchema,
-        lambda p: _get("/geo-harmonic/pine", symbol=p["symbol"], arithmetic_mid=p["arithmetic_mid"]),
-    )
+# generate_gh_pine tool removed — Pine can't drive TV's native Fib Circle tool.
+# Use get_geo_harmonic; its circle anchors (center + radius_endpoint) place TV's
+# native Fib Circles by hand or via direct MCP chart drawing.
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -244,7 +244,9 @@ def route_rotation():
     try:
         closes = fetch_sector_closes()
         if closes.empty:
-            return {"error": "Data unavailable", "sectors": [], "camd_alerts": [],
+            return {"error": "Data unavailable",
+                    "user_message": "Sector rotation needs market data — enable a data provider in Settings → Data Sources",
+                    "sectors": [], "camd_alerts": [],
                     "spy_roc_21": None, "macro_env": None, "timestamp": None}
         return sector_rotation_engine.run(closes, fred_key)
     except Exception as e:

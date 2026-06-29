@@ -968,35 +968,78 @@ class GHArcRenderer {
   constructor(source) { this._source = source; }
 
   draw(target) {
-    const series  = this._source._series;
-    const chart   = this._source._chart;
-    const circles = this._source._circles;
-    const scMacro = this._source._scMacro;
-    if (!series || !chart || !circles.length) return;
+    const series   = this._source._series;
+    const chart    = this._source._chart;
+    const circles  = this._source._circles;
+    const endpoint = this._source._endpoint;
+    const bars     = this._source._barsRef && this._source._barsRef.current;
+    if (!series || !chart || !circles.length || !endpoint || !endpoint.ts) return;
 
     target.useBitmapCoordinateSpace((scope) => {
       const ctx = scope.context;
-      const { verticalPixelRatio: vr, horizontalPixelRatio: hr, bitmapSize } = scope;
+      const { verticalPixelRatio: vr, horizontalPixelRatio: hr } = scope;
       ctx.save();
 
       const ts = chart.timeScale();
+      /* cx_ts / endpoint.ts are date-only "YYYY-MM-DD". The candle series parses its
+         ISO timestamps WITHOUT a timezone → LOCAL time, so a bar for that date sits at
+         LOCAL midnight. Parsing a bare "YYYY-MM-DD" gives UTC midnight (hours off), so
+         the anchor never matched a bar → timeToCoordinate returned null → every anchor
+         fell to the unreliable logicalToCoordinate path (centre jumped to x=0 / didn't
+         track pan on 1D). Append local midnight so the unix lands exactly on a bar. */
+      const toUnix = (s) =>
+        Math.floor(new Date(typeof s === "string" && s.length === 10 ? s + "T00:00:00" : s).getTime() / 1000);
 
-      /* pixels-per-bar at current zoom (bitmap coords) */
-      const visRange = ts.getVisibleLogicalRange();
-      if (!visRange) { ctx.restore(); return; }
-      const pxPerBar = bitmapSize.width / (visRange.to - visRange.from);
+      /* time → CSS-x that EXTRAPOLATES off-window. timeToCoordinate() returns null for
+         any timestamp outside the loaded bar range — that silently drops every off-window
+         anchor (the endpoint sits past the last daily bar → whole overlay vanished on 1D;
+         old ATH/ATL centres sit before the short intraday window → dropped on 1H/4H).
+         logicalToCoordinate() extrapolates and never nulls, so map a unix time → fractional
+         bar index via the loaded bar interval, then logicalToCoordinate. Anchors stay
+         timeframe-correct AND a circle whose centre/endpoint is off-window still projects
+         its arc through the view (only an edge may be visible — that is intended). */
+      const dt = bars && bars.n > 1 ? (bars.tN - bars.t0) / (bars.n - 1) : 0;
+      const timeToX = (tUnix) => {
+        const direct = ts.timeToCoordinate(tUnix);
+        if (direct !== null) return direct;          // in-window: exact
+        if (!dt) return null;                        // no interval → cannot extrapolate
+        return ts.logicalToCoordinate((tUnix - bars.t0) / dt);  // first bar = logical 0
+      };
 
-      /* pixels per one log-norm unit — one unit = sc_macro in log-price */
-      const refP  = series.priceToCoordinate(circles[0].center_price);
-      const refPU = series.priceToCoordinate(circles[0].center_price * Math.exp(scMacro));
-      if (refP === null || refPU === null) { ctx.restore(); return; }
-      const pxPerLogNorm = Math.abs((refPU - refP) * vr);
+      /* ── Engine units → pixels (timeframe-correct, pans rigidly) ──────────
+         The engine builds each circle in (daily-bar, normalized-log) space with
+         r_base = engine distance from centre to the shared midpoint (today,
+         √(ATH×ATL)). sc_macro = Δln(price) per daily bar, so 1 engine x-unit ≡ 1
+         calendar DAY and 1 engine y-unit ≡ sc_macro in log-price. We measure the
+         radius in those real units — NOT raw screen pixels — so it no longer
+         balloons on fine timeframes (24 bars/day on 1H) and stays put on pan:
+           • pxPerDay  — pixels per calendar day (timeToX delta of one day);
+                         24× the per-bar spacing on 1H, etc.
+           • pxPerNorm — pixels per normalized-log unit (local log-price slope).
+         The 1.0 ring then lands on the endpoint at the current bar, exactly like
+         the TradingView Fib Circles placed from these same coordinates. */
+      const scMacro = this._source._scMacro;
+      const DAY     = 86400;
+      const tRef    = bars ? bars.tN : toUnix(endpoint.ts);   // in-window reference time
+      const xRef    = timeToX(tRef);
+      const xRefDay = timeToX(tRef - DAY);
+      const pyRef   = series.priceToCoordinate(endpoint.price);
+      const pyUp    = series.priceToCoordinate(endpoint.price * Math.exp(scMacro || 0));
+      if (xRef === null || xRefDay === null || pyRef === null || pyUp === null || !scMacro) {
+        ctx.restore(); return;
+      }
+      const pxPerDay  = Math.abs((xRef - xRefDay) * hr);   // pixels per calendar day
+      const pxPerNorm = Math.abs((pyRef - pyUp)  * vr);    // pixels per normalized-log unit
+      if (pxPerDay < 1e-6 || pxPerNorm < 1e-6) { ctx.restore(); return; }
 
       const BIAS_COLOR  = { floor: "#5eead4", ceiling: "#ef4444", mixed: "#f59e0b" };
       const RENDER_FIBS = [0.382, 0.500, 0.618, 0.786, 1.000, 1.618];
 
       for (const c of circles) {
-        const cxCSS = ts.logicalToCoordinate(c.cx_bar);
+        if (!c.cx_ts || !c.r_base) continue;
+        /* centre anchored by timestamp (not bar index) → timeframe-agnostic;
+           timeToX extrapolates so off-window centres still draw their arcs */
+        const cxCSS = timeToX(toUnix(c.cx_ts));
         const cyCSS = series.priceToCoordinate(c.center_price);
         if (cxCSS === null || cyCSS === null) continue;
         const cx_px = cxCSS * hr;
@@ -1004,10 +1047,11 @@ class GHArcRenderer {
         const base  = BIAS_COLOR[c.origin] || "#f59e0b";
 
         for (const fib of RENDER_FIBS) {
-          const r     = c.r_base * fib;
-          const rx_px = r * pxPerBar;
-          const ry_px = r * pxPerLogNorm;
-          if (rx_px < 0.5 || ry_px < 0.5) continue;
+          /* engine-space radius r_base·fib → screen ellipse (round in engine
+             space, anchored by time+price). 1.0 ring passes through the endpoint. */
+          const a = c.r_base * fib * pxPerDay;    // horizontal semi-axis (days)
+          const b = c.r_base * fib * pxPerNorm;   // vertical semi-axis (norm-log)
+          if (a < 0.5 && b < 0.5) continue;
 
           const alpha = fib >= 0.99 ? "cc" : fib >= 0.75 ? "77" : fib >= 0.59 ? "99" : fib >= 0.49 ? "66" : "44";
           const lw    = (fib >= 0.99 ? 2 : fib >= 0.59 ? 1.5 : 1) * hr;
@@ -1015,7 +1059,7 @@ class GHArcRenderer {
           ctx.strokeStyle = base + alpha;
           ctx.lineWidth   = lw;
           ctx.beginPath();
-          ctx.ellipse(cx_px, cy_px, rx_px, ry_px, 0, 0, 2 * Math.PI);
+          ctx.ellipse(cx_px, cy_px, a, b, 0, 0, 2 * Math.PI);
           ctx.stroke();
         }
       }
@@ -1032,10 +1076,12 @@ class GHArcPaneView {
 }
 
 class GHArcPrimitive {
-  constructor(circles, scMacro, chart) {
+  constructor(circles, scMacro, chart, endpoint, barsRef) {
     this._circles  = circles;
     this._scMacro  = scMacro;
     this._chart    = chart;
+    this._endpoint = endpoint;   // {ts, price} — shared "middle" the radii reach
+    this._barsRef  = barsRef || null;  // ref → {t0,tN,n} of loaded bars, for off-window extrapolation
     this._series   = null;
     this._paneViews = [new GHArcPaneView(this)];
   }
@@ -1283,6 +1329,7 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
   const lensModeRef       = useRef(lensMode);
   const currentPriceRef   = useRef(currentPrice);
   const lastCandleTimeRef = useRef(null);
+  const ghBarsRef         = useRef(null);  // {t0,tN,n} of loaded bars — for GH off-window arc extrapolation
   const activeOnlyRef     = useRef(activeOnly);
   const zonesForHoverRef  = useRef([]);
   const swingsForHoverRef = useRef([]);
@@ -1516,6 +1563,11 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
       if (cancelled || !seriesRef.current || !candles.length) return;
       seriesRef.current.setData(candles);
       lastCandleTimeRef.current = candles[candles.length - 1].time; // Unix int seconds
+      ghBarsRef.current = {                                          // for GH off-window arc extrapolation
+        t0: candles[0].time,
+        tN: candles[candles.length - 1].time,
+        n:  candles.length,
+      };
       chartRef.current.timeScale().fitContent();
       setDataSource(source);
       setIndicatorData(indicators || null);
@@ -1714,11 +1766,12 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
 
     if (!showGH || !ghData || ghData.error) return;
 
-    const circles = ghData.gh_circles || [];
-    const scMacro = ghData.sc_macro   || 0;
-    if (!circles.length || !scMacro) return;
+    const circles  = ghData.gh_circles || [];
+    const scMacro  = ghData.sc_macro   || 0;
+    const endpoint = ghData.radius_endpoint || null;
+    if (!circles.length || !endpoint || !endpoint.ts) return;
 
-    const prim = new GHArcPrimitive(circles, scMacro, chart);
+    const prim = new GHArcPrimitive(circles, scMacro, chart, endpoint, ghBarsRef);
     try {
       series.attachPrimitive(prim);
       ghPrimRef.current = prim;
@@ -2171,7 +2224,7 @@ function RotationSection({ data, loading }) {
   if (!data || data.error || !data.sectors?.length) return (
     <div style={sty.wrap}>
       <div style={sty.header}>SECTOR ROTATION ENGINE</div>
-      <div style={sty.muted}>Rotation data unavailable.</div>
+      <div style={sty.muted}>{data?.user_message || "Rotation data unavailable."}</div>
     </div>
   );
 

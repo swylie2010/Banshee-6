@@ -46,7 +46,12 @@ def get_ohlcv_cached(symbol: str, mode: str) -> dict:
     if entry and (now - entry["ts"]) < _OHLCV_TTL:
         return entry["tfs"]
     tfs = micro_engine.load_and_prepare(symbol, mode)
-    if tfs and "error" not in tfs:
+    # Only cache a result that actually has data — caching an empty/failed fetch would pin the
+    # failure for the full TTL, turning a transient provider blip into minutes of stale UI.
+    has_data = isinstance(tfs, dict) and any(
+        isinstance(v, pd.DataFrame) and not v.empty for v in tfs.values()
+    )
+    if tfs and "error" not in tfs and has_data:
         _OHLCV_CACHE[key] = {"tfs": tfs, "ts": now}
     return tfs
 
@@ -1079,32 +1084,9 @@ def route_geo_harmonic(
 # ROUTE — Geometric Harmonic Pine Script
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.get("/geo-harmonic/pine")
-def route_geo_harmonic_pine(
-    symbol:         str  = Query(...),
-    arithmetic_mid: bool = Query(False),
-    multi_window:   bool = Query(True),
-):
-    """
-    Generate a paste-ready Pine Script v5 indicator for GH circles.
-    Returns {"symbol": ..., "pine_script": "..."}.
-    Paste the pine_script into TradingView's Pine Editor on a 1D chart.
-    """
-    import geometric_harmonic as gh
-    tfs = get_ohlcv_cached(symbol, "swing")
-    if not tfs or "error" in tfs:
-        return JSONResponse(content={"error": f"Failed to load data for {symbol}"})
-    df = tfs.get("1d")
-    if df is None or (hasattr(df, "empty") and df.empty):
-        valid = [k for k, v in tfs.items() if isinstance(v, pd.DataFrame) and not v.empty]
-        if not valid:
-            return JSONResponse(content={"error": f"No data for {symbol}"})
-        df = tfs[valid[0]]
-    result = gh.run(df, arithmetic_mid=arithmetic_mid, multi_window=multi_window)
-    if "error" in result:
-        return JSONResponse(content={"error": result["error"]})
-    pine = gh.generate_pine_script(result, symbol=symbol)
-    return JSONResponse(content={"symbol": symbol, "pine_script": pine})
+# Pine Script route removed — Pine can't drive TV's native Fib Circle tool and
+# distorts off 1D. GH circles render in-app (GHArcRenderer) + via the coordinate
+# table for manual placement with TradingView's native Fib Circle tool.
 
 
 # ─────────────────────────────────────────────────────────────────────────────

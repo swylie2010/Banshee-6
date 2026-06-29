@@ -154,16 +154,6 @@ def test_get_geo_harmonic_routes_through_gateway():
     assert args[2] is gw.GeoHarmonicSchema
 
 
-def test_generate_gh_pine_routes_through_gateway():
-    with patch.object(mcp_server.gateway, "call", return_value="PINE") as mc:
-        result = mcp_server.generate_gh_pine("NVDA", arithmetic_mid=True)
-    mc.assert_called_once()
-    args = mc.call_args[0]
-    assert args[0] == "generate_gh_pine"
-    assert args[1] == {"symbol": "NVDA", "arithmetic_mid": True}
-    assert args[2] is gw.GHPineSchema
-
-
 def test_scan_xabcd_routes_through_gateway():
     with patch.object(mcp_server.gateway, "call", return_value="XABCD") as mc:
         result = mcp_server.scan_xabcd("ETH/USD", pct=0.05)

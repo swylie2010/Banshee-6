@@ -269,6 +269,8 @@ def _fetch_1y_closes(syms_key: tuple) -> pd.DataFrame:
     syms_key: tuple of symbols in yfinance form (e.g. "BTC-USD", "SPY", "AAPL").
     Returns DataFrame with symbol columns and DatetimeIndex matching the old yfinance shape.
     """
+    # syms arrive in canonical dash form ("BTC-USD"); the provider chain expects
+    # the slash pair form ("BTC/USD") for crypto. Convert back here. Equities pass through.
     def _to_dp(s: str) -> str:
         if s.endswith("-USD"):
             return s[:-4] + "/USD"
@@ -315,16 +317,18 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
 
     syms = [p["sym"] for p in positions]
 
-    # yfinance uses "BTC-USD" for crypto pairs, not "BTC/USD" (the app's display form)
-    def _yf_symbol(s):
+    # The closes DataFrame (from _fetch_1y_closes) is keyed by the canonical
+    # "BTC-USD" dash form, not the app's "BTC/USD" display form. col_map maps each
+    # position's display symbol → its column name in `closes`.
+    def _canon_sym(s):
         s = str(s)
         return s.replace("/", "-") if "/" in s else s
 
-    yf_map = {p["sym"]: _yf_symbol(p["sym"]) for p in positions}
+    col_map = {p["sym"]: _canon_sym(p["sym"]) for p in positions}
 
-    # Fetch current prices from yfinance — include sector ETFs + SPY for blended benchmark
+    # Fetch current prices via the provider chain — include sector ETFs + SPY for blended benchmark
     sector_etfs = ["XLK", "XLF", "IBIT", "XLC", "XLE", "XLV", "XLY", "XLU", "SPY"]
-    all_syms = list(dict.fromkeys(list(yf_map.values()) + sector_etfs))  # dedupe, preserve order
+    all_syms = list(dict.fromkeys(list(col_map.values()) + sector_etfs))  # dedupe, preserve order
     try:
         syms_key = tuple(sorted(all_syms))
         closes = _fetch_1y_closes(syms_key)
@@ -350,8 +354,8 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
     holdings_rows = []
     for p in positions:
         sym = p["sym"]
-        yfs = yf_map[sym]
-        last = closes[yfs].iloc[-1] if yfs in closes.columns else None
+        col = col_map[sym]
+        last = closes[col].iloc[-1] if col in closes.columns else None
         current_price = float(last) if last is not None and not pd.isna(last) else 0.0
         if current_price <= 0:
             rp = radar_data.get(sym, {}).get("price")
@@ -381,7 +385,7 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
             w = weight_of(r)
             if w <= 0:
                 continue
-            col = yf_map.get(r["sym"])
+            col = col_map.get(r["sym"])
             if col and col in closes.columns:
                 ret = closes[col].pct_change().fillna(0) * w
                 series = ret if series is None else series.add(ret, fill_value=0)
@@ -513,7 +517,7 @@ def run_portfolio_analysis(portfolio: dict, today: str) -> dict:
     # date, take the last close on/before it; fall back to the flat radar price
     # for coins yfinance can't price (TAO/SUI) so they stay in the basket.
     def _price_at(sym, d):
-        col = yf_map.get(sym)
+        col = col_map.get(sym)
         if col and col in closes.columns:
             try:
                 ser = closes[col].loc[:pd.Timestamp(d)].dropna()

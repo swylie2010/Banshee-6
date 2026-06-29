@@ -105,10 +105,13 @@ def load_and_prepare(symbol: str, mode: str = "active", is_crypto: bool = None) 
     if is_crypto is None:
         is_crypto = ("/" in symbol) or ("-USD" in symbol)
 
+    # Match equity depth so crypto charts show more history. Deeper sources honour the higher
+    # limit; per-request-capped sources (e.g. Coinbase ~300) simply return what they can.
+    _crypto_limits = {"1wk": 520, "1d": 500, "4h": 300, "1h": 300, "15m": 300}
     tfs = {}
     for tf in ALL_TIMEFRAMES:
         if is_crypto:
-            df, _ = fetch_crypto_ohlcv(symbol, tf)
+            df, _ = fetch_crypto_ohlcv(symbol, tf, _crypto_limits.get(tf, 300))
         else:
             df, _ = fetch_stock(symbol, tf)
         tfs[tf] = add_all_indicators(df) if not df.empty else df

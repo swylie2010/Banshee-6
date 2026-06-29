@@ -118,11 +118,21 @@ def fetch_closes(symbol, period="1y"):
 
 
 def fetch_earnings_date(symbol: str):
-    """Return the next earnings date for symbol as a date object, or None.
-    Returns an error dict when no capable provider is active.
+    """Return the next earnings date for symbol — TRI-STATE return:
 
-    Defensive: yfinance calendar format varies by version. Returns None on
-    any error so callers can treat missing data as 'no known earnings'.
+      • date object  — a known upcoming earnings date was found.
+      • None         — no earnings date is known (provider returned nothing,
+                       or any error occurred). Callers treat this as
+                       'no known earnings', not as a failure.
+      • error dict   — {"error", "feature", "user_message"} when no provider
+                       with the "earnings_calendar" capability is active.
+                       Callers should surface user_message and skip the feature.
+
+    Callers MUST distinguish the dict case (capability gate) from None
+    (genuinely no date) — e.g. `isinstance(result, dict)`.
+
+    Defensive: yfinance calendar format varies by version, so the success
+    path returns None on any parsing error rather than raising.
     """
     import data_providers
     if not data_providers.has_capability("earnings_calendar"):

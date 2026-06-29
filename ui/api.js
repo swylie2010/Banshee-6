@@ -199,18 +199,6 @@ async function fetchGH(sym) {
   }
 }
 
-/* generate Pine Script v5 indicator for GH circles — returns {pine_script: "..."} */
-async function fetchGHPine(sym) {
-  const pair = coreSymbol(sym);
-  try {
-    const res = await _fetch(`${API_BASE}/geo-harmonic/pine?symbol=${encodeURIComponent(pair)}&multi_window=true`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    console.warn(`[api] GH Pine fallback for ${sym}:`, err.message);
-    return { error: err.message };
-  }
-}
 
 /* request an AI synthesis briefing for a symbol — POSTs to /ai/briefing
  * tab: "nexus" | "smc" | "gh" — controls prompt focus and format
@@ -833,4 +821,4 @@ async function fetchAuditSummary(days = 7) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchGHPine, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary };
