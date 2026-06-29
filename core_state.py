@@ -52,6 +52,8 @@ _PAPER_GRIDBOT_PATH = Path(__file__).parent / "paper_gridbot.json"
 # ── File locks (prevent concurrent write corruption) ─────────────────────────
 _MACRO_CACHE_LOCK    = threading.Lock()
 _KILL_SWITCH_LOCK    = threading.Lock()
+_UNLEASHED_FILE      = Path.home() / ".banshee_unleashed.json"
+_UNLEASHED_LOCK      = threading.Lock()
 
 
 # ── Pure utility functions ────────────────────────────────────────────────────
@@ -147,6 +149,25 @@ def _save_kill_switch_state(state: dict):
     try:
         with _KILL_SWITCH_LOCK:
             _KILL_SWITCH_FILE.write_text(json.dumps(state, indent=2))
+    except Exception:
+        pass
+
+
+def load_unleashed() -> dict:
+    """Global Unleashed-mode toggle. Defaults to disabled (conservative)."""
+    try:
+        if _UNLEASHED_FILE.exists():
+            data = json.loads(_UNLEASHED_FILE.read_text())
+            return {"enabled": bool(data.get("enabled", False))}
+    except Exception:
+        pass
+    return {"enabled": False}
+
+
+def save_unleashed(state: dict) -> None:
+    try:
+        with _UNLEASHED_LOCK:
+            _UNLEASHED_FILE.write_text(json.dumps({"enabled": bool(state.get("enabled", False))}, indent=2))
     except Exception:
         pass
 
