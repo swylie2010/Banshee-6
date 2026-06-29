@@ -414,3 +414,21 @@ def test_fetch_ohlcv_deep_no_deep_providers_returns_empty():
          patch.object(data_providers, "_active_chain", lambda ct, ac: ["coinbase"]):
         df = data_providers.fetch_ohlcv_deep("BTC/USD", "1d", 500)
     assert df.empty
+
+def test_fetch_ohlcv_deep_timeout_returns_what_finished():
+    import data_providers, time as _time, pandas as pd
+    def _fast(s, t, l):
+        return _mk_df("2026-06-29", 100)
+    def _slow(s, t, l):
+        _time.sleep(5)          # never finishes inside the shrunk budget
+        return _mk_df("2026-06-29", 999)
+    fns = {"yfinance": _slow, "custom": _fast}
+    with patch.object(data_providers, "_OHLCV_FNS", fns), \
+         patch.object(data_providers, "_deep_chain",
+                      lambda ac, exclude=None, cap=3: ["yfinance", "custom"]), \
+         patch.object(data_providers, "_active_chain", lambda ct, ac: ["coinbase"]), \
+         patch.object(data_providers, "_DEEP_POLL_TIMEOUT", 0.2):
+        df = data_providers.fetch_ohlcv_deep("BTC/USD", "1d", 500)
+    # the fast provider finished inside the 0.2s budget; the slow one timed out
+    assert not df.empty
+    assert len(df) == 100

@@ -12,7 +12,7 @@ No imports from shared_data.py (avoids circular import) — keys read directly v
 import json
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as _FuturesTimeout
 from pathlib import Path
 
 import pandas as pd
@@ -500,7 +500,7 @@ def fetch_ohlcv_deep(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
                         results.append((_name, df))
                 except Exception:
                     pass
-        except TimeoutError:
+        except _FuturesTimeout:
             pass   # take whatever finished inside the budget
 
     if not results:
