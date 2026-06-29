@@ -675,6 +675,70 @@ def score_timeframe(df: pd.DataFrame, profile: dict = None) -> tuple:
 
     return bull, bear, signals
 
+def compute_bias_trigger_alignment(trend_slow, trend_mid, trend_fast,
+                                   s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
+                                   entry_quality: dict) -> dict:
+    """Decompose the multi-timeframe read into HTF Bias + LTF Trigger + Alignment.
+
+    Mode-INDEPENDENT: computed identically whether or not Unleashed is on. The lens
+    (veto vs. label) is applied later, in compute_verdict / run_analysis.
+    """
+    # ── BIAS: higher-timeframe context (slow + mid) ──────────────────────────
+    htf_edge = (s_bull * 0.40 + m_bull * 0.35) - (s_bear * 0.40 + m_bear * 0.35)
+    htf_trends = [trend_slow, trend_mid]
+    if   htf_edge >  0.5: bias_dir = "BULLISH"
+    elif htf_edge < -0.5: bias_dir = "BEARISH"
+    else:                 bias_dir = "NEUTRAL"
+    mag = abs(htf_edge)
+    agree = (htf_trends.count("UPTREND") == 2) or (htf_trends.count("DOWNTREND") == 2)
+    if   bias_dir == "NEUTRAL":          conviction = "FLAT"
+    elif mag >= 2.0 or (mag >= 1.0 and agree): conviction = "STRONG"
+    else:                                conviction = "MILD"
+
+    # ── TRIGGER: lower-timeframe actionable read (fast) ──────────────────────
+    ltf_edge = f_bull - f_bear
+    if   ltf_edge >  0.3: trig_dir = "LONG"
+    elif ltf_edge < -0.3: trig_dir = "SHORT"
+    else:                 trig_dir = "FLAT"
+    actionable = trig_dir != "FLAT"
+
+    # Extended-move dual reading. entry_quality WAIT reasons flag an extended move;
+    # "in_trend" = the extension runs WITH the trigger direction (the violent kill),
+    # vs. against it (genuine exhaustion).
+    reasons = " ".join(entry_quality.get("reasons", [])).lower()
+    extended = ("oversold" in reasons) or ("overbought" in reasons)
+    in_trend = False
+    if extended:
+        if trig_dir == "SHORT" and "oversold" in reasons:   in_trend = True
+        if trig_dir == "LONG"  and "overbought" in reasons: in_trend = True
+    extended_reading = {
+        "extended": extended,
+        "in_trend": in_trend,
+        "momentum_note": (
+            "Extended in the trend direction — momentum confirmation, the move is live."
+            if extended and in_trend else ""
+        ),
+        "mean_reversion_note": (
+            "Already extended — elevated snap-back / bounce risk."
+            if extended else ""
+        ),
+    }
+    trigger = {"direction": trig_dir, "actionable": actionable, "extended_reading": extended_reading}
+
+    # ── ALIGNMENT ────────────────────────────────────────────────────────────
+    if bias_dir == "NEUTRAL" or trig_dir == "FLAT":
+        alignment = "neutral"
+    else:
+        bias_long = bias_dir == "BULLISH"
+        trig_long = trig_dir == "LONG"
+        alignment = "aligned" if bias_long == trig_long else "conflict"
+
+    return {
+        "bias": {"direction": bias_dir, "conviction": conviction},
+        "trigger": trigger,
+        "alignment": alignment,
+    }
+
 def compute_verdict(trend_slow, trend_mid, trend_fast,
                     s_bull, s_bear, m_bull, m_bear, f_bull, f_bear,
                     slow_adx=None, rsi_divergence=None) -> tuple:
