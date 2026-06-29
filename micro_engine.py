@@ -810,16 +810,22 @@ def compute_entry_quality(verdict: str, fast_df: pd.DataFrame, slow_adx: float, 
 
     wait_reasons, caution_reasons = [], []
 
+    # Extended-move flag. Conservative: a veto (wait_reason). Unleashed: kept as an
+    # informational caution so the dual extended_reading (momentum vs. bounce-risk) still
+    # surfaces downstream — never silently dropped.
+    def _extended(msg):
+        (caution_reasons if unleashed else wait_reasons).append(msg)
+
     if "stoch_k" in fast_df.columns:
         k = float(last.get("stoch_k", 50))
         if not np.isnan(k):
-            if is_bearish and k < 25 and not unleashed: wait_reasons.append("Stoch RSI is already oversold for shorts.")
-            elif is_bullish and k > 75 and not unleashed: wait_reasons.append("Stoch RSI is already overbought for longs.")
+            if is_bearish and k < 25: _extended("Stoch RSI is already oversold for shorts.")
+            elif is_bullish and k > 75: _extended("Stoch RSI is already overbought for longs.")
     if "rsi" in fast_df.columns:
         rsi = float(last.get("rsi", 50))
         if not np.isnan(rsi):
-            if is_bearish and rsi < 35 and not unleashed: wait_reasons.append("Fast RSI is oversold.")
-            elif is_bullish and rsi > 65 and not unleashed: wait_reasons.append("Fast RSI is overbought.")
+            if is_bearish and rsi < 35: _extended("Fast RSI is oversold.")
+            elif is_bullish and rsi > 65: _extended("Fast RSI is overbought.")
             
     if slow_adx is not None and not np.isnan(float(slow_adx)) and float(slow_adx) < 20:
         caution_reasons.append("Choppy market (ADX < 20). False breakouts abound.")

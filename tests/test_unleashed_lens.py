@@ -46,6 +46,16 @@ def test_entry_gate_does_not_veto_extended_in_trend_short_when_unleashed():
     assert q["quality"] != "WAIT"   # momentum confirmation, not a veto
 
 
+def test_extended_info_survives_in_unleashed_entry_quality():
+    # Unleashed must NOT delete the extended-move info: it powers the dual
+    # momentum/bounce-risk reading downstream. It should be a caution, not a veto.
+    import pandas as pd
+    fast = pd.DataFrame({"stoch_k": [10.0], "rsi": [45.0]})  # oversold short
+    q = me.compute_entry_quality("SELL SETUP", fast, slow_adx=30, funding={}, unleashed=True)
+    assert q["quality"] != "WAIT"
+    assert any("oversold" in r.lower() for r in q["reasons"])  # string preserved
+
+
 def test_adx_chop_demotes_when_conservative_only():
     cons, *_ = me.compute_verdict("UPTREND", "UPTREND", "UPTREND",
                                   s_bull=4, s_bear=0, m_bull=4, m_bear=0, f_bull=4, f_bear=0,
