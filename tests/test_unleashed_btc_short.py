@@ -102,6 +102,12 @@ def test_btc_short_waits_conservative_but_surfaces_unleashed(monkeypatch):
         f"Unleashed trigger direction should be SHORT, got {unl['trigger']}"
     )
 
+    # ── Conservative buries the short; unleashed surfaces it ────────────────────
+    assert cons["entry_quality"]["quality"] == "WAIT", (
+        f"Conservative entry gate must bury the extended short (expected WAIT), "
+        f"got {cons['entry_quality']}"
+    )
+
     # ── Unleashed surfaces an actionable short WITH bounce risk stated ───────────
     assert unl["verdict"] in ("SELL SETUP", "STRONG SELL"), (
         f"Unleashed verdict should be SELL SETUP or STRONG SELL, got {unl['verdict']!r}"
