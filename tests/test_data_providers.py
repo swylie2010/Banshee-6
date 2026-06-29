@@ -359,3 +359,58 @@ def test_deep_chain_coinbase_only_is_empty():
     with patch.object(data_providers, "_load_keys", lambda: keys):
         chain = data_providers._deep_chain("crypto", exclude="coinbase")
     assert chain == []   # no-op path: nothing to upgrade to
+
+
+# ── fetch_ohlcv_deep tests ────────────────────────────────────────────────────
+
+def _mk_df(last_day: str, n: int):
+    import pandas as pd
+    ts = pd.date_range(end=last_day, periods=n, freq="D")
+    return pd.DataFrame({"timestamp": ts, "open": 1.0, "high": 1.0,
+                         "low": 1.0, "close": 1.0, "volume": 1.0})
+
+def test_fetch_ohlcv_deep_picks_freshest_then_deepest():
+    import data_providers
+    fns = {
+        "yfinance": lambda s, t, l: _mk_df("2026-06-28", 500),   # deep, 1 day staler
+        "custom":   lambda s, t, l: _mk_df("2026-06-29", 120),   # fresher, shallower
+    }
+    import pandas as pd
+    with patch.object(data_providers, "_OHLCV_FNS", fns), \
+         patch.object(data_providers, "_deep_chain",
+                      lambda ac, exclude=None, cap=3: ["yfinance", "custom"]), \
+         patch.object(data_providers, "_active_chain",
+                      lambda ct, ac: ["coinbase", "yfinance", "custom"]):
+        df = data_providers.fetch_ohlcv_deep("BTC/USD", "1d", 500)
+    assert df["timestamp"].iloc[-1] == pd.Timestamp("2026-06-29")   # freshest wins
+
+def test_fetch_ohlcv_deep_depth_breaks_freshness_tie():
+    import data_providers, pandas as pd
+    fns = {
+        "yfinance": lambda s, t, l: _mk_df("2026-06-29", 500),   # same last bar, deeper
+        "custom":   lambda s, t, l: _mk_df("2026-06-29", 120),
+    }
+    with patch.object(data_providers, "_OHLCV_FNS", fns), \
+         patch.object(data_providers, "_deep_chain",
+                      lambda ac, exclude=None, cap=3: ["yfinance", "custom"]), \
+         patch.object(data_providers, "_active_chain", lambda ct, ac: ["coinbase"]):
+        df = data_providers.fetch_ohlcv_deep("BTC/USD", "1d", 500)
+    assert len(df) == 500   # deeper wins the tie
+
+def test_fetch_ohlcv_deep_all_empty_returns_empty():
+    import data_providers, pandas as pd
+    fns = {"yfinance": lambda s, t, l: pd.DataFrame()}
+    with patch.object(data_providers, "_OHLCV_FNS", fns), \
+         patch.object(data_providers, "_deep_chain",
+                      lambda ac, exclude=None, cap=3: ["yfinance"]), \
+         patch.object(data_providers, "_active_chain", lambda ct, ac: ["coinbase"]):
+        df = data_providers.fetch_ohlcv_deep("BTC/USD", "1d", 500)
+    assert df.empty
+
+def test_fetch_ohlcv_deep_no_deep_providers_returns_empty():
+    import data_providers
+    with patch.object(data_providers, "_deep_chain",
+                      lambda ac, exclude=None, cap=3: []), \
+         patch.object(data_providers, "_active_chain", lambda ct, ac: ["coinbase"]):
+        df = data_providers.fetch_ohlcv_deep("BTC/USD", "1d", 500)
+    assert df.empty

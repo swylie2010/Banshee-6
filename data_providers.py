@@ -12,6 +12,7 @@ No imports from shared_data.py (avoids circular import) — keys read directly v
 import json
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -461,6 +462,52 @@ def _deep_chain(asset_class: str, exclude: str | None = None, cap: int = 3) -> l
     ]
     names.sort(key=lambda n: _DEPTH_RANK[n], reverse=True)
     return names[:cap]
+
+
+_DEEP_POLL_TIMEOUT = 6.0   # seconds — bounded wall-clock for the Stage-2 background poll
+
+
+def _deep_fetch_one(name: str, symbol: str, timeframe: str, limit: int):
+    """Fetch one deep provider, timing it. Records latency only on a non-empty result."""
+    fn = _OHLCV_FNS[name]
+    t0 = time.monotonic()
+    df = fn(symbol, timeframe, limit)
+    if df is not None and not df.empty:
+        _record_latency(name, (time.monotonic() - t0) * 1000)
+    return name, df
+
+
+def fetch_ohlcv_deep(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+    """Fast-then-complete Stage 2: poll the deep providers in parallel and return the
+    freshest-then-deepest OHLCV frame. Excludes the fastest provider (Stage 1 already
+    returned it). Returns an empty DataFrame when nothing deeper/fresher is available."""
+    asset_class = _asset_class(symbol)
+    fast_chain  = _active_chain("ohlcv", asset_class)
+    fast        = fast_chain[0] if fast_chain else None
+    deep_names  = _deep_chain(asset_class, exclude=fast)
+    if not deep_names:
+        return pd.DataFrame()
+
+    results: list[tuple[str, pd.DataFrame]] = []
+    with ThreadPoolExecutor(max_workers=len(deep_names)) as ex:
+        futs = {ex.submit(_deep_fetch_one, n, symbol, timeframe, limit): n
+                for n in deep_names}
+        try:
+            for fut in as_completed(futs, timeout=_DEEP_POLL_TIMEOUT):
+                try:
+                    _name, df = fut.result()
+                    if df is not None and not df.empty:
+                        results.append((_name, df))
+                except Exception:
+                    pass
+        except TimeoutError:
+            pass   # take whatever finished inside the budget
+
+    if not results:
+        return pd.DataFrame()
+    # freshest last bar, then most bars
+    best = max(results, key=lambda r: (r[1]["timestamp"].iloc[-1], len(r[1])))
+    return best[1]
 
 
 def _fetch_ohlcv_impl(symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
