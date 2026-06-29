@@ -302,7 +302,8 @@ function GbDeployButton({ deployParams, onDeployed }) {
     try {
       await window.API.deployPaperGridbot(
         deployParams.sym, deployParams.capital,
-        deployParams.gridCount, deployParams.feePct
+        deployParams.gridCount, deployParams.feePct,
+        deployParams.rangeMin ?? null, deployParams.rangeMax ?? null,
       );
       setDeployed(true);
       if (onDeployed) onDeployed();
@@ -566,26 +567,44 @@ function GbPaperSection({ deployParams, deployKey }) {
 
 /* ── Main GridbotPage ──────────────────────────────────────────────────────── */
 function GridbotPage({ onBack }) {
-  const [sym,       setSym]       = React.useState("BTC");
-  const [capital,   setCapital]   = React.useState("10000");
-  const [gridCount, setGridCount] = React.useState(10);
-  const [feePct,    setFeePct]    = React.useState("0.1");
-  const [loading,   setLoading]   = React.useState(false);
-  const [result,    setResult]    = React.useState(null);
-  const [error,     setError]     = React.useState(null);
-  const [deployParams, setDeployParams] = React.useState(null);
-  const [deployKey,    setDeployKey]    = React.useState(0);
+  const [sym,              setSym]              = React.useState("BTC");
+  const [capital,          setCapital]          = React.useState("10000");
+  const [gridCount,        setGridCount]        = React.useState(10);
+  const [feePct,           setFeePct]           = React.useState("0.1");
+  const [customRange,      setCustomRange]      = React.useState(false);
+  const [rangeMin,         setRangeMin]         = React.useState("");
+  const [rangeMax,         setRangeMax]         = React.useState("");
+  const [loading,          setLoading]          = React.useState(false);
+  const [result,           setResult]           = React.useState(null);
+  const [error,            setError]            = React.useState(null);
+  const [deployParams,     setDeployParams]     = React.useState(null);
+  const [deployKey,        setDeployKey]        = React.useState(0);
 
   const analyze = async () => {
     const cap = parseFloat(capital);
     const fee = parseFloat(feePct);
     if (!sym.trim() || isNaN(cap) || cap <= 0 || isNaN(fee) || fee < 0) return;
+    const rMin = customRange ? parseFloat(rangeMin) : null;
+    const rMax = customRange ? parseFloat(rangeMax) : null;
+    if (customRange && (isNaN(rMin) || isNaN(rMax) || rMin <= 0 || rMax <= rMin)) {
+      setError("Custom range: lower bound must be > 0 and upper bound must be > lower bound.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const r = await window.API.analyzeGridbot(sym.trim().toUpperCase(), cap, gridCount, fee);
+      const r = await window.API.analyzeGridbot(
+        sym.trim().toUpperCase(), cap, gridCount, fee,
+        customRange ? rMin : null, customRange ? rMax : null,
+      );
       if (r && r.error) { setError(r.error); setResult(null); setDeployParams(null); }
-      else { setResult(r); setDeployParams({ sym: sym.trim().toUpperCase(), capital: cap, gridCount, feePct: fee }); }
+      else {
+        setResult(r);
+        setDeployParams({
+          sym: sym.trim().toUpperCase(), capital: cap, gridCount, feePct: fee,
+          rangeMin: customRange ? rMin : null, rangeMax: customRange ? rMax : null,
+        });
+      }
     } catch (e) {
       setDeployParams(null);
       setError((e && (e.detail || e.error || e.message)) || "Analysis failed — check the backend is running.");
@@ -615,8 +634,8 @@ function GridbotPage({ onBack }) {
         position: "sticky", top: 0, zIndex: 10,
       }}>
         <button onClick={onBack} style={{
-          background: "transparent", border: "1px solid var(--line-2)",
-          color: "var(--ink-3)", cursor: "pointer", borderRadius: 4,
+          background: "transparent", border: "1px solid #FF6D00",
+          color: "#FF6D00", cursor: "pointer", borderRadius: 4,
           padding: "4px 10px", fontFamily: "inherit", fontSize: 12, letterSpacing: "0.1em",
         }}>← BACK</button>
         <span className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", letterSpacing: "0.1em" }}>
@@ -715,6 +734,49 @@ function GridbotPage({ onBack }) {
             </button>
 
           </div>
+
+          {/* Custom range row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={customRange}
+                onChange={e => setCustomRange(e.target.checked)}
+                style={{ accentColor: "var(--amber)", width: 14, height: 14, cursor: "pointer" }}
+              />
+              <span className="mono" style={{ fontSize: 10, color: customRange ? "var(--amber)" : "var(--ink-4)", letterSpacing: "0.16em" }}>
+                CUSTOM RANGE
+              </span>
+            </label>
+            {customRange && (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.14em" }}>LOWER BOUND ($)</label>
+                  <input
+                    value={rangeMin}
+                    onChange={e => setRangeMin(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && analyze()}
+                    style={{ ...inputBase, width: 110 }}
+                    placeholder="e.g. 55000"
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: "0.14em" }}>UPPER BOUND ($)</label>
+                  <input
+                    value={rangeMax}
+                    onChange={e => setRangeMax(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && analyze()}
+                    style={{ ...inputBase, width: 110 }}
+                    placeholder="e.g. 72000"
+                  />
+                </div>
+                <div style={{ fontSize: 11, color: "var(--amber)", lineHeight: 1.5, maxWidth: 260 }}>
+                  Banshee will fit the grid to your bounds and still auto-adjust spacing for fees.
+                </div>
+              </>
+            )}
+          </div>
+
           <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 10 }}>
             Supports stocks (SPY, QQQ, NVDA) and crypto (BTC, ETH, SOL). Data: 6 months of daily bars via yfinance.
           </div>

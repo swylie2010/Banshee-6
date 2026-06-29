@@ -49,15 +49,17 @@ def _active_grid(data: dict | None) -> bool:
 
 @router.post("/gridbot/analyze")
 async def route_gridbot_analyze(
-    sym:        str   = Body(...),
-    capital:    float = Body(...),
-    grid_count: int   = Body(10),
-    fee_pct:    float = Body(0.1),
+    sym:        str           = Body(...),
+    capital:    float         = Body(...),
+    grid_count: int           = Body(10),
+    fee_pct:    float         = Body(0.1),
+    range_min:  float | None  = Body(None),
+    range_max:  float | None  = Body(None),
 ):
     try:
         result = await asyncio.to_thread(
             gridbot_engine.analyze_gridbot,
-            sym, float(capital), int(grid_count), float(fee_pct),
+            sym, float(capital), int(grid_count), float(fee_pct), range_min, range_max,
         )
         if "error" in result:
             return JSONResponse({"error": result["error"]}, status_code=400)
@@ -70,10 +72,12 @@ async def route_gridbot_analyze(
 
 @router.post("/gridbot/paper")
 async def route_gridbot_paper_deploy(
-    sym:        str   = Body(...),
-    capital:    float = Body(...),
-    grid_count: int   = Body(10),
-    fee_pct:    float = Body(0.1),
+    sym:        str           = Body(...),
+    capital:    float         = Body(...),
+    grid_count: int           = Body(10),
+    fee_pct:    float         = Body(0.1),
+    range_min:  float | None  = Body(None),
+    range_max:  float | None  = Body(None),
 ):
     """Deploy a virtual paper grid. Only one active grid allowed at a time."""
     existing = load_paper_gridbot()
@@ -90,7 +94,7 @@ async def route_gridbot_paper_deploy(
     try:
         config = await asyncio.to_thread(
             gridbot_engine.analyze_gridbot,
-            sym, float(capital), int(grid_count), float(fee_pct),
+            sym, float(capital), int(grid_count), float(fee_pct), range_min, range_max,
         )
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)

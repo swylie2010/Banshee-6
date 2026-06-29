@@ -1,7 +1,7 @@
 /* Banshee — Portfolio Analysis Page
  * Two themes: LIGHT (muted lavender-gray, easy on dark-adapted eyes) and
  * DARK (standard Banshee colors). Toggle in the header; choice persists.
- * Font floor is 11px everywhere — the smallest type on the page. */
+ * Font floor is 14px everywhere — the smallest type on the page. */
 
 const PORTFOLIO_THEMES = {
   light: {
@@ -67,7 +67,7 @@ function GradeCircle({ grade, score }) {
     }}>
       <span style={{ fontSize: 20, fontWeight: 700, color: pm.gold, lineHeight: 1 }}>{grade}</span>
       {score > 0 && (
-        <span style={{ fontSize: 11, color: pm.ink4, marginTop: 3 }}>{score}</span>
+        <span style={{ fontSize: 14, color: pm.ink4, marginTop: 3 }}>{score}</span>
       )}
     </div>
   );
@@ -78,9 +78,9 @@ function KPIBlock({ label, value, sub }) {
   const pm = usePalette();
   return (
     <div>
-      <div style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 14, color: pm.ink4, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 700, color: pm.ink }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: pm.ink3 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 14, color: pm.ink3 }}>{sub}</div>}
     </div>
   );
 }
@@ -119,34 +119,34 @@ function GradeBreakdown({ analysis }) {
 
   return (
     <div style={{ background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-      <div style={{ fontSize: 12, color: pm.ink, lineHeight: 1.55, marginBottom: 12, fontWeight: 700 }}>{headline}</div>
+      <div style={{ fontSize: 14, color: pm.ink, lineHeight: 1.55, marginBottom: 12, fontWeight: 700 }}>{headline}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {rows.map(row => (
           <div key={row.label}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-              <span style={{ fontSize: 11, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>
+              <span style={{ fontSize: 14, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>
                 {row.label} <span style={{ color: pm.ink4, fontWeight: 400 }}>· {row.weight}% of grade</span>
               </span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: barColor(row.score) }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: barColor(row.score) }}>
                 {row.score != null ? `${Math.round(row.score)}/100` : '—'}
               </span>
             </div>
             <div style={{ height: 6, borderRadius: 4, background: pm.bg3, marginBottom: 4 }}>
               <div style={{ height: 6, borderRadius: 4, width: `${Math.max(0, Math.min(100, row.score || 0))}%`, background: barColor(row.score) }} />
             </div>
-            <div style={{ fontSize: 11, color: pm.ink3, lineHeight: 1.5 }}>{row.note}</div>
+            <div style={{ fontSize: 14, color: pm.ink3, lineHeight: 1.5 }}>{row.note}</div>
           </div>
         ))}
       </div>
       {showReconcile && (
-        <div style={{ marginTop: 12, fontSize: 12, color: pm.ink2, lineHeight: 1.55, fontWeight: 700 }}>
+        <div style={{ marginTop: 12, fontSize: 14, color: pm.ink2, lineHeight: 1.55, fontWeight: 700 }}>
           Graded on the last year&rsquo;s behavior — your since-entry track record is{' '}
           <span style={{ color: ov.portfolio >= ov.benchmark ? pm.mint : pm.rose }}>
             {ov.portfolio >= 0 ? '+' : ''}{ov.portfolio}%
           </span>{' '}vs S&amp;P {ov.benchmark >= 0 ? '+' : ''}{ov.benchmark}%, shown in Performance below.
         </div>
       )}
-      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${pm.line}`, fontSize: 11, color: pm.ink3, lineHeight: 1.55 }}>
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${pm.line}`, fontSize: 14, color: pm.ink3, lineHeight: 1.55 }}>
         <span style={{ color: pm.peach, fontWeight: 700 }}>⚠ Note: </span>
         This grade is a read on the basket&rsquo;s <b style={{ color: pm.ink2 }}>current health</b> — trailing-year risk + current momentum. It is <b style={{ color: pm.ink2 }}>not</b> a verdict on your investment; your track record lives in the Performance panel.
       </div>
@@ -164,15 +164,15 @@ function PerformancePanel({ performance }) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${pm.line}66` }}>
         <div style={{ minWidth: 96 }}>
-          <div style={{ fontSize: 11, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>{label}</div>
-          <div style={{ fontSize: 11, color: pm.ink4 }}>{span}</div>
+          <div style={{ fontSize: 14, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>{label}</div>
+          <div style={{ fontSize: 14, color: pm.ink4 }}>{span}</div>
         </div>
         <div style={{ display: 'flex', gap: 18, alignItems: 'baseline', flex: 1 }}>
-          <div><span style={{ fontSize: 11, color: pm.ink4 }}>{'YOU '}</span><span style={{ fontSize: 14, fontWeight: 700, color: you >= 0 ? pm.mint : pm.rose }}>{you >= 0 ? '+' : ''}{you}%</span></div>
-          <div><span style={{ fontSize: 11, color: pm.ink4 }}>{'S&P '}</span><span style={{ fontSize: 14, fontWeight: 700, color: spy >= 0 ? pm.mint : pm.rose }}>{spy >= 0 ? '+' : ''}{spy}%</span></div>
+          <div><span style={{ fontSize: 14, color: pm.ink4 }}>{'YOU '}</span><span style={{ fontSize: 14, fontWeight: 700, color: you >= 0 ? pm.mint : pm.rose }}>{you >= 0 ? '+' : ''}{you}%</span></div>
+          <div><span style={{ fontSize: 14, color: pm.ink4 }}>{'S&P '}</span><span style={{ fontSize: 14, fontWeight: 700, color: spy >= 0 ? pm.mint : pm.rose }}>{spy >= 0 ? '+' : ''}{spy}%</span></div>
         </div>
         {vs != null && (
-          <div style={{ fontSize: 12, fontWeight: 700, color: ahead ? pm.mint : pm.rose, whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: ahead ? pm.mint : pm.rose, whiteSpace: 'nowrap' }}>
             {ahead ? '▲ ahead ' : '▼ behind '}{Math.abs(vs)}%
           </div>
         )}
@@ -182,12 +182,12 @@ function PerformancePanel({ performance }) {
 
   return (
     <div style={{ background: pm.bg1, border: `1px solid ${pm.line}`, borderRadius: 10, padding: '10px 16px 12px', marginBottom: 16 }}>
-      <div style={{ fontSize: 11, color: pm.ink3, letterSpacing: 1, marginBottom: 2, fontWeight: 700 }}>{'PERFORMANCE vs S&P 500'}</div>
+      <div style={{ fontSize: 14, color: pm.ink3, letterSpacing: 1, marginBottom: 2, fontWeight: 700 }}>{'PERFORMANCE vs S&P 500'}</div>
       {performance.overall
         ? <Row label="OVERALL"
             span={`since your entries${performance.overall.coverage != null && performance.overall.coverage < 0.9 ? ` · ${Math.round(performance.overall.coverage * 100)}% of book dated` : ''}`}
             you={performance.overall.portfolio} spy={performance.overall.benchmark} vs={performance.overall.vs_benchmark} />
-        : <div style={{ fontSize: 11, color: pm.ink4, padding: '7px 0', borderTop: `1px solid ${pm.line}66`, lineHeight: 1.5 }}>
+        : <div style={{ fontSize: 14, color: pm.ink4, padding: '7px 0', borderTop: `1px solid ${pm.line}66`, lineHeight: 1.5 }}>
             Add entry <b style={{ color: pm.ink3 }}>dates</b> in Edit Holdings to compare your returns against the S&P over your actual holding period.
           </div>}
       {performance.recent && <Row label="RECENT" span={`last ~${performance.recent.days} days · basket`} you={performance.recent.portfolio} spy={performance.recent.benchmark} vs={performance.recent.vs_benchmark} />}
@@ -211,11 +211,11 @@ function RiskScorecard({ analysis }) {
         padding: '10px 12px',
         borderTop: `3px solid ${accent}`,
       }}>
-        <div style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+        <div style={{ fontSize: 14, color: pm.ink4, letterSpacing: 1, marginBottom: 4 }}>{label}</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: value != null ? accent : pm.ink4 }}>
           {value != null ? value : '—'}
         </div>
-        {note && <div style={{ fontSize: 11, color: pm.ink3, marginTop: 2 }}>{note}</div>}
+        {note && <div style={{ fontSize: 14, color: pm.ink3, marginTop: 2 }}>{note}</div>}
       </div>
     );
   }
@@ -226,11 +226,11 @@ function RiskScorecard({ analysis }) {
         background: pm.bg2, borderRadius: 8, padding: '10px 12px',
         borderTop: `3px solid ${pm.mint}`,
       }}>
-        <div style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, marginBottom: 4 }}>ALPHA</div>
+        <div style={{ fontSize: 14, color: pm.ink4, letterSpacing: 1, marginBottom: 4 }}>ALPHA</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: alpha != null ? (alpha >= 0 ? pm.mint : pm.rose) : pm.ink4 }}>
           {alpha != null ? `${alpha >= 0 ? '+' : ''}${(alpha * 100).toFixed(1)}%` : '—'}
         </div>
-        <div style={{ fontSize: 11, color: pm.ink3, marginTop: 2 }}>vs benchmark</div>
+        <div style={{ fontSize: 14, color: pm.ink3, marginTop: 2 }}>vs benchmark</div>
       </div>
 
       <Cell
@@ -259,16 +259,16 @@ function RiskScorecard({ analysis }) {
 function HoldingsTable({ weights }) {
   const pm = usePalette();
   if (!weights || weights.length === 0) {
-    return <div style={{ fontSize: 11, color: pm.ink4, padding: '20px 0', textAlign: 'center' }}>No holdings data</div>;
+    return <div style={{ fontSize: 14, color: pm.ink4, padding: '20px 0', textAlign: 'center' }}>No holdings data</div>;
   }
 
   const thStyle = {
-    fontSize: 11, color: pm.ink2, letterSpacing: 1,
+    fontSize: 14, color: pm.ink2, letterSpacing: 1,
     padding: '6px 8px', textAlign: 'left',
     background: pm.bg2, fontWeight: 700,
   };
   const tdStyle = (i) => ({
-    fontSize: 12, color: pm.ink,
+    fontSize: 14, color: pm.ink,
     padding: '5px 8px',
     background: i % 2 === 0 ? pm.bg0 : pm.bg1,
     borderBottom: `1px solid ${pm.line}`,
@@ -276,7 +276,7 @@ function HoldingsTable({ weights }) {
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
         <thead>
           <tr>
             {['SYM', 'SHARES', 'VALUE', 'WEIGHT', 'DRIFT', 'ALPHA'].map(col => (
@@ -305,7 +305,7 @@ function HoldingsTable({ weights }) {
 function SectorBars({ weights }) {
   const pm = usePalette();
   if (!weights || weights.length === 0) {
-    return <div style={{ fontSize: 11, color: pm.ink4, padding: '20px 0', textAlign: 'center' }}>No sector data</div>;
+    return <div style={{ fontSize: 14, color: pm.ink4, padding: '20px 0', textAlign: 'center' }}>No sector data</div>;
   }
 
   const CLS_COLORS = {
@@ -333,8 +333,8 @@ function SectorBars({ weights }) {
         return (
           <div key={cls}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 11, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>{cls}</span>
-              <span style={{ fontSize: 11, color: pm.ink3 }}>{pctNum}% <span style={{ color }}>{signal}</span></span>
+              <span style={{ fontSize: 14, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>{cls}</span>
+              <span style={{ fontSize: 14, color: pm.ink3 }}>{pctNum}% <span style={{ color }}>{signal}</span></span>
             </div>
             <div style={{
               height: 18,
@@ -383,7 +383,7 @@ function GradeHistoryBars({ gradeHistory }) {
         return (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 40 }}>
             {isCurrent && (
-              <span style={{ fontSize: 12, color: pm.gold }}>★</span>
+              <span style={{ fontSize: 14, color: pm.gold }}>★</span>
             )}
             <div style={{
               width: 32, height,
@@ -392,7 +392,7 @@ function GradeHistoryBars({ gradeHistory }) {
               opacity: isCurrent ? 1 : 0.6,
               border: isCurrent ? `2px solid ${pm.gold}` : '2px solid transparent',
             }} />
-            <div style={{ fontSize: 11, color: pm.ink3, textAlign: 'center' }}>
+            <div style={{ fontSize: 14, color: pm.ink3, textAlign: 'center' }}>
               {h.month && <div>{h.month}</div>}
               <div style={{ fontWeight: 700, color }}>{h.grade ?? '—'}</div>
             </div>
@@ -417,7 +417,7 @@ function ThemeToggle({ theme, onToggle }) {
     <button onClick={onToggle} title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
       style={{
         background: 'transparent', border: `1px solid ${pm.line}`, color: pm.ink2,
-        borderRadius: 6, padding: '5px 10px', fontSize: 13, cursor: 'pointer',
+        borderRadius: 6, padding: '5px 10px', fontSize: 14, cursor: 'pointer',
         fontFamily: 'monospace', flexShrink: 0, lineHeight: 1,
       }}>
       {theme === 'light' ? '☾' : '☀'}
@@ -435,7 +435,7 @@ function MarketRotation({ rotation }) {
   const { summary, inflows = [], outflows = [], interpretation } = rotation;
 
   const Chip = ({ name, roc, up }) => (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, fontSize: 11,
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5, fontSize: 14,
       background: pm.bg3, borderRadius: 12, padding: '3px 9px',
       border: `1px solid ${(up ? pm.mint : pm.rose)}44` }}>
       <span style={{ color: up ? pm.mint : pm.rose, fontWeight: 700 }}>{up ? '↑' : '↓'} {name}</span>
@@ -446,10 +446,10 @@ function MarketRotation({ rotation }) {
   const hasChips = inflows.length > 0 || outflows.length > 0;
   return (
     <div style={{ background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-      <div style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
+      <div style={{ fontSize: 14, color: pm.ink4, letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>
         MARKET ROTATION <span style={{ color: pm.ink4, fontWeight: 400 }}>· context, not part of your grade</span>
       </div>
-      <div style={{ fontSize: 13, color: pm.ink, fontWeight: 700, lineHeight: 1.5, marginBottom: hasChips ? 10 : 0 }}>{summary}</div>
+      <div style={{ fontSize: 14, color: pm.ink, fontWeight: 700, lineHeight: 1.5, marginBottom: hasChips ? 10 : 0 }}>{summary}</div>
       {hasChips && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: interpretation ? 10 : 0 }}>
           {inflows.map(s => <Chip key={'in' + s.name} name={s.name} roc={s.roc_21} up />)}
@@ -457,7 +457,7 @@ function MarketRotation({ rotation }) {
         </div>
       )}
       {interpretation && (
-        <div style={{ fontSize: 11, color: pm.ink3, fontStyle: 'italic', lineHeight: 1.5, borderLeft: `3px solid ${pm.lav}`, paddingLeft: 10 }}>{interpretation}</div>
+        <div style={{ fontSize: 14, color: pm.ink3, fontStyle: 'italic', lineHeight: 1.5, borderLeft: `3px solid ${pm.lav}`, paddingLeft: 10 }}>{interpretation}</div>
       )}
     </div>
   );
@@ -483,7 +483,7 @@ function EvolutionLine({ evolution }) {
       background: pm.bg2, border: `1px solid ${pm.line}`, borderRadius: 8,
       padding: '8px 14px', marginBottom: 12 }}>
       <span style={{ color: tone, flexShrink: 0 }}>{icon}</span>
-      <span style={{ fontSize: 12, color: tone, lineHeight: 1.5,
+      <span style={{ fontSize: 14, color: tone, lineHeight: 1.5,
         fontStyle: italic ? 'italic' : 'normal',
         fontWeight: status === 'shift' ? 600 : 400 }}>{evolution.line}</span>
     </div>
@@ -529,7 +529,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
     try {
       chart = window.LightweightCharts.createChart(el, {
         width: el.clientWidth || 320, height: 180,
-        layout: { background: { color: 'transparent' }, textColor: pm.ink3, fontFamily: 'monospace', fontSize: 11 },
+        layout: { background: { color: 'transparent' }, textColor: pm.ink3, fontFamily: 'monospace', fontSize: 14 },
         grid: { vertLines: { color: pm.line + '33' }, horzLines: { color: pm.line + '33' } },
         rightPriceScale: { borderColor: pm.line },
         timeScale: { borderColor: pm.line, timeVisible: false },
@@ -555,22 +555,22 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
   if (loading) return (
     <PaletteCtx.Provider value={pm}>
       <div style={{ ...overlayStyle(pm), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: pm.lav, fontSize: 13, fontFamily: 'monospace', letterSpacing: 2 }}>ANALYZING PORTFOLIO...</span>
+        <span style={{ color: pm.lav, fontSize: 14, fontFamily: 'monospace', letterSpacing: 2 }}>ANALYZING PORTFOLIO...</span>
       </div>
     </PaletteCtx.Provider>
   );
   if (error) return (
     <PaletteCtx.Provider value={pm}>
       <div style={{ ...overlayStyle(pm), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
-        <button onClick={onBack} style={{ position: 'absolute', top: 20, left: 24, background: 'transparent', border: 'none', color: '#FF6D00', cursor: 'pointer', fontSize: 12, letterSpacing: 1, padding: 0 }}>← BACK</button>
-        <div style={{ fontSize: 13, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>COULDN'T LOAD THIS PORTFOLIO</div>
-        <div style={{ fontSize: 11, color: pm.ink3, maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
+        <button onClick={onBack} style={{ position: 'absolute', top: 20, left: 24, background: 'transparent', border: 'none', color: '#FF6D00', cursor: 'pointer', fontSize: 14, letterSpacing: 1, padding: 0 }}>← BACK</button>
+        <div style={{ fontSize: 14, color: pm.ink2, fontWeight: 700, letterSpacing: 1 }}>COULDN'T LOAD THIS PORTFOLIO</div>
+        <div style={{ fontSize: 14, color: pm.ink3, maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
           {/HTTP 4|no holdings|value is zero/i.test(error)
             ? 'This portfolio has no holdings yet. Add the assets you want to track to see its analysis.'
             : error}
         </div>
         {onEditHoldings && (
-          <button onClick={onEditHoldings} style={{ background: pm.btn, border: 'none', color: pm.btnInk, borderRadius: 8, padding: '8px 18px', fontSize: 12, fontWeight: 700, letterSpacing: 1, cursor: 'pointer', fontFamily: 'monospace' }}>
+          <button onClick={onEditHoldings} style={{ background: pm.btn, border: 'none', color: pm.btnInk, borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 700, letterSpacing: 1, cursor: 'pointer', fontFamily: 'monospace' }}>
             + ADD HOLDINGS
           </button>
         )}
@@ -600,7 +600,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
   const fmtMoney = (v) => `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
   const cardStyle = { background: pm.bg1, border: `1px solid ${pm.line}`, borderRadius: 10, padding: 16 };
-  const cardLabel = { fontSize: 11, color: pm.ink3, letterSpacing: 1, marginBottom: 10 };
+  const cardLabel = { fontSize: 14, color: pm.ink3, letterSpacing: 1, marginBottom: 10 };
 
   return (
     <PaletteCtx.Provider value={pm}>
@@ -608,12 +608,12 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 14 }}>
-        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: '#FF6D00', cursor: 'pointer', fontSize: 12, letterSpacing: 1, padding: 0 }}>← BACK</button>
+        <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: '#FF6D00', cursor: 'pointer', fontSize: 14, letterSpacing: 1, padding: 0 }}>← BACK</button>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
           <GradeCircle grade={grade} score={score} />
-          <span style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1, whiteSpace: 'nowrap' }}>BASKET HEALTH</span>
+          <span style={{ fontSize: 14, color: pm.ink4, letterSpacing: 1, whiteSpace: 'nowrap' }}>BASKET HEALTH</span>
           <button onClick={() => setGradeOpen(o => !o)}
-            style={{ background: 'transparent', border: 'none', color: pm.ink3, fontSize: 11, letterSpacing: 0.5, cursor: 'pointer', fontFamily: 'monospace', whiteSpace: 'nowrap', padding: 0 }}>
+            style={{ background: 'transparent', border: 'none', color: pm.ink3, fontSize: 14, letterSpacing: 0.5, cursor: 'pointer', fontFamily: 'monospace', whiteSpace: 'nowrap', padding: 0 }}>
             WHY? {gradeOpen ? '▴' : '▾'}
           </button>
         </div>
@@ -631,7 +631,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
         </div>
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
         {onEditHoldings && (
-          <button onClick={onEditHoldings} style={{ background: 'transparent', border: `1px solid ${pm.line}`, color: pm.ink2, borderRadius: 6, padding: '5px 12px', fontSize: 11, letterSpacing: 1, cursor: 'pointer', fontFamily: 'monospace', flexShrink: 0 }}>
+          <button onClick={onEditHoldings} style={{ background: 'transparent', border: `1px solid ${pm.line}`, color: pm.ink2, borderRadius: 6, padding: '5px 12px', fontSize: 14, letterSpacing: 1, cursor: 'pointer', fontFamily: 'monospace', flexShrink: 0 }}>
             ✎ EDIT HOLDINGS
           </button>
         )}
@@ -642,7 +642,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
 
       {/* ── Ledger warnings (quiet hint, e.g. negative cash) ── */}
       {ledgerWarnings.length > 0 && (
-        <div style={{ fontSize: 11, color: pm.ink3, fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14, color: pm.ink3, fontStyle: 'italic', marginBottom: 10, lineHeight: 1.5 }}>
           {ledgerWarnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
         </div>
       )}
@@ -655,7 +655,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
 
       {/* ── Equal-weight basket note (quiet, only when no share counts entered) ── */}
       {isEqualWeight && (
-        <div style={{ background: pm.bg2, borderRadius: 8, padding: '8px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: pm.ink3 }}>
+        <div style={{ background: pm.bg2, borderRadius: 8, padding: '8px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: pm.ink3 }}>
           <span style={{ color: pm.peach }}>◷</span>
           <span>Showing an <b style={{ color: pm.ink2 }}>equal-weight basket</b> view. Add share counts via Edit Holdings for exact value &amp; returns.</span>
         </div>
@@ -669,7 +669,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
             <div style={{ flex: 1, minWidth: 0 }}>
               {/* What the portfolio IS */}
               {aiReview.primary_observation && (
-                <div style={{ fontSize: 12, color: pm.ink, lineHeight: 1.6, marginBottom: 10 }}>
+                <div style={{ fontSize: 14, color: pm.ink, lineHeight: 1.6, marginBottom: 10 }}>
                   {aiReview.primary_observation}
                 </div>
               )}
@@ -679,14 +679,14 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
                   {aiReview.whats_working && (
                     <div style={{ borderLeft: `3px solid ${pm.mint}`, paddingLeft: 10 }}>
-                      <div style={{ fontSize: 11, color: pm.mint, letterSpacing: 1, fontWeight: 700, marginBottom: 3 }}>✓ WORKING</div>
-                      <div style={{ fontSize: 11, color: pm.ink2, lineHeight: 1.55 }}>{aiReview.whats_working}</div>
+                      <div style={{ fontSize: 14, color: pm.mint, letterSpacing: 1, fontWeight: 700, marginBottom: 3 }}>✓ WORKING</div>
+                      <div style={{ fontSize: 14, color: pm.ink2, lineHeight: 1.55 }}>{aiReview.whats_working}</div>
                     </div>
                   )}
                   {aiReview.key_risks && (
                     <div style={{ borderLeft: `3px solid ${pm.peach}`, paddingLeft: 10 }}>
-                      <div style={{ fontSize: 11, color: pm.peach, letterSpacing: 1, fontWeight: 700, marginBottom: 3 }}>▲ RISKS</div>
-                      <div style={{ fontSize: 11, color: pm.ink2, lineHeight: 1.55 }}>{aiReview.key_risks}</div>
+                      <div style={{ fontSize: 14, color: pm.peach, letterSpacing: 1, fontWeight: 700, marginBottom: 3 }}>▲ RISKS</div>
+                      <div style={{ fontSize: 14, color: pm.ink2, lineHeight: 1.55 }}>{aiReview.key_risks}</div>
                     </div>
                   )}
                 </div>
@@ -694,19 +694,19 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
 
               {/* vs benchmark */}
               {aiReview.goals_alignment && (
-                <div style={{ fontSize: 11, color: pm.ink3, lineHeight: 1.55, marginBottom: 10 }}>
+                <div style={{ fontSize: 14, color: pm.ink3, lineHeight: 1.55, marginBottom: 10 }}>
                   <span style={{ color: pm.ink4, letterSpacing: 1 }}>VS BENCHMARK · </span>{aiReview.goals_alignment}
                 </div>
               )}
 
               {/* Thesis evaluation + the quoted goal */}
               {aiReview.thesis_alignment_note && (
-                <div style={{ fontSize: 12, color: pm.ink2, lineHeight: 1.6, marginBottom: thesis ? 6 : 0 }}>
+                <div style={{ fontSize: 14, color: pm.ink2, lineHeight: 1.6, marginBottom: thesis ? 6 : 0 }}>
                   {aiReview.thesis_alignment_note}
                 </div>
               )}
               {thesis && (
-                <div style={{ fontSize: 11, color: pm.ink3, borderLeft: `3px solid ${pm.lav}`, paddingLeft: 10, fontStyle: 'italic', marginBottom: 10 }}>
+                <div style={{ fontSize: 14, color: pm.ink3, borderLeft: `3px solid ${pm.lav}`, paddingLeft: 10, fontStyle: 'italic', marginBottom: 10 }}>
                   "{thesis}"
                 </div>
               )}
@@ -714,12 +714,12 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
               {/* Framed guesses at the investor's "why" */}
               {aiReview.possible_intents && aiReview.possible_intents.length > 0 && (
                 <div style={{ marginBottom: (aiReview.asset_breakdown && aiReview.asset_breakdown.length) ? 10 : 0 }}>
-                  <div style={{ fontSize: 11, color: pm.lav, letterSpacing: 1, fontWeight: 700, marginBottom: 4 }}>
+                  <div style={{ fontSize: 14, color: pm.lav, letterSpacing: 1, fontWeight: 700, marginBottom: 4 }}>
                     {'◈ A FEW GUESSES AT YOUR "WHY" — am I warm?'}
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {aiReview.possible_intents.map((g, i) => (
-                      <li key={i} style={{ fontSize: 11, color: pm.ink2, lineHeight: 1.5 }}>{g}</li>
+                      <li key={i} style={{ fontSize: 14, color: pm.ink2, lineHeight: 1.5 }}>{g}</li>
                     ))}
                   </ul>
                 </div>
@@ -732,7 +732,7 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
                     const sc = a.sentiment === 'positive' ? pm.mint : a.sentiment === 'negative' ? pm.rose : pm.ink4;
                     return (
                       <span key={a.sym || i} title={a.note || ''}
-                        style={{ fontSize: 11, color: sc, border: `1px solid ${sc}`, borderRadius: 5, padding: '2px 7px', cursor: 'help', whiteSpace: 'nowrap' }}>
+                        style={{ fontSize: 14, color: sc, border: `1px solid ${sc}`, borderRadius: 5, padding: '2px 7px', cursor: 'help', whiteSpace: 'nowrap' }}>
                         {a.sym}
                       </span>
                     );
@@ -748,11 +748,11 @@ function PortfolioPage({ portfolioId, portfolio: initialPortfolio, onBack, onEdi
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div style={cardStyle}>
           <div style={cardLabel}>CUMULATIVE RETURNS</div>
-          <div style={{ fontSize: 11, color: pm.ink3 }}>Trailing-year cumulative return</div>
+          <div style={{ fontSize: 14, color: pm.ink3 }}>Trailing-year cumulative return</div>
           {window.LightweightCharts && analysis?.returns_series?.length
             ? <div id="portfolio-chart" style={{ height: 180 }} />
             : <div style={{ height: 180, background: pm.bg2, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 11, color: pm.ink4, letterSpacing: 1 }}>
+                <span style={{ fontSize: 14, color: pm.ink4, letterSpacing: 1 }}>
                   {analysis?.returns_series && !analysis.returns_series.length ? 'NOT ENOUGH PRICE HISTORY' : 'RETURNS CHART UNAVAILABLE'}
                 </span>
               </div>

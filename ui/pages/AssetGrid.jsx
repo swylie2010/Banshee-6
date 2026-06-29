@@ -88,7 +88,7 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
   const wait = assets.filter(a => a.verdict === "WAIT").length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>
       <div style={{
         height: 40, padding: "0 16px",
         borderBottom: "1px solid var(--line)",
@@ -134,19 +134,20 @@ function AssetGrid({ watchlists, watchlist, focusedSym, onOpen, radarData, radar
         </div>
       </div>
 
-      <div style={{
-        flex: 1, minHeight: 0, overflowY: "auto",
-        padding: 14,
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-        gap: 10,
-        alignContent: "start",
-      }}>
-        {assets.map(a => (
-          <window.AssetCard key={a._origSym || a.sym} asset={a}
-            selected={focusedSym === a.sym}
-            onClick={() => onOpen(a.sym)} />
-        ))}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: 10,
+          padding: 14,
+          alignContent: "start",
+        }}>
+          {assets.map(a => (
+            <window.AssetCard key={a._origSym || a.sym} asset={a}
+              selected={focusedSym === a.sym}
+              onClick={() => onOpen(a.sym)} />
+          ))}
+        </div>
       </div>
 
       <Ticker radarData={radarData} snapshot={snapshot} />

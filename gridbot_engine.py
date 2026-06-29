@@ -81,7 +81,8 @@ def _bollinger(close: pd.Series, period: int = 20, mult: float = 2.0):
 
 # ── Main analysis ──────────────────────────────────────────────────────────────
 
-def analyze_gridbot(sym: str, capital: float, grid_count: int, fee_pct: float) -> dict:
+def analyze_gridbot(sym: str, capital: float, grid_count: int, fee_pct: float,
+                    range_min: float | None = None, range_max: float | None = None) -> dict:
     """Run the 4-phase Banshee gridbot analysis. Returns a dict."""
     import data_providers
     yf_sym = _to_yf_sym(sym)
@@ -134,11 +135,15 @@ def analyze_gridbot(sym: str, capital: float, grid_count: int, fee_pct: float) -
     high30 = float(hist["High"].tail(30).max())
     low30  = float(hist["Low"].tail(30).min())
 
-    upper = min(bb_hi, high30)
-    lower = max(bb_lo, low30)
-    if upper <= lower or upper <= 0:
-        upper = high30
-        lower = low30
+    if range_min is not None and range_max is not None and float(range_min) > 0 and float(range_max) > float(range_min):
+        upper = float(range_max)
+        lower = float(range_min)
+    else:
+        upper = min(bb_hi, high30)
+        lower = max(bb_lo, low30)
+        if upper <= lower or upper <= 0:
+            upper = high30
+            lower = low30
 
     range_pct = ((upper - lower) / lower) * 100 if lower > 0 else 0.0
     topology  = "geometric" if range_pct > 15 else "arithmetic"
