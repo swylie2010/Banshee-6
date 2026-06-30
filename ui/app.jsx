@@ -286,6 +286,7 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
               maxLength={12}
               style={{
                 flex: 1,
+                minWidth: 0,
                 background: "var(--bg-3)", border: "1px solid var(--line-2)",
                 color: "var(--ink)", padding: "5px 8px",
                 fontFamily: "'JetBrains Mono', monospace", fontSize: 13,
@@ -945,6 +946,7 @@ function App() {
             initialTab={analysisTab}
             onBack={goBack}
             manualStories={manualStories}
+            unleashed={unleashed}
           />
         )}
         {page === "macro" && (

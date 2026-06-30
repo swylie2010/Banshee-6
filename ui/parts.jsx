@@ -1491,37 +1491,34 @@ function Chart({ symbol, tf, height = 360, accent = "var(--cyan)", smcData = nul
     chartRef.current  = chart;
     seriesRef.current = series;
 
-    let cachedRect = null;
-
     const ro = new ResizeObserver(() => {
       if (containerRef.current && chartRef.current)
         chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
-      cachedRect = null;
     });
     ro.observe(containerRef.current);
 
-    /* hover hit-testing */
+    /* hover hit-testing — read the container rect fresh on every move.
+       A cached rect goes stale whenever the chart shifts position without
+       resizing (e.g. the Unleashed banner appearing above it, or the sidebar
+       sliding), which silently offset every hover and killed the context card. */
     const container = containerRef.current;
     function onMouseMove(e) {
       if (!onHover) return;
-      if (!cachedRect) cachedRect = container.getBoundingClientRect();
-      const x = e.clientX - cachedRect.left;
-      const y = e.clientY - cachedRect.top;
+      const rect = container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
       const el = findHoveredElement(x, y);
       onHover(el);
     }
     function onMouseLeave() {
       if (onHover) onHover(null);
     }
-    function onScroll() { cachedRect = null; }
     container.addEventListener("mousemove", onMouseMove);
     container.addEventListener("mouseleave", onMouseLeave);
-    window.addEventListener("scroll", onScroll, true);
 
     return () => {
       container.removeEventListener("mousemove", onMouseMove);
       container.removeEventListener("mouseleave", onMouseLeave);
-      window.removeEventListener("scroll", onScroll, true);
       ro.disconnect();
       if (primitiveRef.current) {
         try { series.detachPrimitive(primitiveRef.current); } catch {}

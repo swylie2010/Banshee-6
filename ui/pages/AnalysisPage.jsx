@@ -172,7 +172,7 @@ const ANALYSIS_TABS = [
   { id: "nexus", label: "NEXUS",          accent: "var(--amber)",   hex: "#f59e0b" },
 ];
 
-function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories = [] }) {
+function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories = [], unleashed = false }) {
   const [tab, setTab] = useState(initialTab || "smc");
   const [tf, setTf] = useState("1H");
   const activeTabCfg = ANALYSIS_TABS.find(t => t.id === tab);
@@ -187,6 +187,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
   const [showVWAP,  setShowVWAP]  = useState(true);
   const [showStoch, setShowStoch] = useState(false);
   const [aiText, setAiText]   = useState(null);
+  const [aiMode, setAiMode]   = useState(null);   // unleashed flag in effect when aiText was generated
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError]   = useState(null);
   const aiAbortRef = useRef(null);
@@ -204,7 +205,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
   useEffect(() => {
     cancelAI();
     setSmcData(null); setGhData(null); setXabcdData(null);
-    setAiText(null); setAiLoading(false); setAiError(null);
+    setAiText(null); setAiMode(null); setAiLoading(false); setAiError(null);
     setLensMode(1);
     setActiveOnly(false);
     setHoveredElement(null);
@@ -213,7 +214,7 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
   /* reset AI on tab change */
   useEffect(() => {
     cancelAI();
-    setAiText(null); setAiLoading(false); setAiError(null);
+    setAiText(null); setAiMode(null); setAiLoading(false); setAiError(null);
   }, [tab]);
 
   /* lens hotkeys 1–4 — active only on SMC tab */
@@ -269,15 +270,21 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
     cancelAI();
     const controller = new AbortController();
     aiAbortRef.current = controller;
-    setAiLoading(true); setAiText(null); setAiError(null);
+    const modeAtFetch = unleashed;   // snapshot: the backend reads the global flag fresh, so this is what the result reflects
+    setAiLoading(true); setAiText(null); setAiMode(null); setAiError(null);
     window.API.fetchAIBriefing(asset.sym, "swing", tab, controller.signal, manualStories).then(r => {
       if (r.aborted) return;
       aiAbortRef.current = null;
       setAiLoading(false);
       if (r.error) setAiError(r.error);
-      else setAiText(r.text);
+      else { setAiText(r.text); setAiMode(modeAtFetch); }
     });
   }
+
+  /* The displayed briefing was generated under aiMode; the live toggle is `unleashed`.
+     When they diverge the user could mistake an UNLEASHED read for a conservative one
+     (or vice-versa) — flag it loudly so refreshing isn't something they can overlook. */
+  const staleMode = aiText && aiMode !== null && aiMode !== unleashed;
 
   const c = window.verdictColors(asset.verdict);
   const macroVal = macroWarning ?? window.MACRO.warning;
@@ -578,24 +585,49 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <window.Label color={activeTabCfg.accent}>AI ANALYSIS</window.Label>
-                <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 4, letterSpacing: "0.1em" }}>
-                  {activeTabCfg.label} · {asset.sym}
+                <div className="mono" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 4, letterSpacing: "0.1em", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>{activeTabCfg.label} · {asset.sym}</span>
+                  {aiText && (
+                    <span style={{
+                      padding: "1px 7px", borderRadius: 3,
+                      fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+                      color:      aiMode ? "#ffd9dd"               : "#9fd4f0",
+                      background:  aiMode ? "rgba(127,29,29,0.7)"  : "rgba(56,189,248,0.12)",
+                      border:     `1px solid ${aiMode ? "#c0392b" : "#38bdf8"}`,
+                    }}>
+                      {aiMode ? "● UNLEASHED" : "CONSERVATIVE"}
+                    </span>
+                  )}
                 </div>
               </div>
               <button onClick={handleFetchAI} disabled={aiLoading}
+                className={staleMode && !aiLoading ? "blink" : ""}
                 style={{
                   padding: "9px 18px",
-                  background: aiText ? "rgba(245,158,11,0.1)" : "transparent",
-                  border: `1px solid ${aiText ? "var(--amber)" : "var(--line-2)"}`,
-                  color: aiLoading ? "var(--wait)" : "var(--amber)",
+                  background: staleMode ? "rgba(245,158,11,0.2)" : aiText ? "rgba(245,158,11,0.1)" : "transparent",
+                  border: `1px solid ${staleMode ? "var(--wait)" : aiText ? "var(--amber)" : "var(--line-2)"}`,
+                  color: aiLoading ? "var(--wait)" : staleMode ? "var(--wait)" : "var(--amber)",
                   cursor: aiLoading ? "default" : "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 13, letterSpacing: "0.16em", fontWeight: 700,
                 }}>
-                {aiLoading ? "◇ ANALYZING…" : aiText ? "◆ REFRESH" : "◆ GENERATE BRIEFING"}
+                {aiLoading ? "◇ ANALYZING…" : staleMode ? "⚠ REFRESH" : aiText ? "◆ REFRESH" : "◆ GENERATE BRIEFING"}
               </button>
             </div>
             <div style={{ padding: "16px 18px", minHeight: 80 }}>
+              {staleMode && (
+                <div style={{
+                  marginBottom: 12, padding: "8px 12px",
+                  background: "rgba(245,158,11,0.12)", border: "1px solid var(--wait)",
+                  borderLeft: "3px solid var(--wait)",
+                  fontSize: 12, color: "var(--wait)", lineHeight: 1.55,
+                  fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.03em",
+                }}>
+                  ⚠ This briefing was generated in <b>{aiMode ? "UNLEASHED" : "CONSERVATIVE"}</b> mode,
+                  but Unleashed is now <b>{unleashed ? "ON" : "OFF"}</b>. These are two different reads —
+                  hit REFRESH to regenerate in the current mode before acting on it.
+                </div>
+              )}
               {aiError && <div style={{ fontSize: 13, color: "var(--sell)", letterSpacing: "0.06em", marginBottom: 8 }}>⚠ {aiError}</div>}
               {aiText ? (
                 <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.75, whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em" }}>
