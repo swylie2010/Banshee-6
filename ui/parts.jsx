@@ -3671,3 +3671,57 @@ window.DisclaimerModal = function DisclaimerModal({ onAccept }) {
     </div>
   );
 };
+
+/* ── Unleashed mode UI components ───────────────────────────── */
+
+/* Non-dismissable banner; appears only while unleashed is ON.
+ * There is no close button — it disappears only when the toggle is flicked off. */
+function UnleashedBanner({ show }) {
+  if (!show) return null;
+  return (
+    <div className="unleashed-banner">
+      UNLEASHED — Banshee can't keep up with the market. That's your job.
+      These are short-term possibilities, not safe trades.
+    </div>
+  );
+}
+
+/* Toggle button placed near the MACRO button in TopBar.
+ * Crimson-on-dark when active; ghost when off. */
+function UnleashedToggle({ enabled, onToggle }) {
+  return (
+    <button
+      onClick={() => onToggle(!enabled)}
+      title="Unleashed mode (global)"
+      className="mono"
+      style={{
+        padding: "0 14px", height: "100%",
+        background: enabled ? "rgba(127, 29, 29, 0.7)" : "transparent",
+        color: enabled ? "#ffe4e6" : "var(--ink-3)",
+        border: "none",
+        borderLeft: `1px solid ${enabled ? "#c0392b" : "var(--line)"}`,
+        borderRight: "none",
+        cursor: "pointer",
+        fontSize: 13, letterSpacing: "0.14em", fontWeight: 700,
+        transition: "color 120ms, background 120ms",
+      }}
+      onMouseEnter={e => {
+        if (!enabled) {
+          e.currentTarget.style.color = "#ff5a5a";
+          e.currentTarget.style.background = "rgba(127, 29, 29, 0.15)";
+        }
+      }}
+      onMouseLeave={e => {
+        if (!enabled) {
+          e.currentTarget.style.color = "var(--ink-3)";
+          e.currentTarget.style.background = "transparent";
+        }
+      }}
+    >
+      {enabled ? "● UNLEASHED" : "○ Unleashed"}
+    </button>
+  );
+}
+
+window.UnleashedBanner = UnleashedBanner;
+window.UnleashedToggle = UnleashedToggle;

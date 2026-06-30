@@ -75,7 +75,7 @@ const MACRO_EXPLAIN = {
 };
 
 /* ── Top bar ───────────────────────────────────────────────── */
-function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
+function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro, unleashed, onToggleUnleashed }) {
   const [time, setTime] = useState(new Date());
   const [activeFlag, setActiveFlag] = useState(null);
   useEffect(() => {
@@ -221,6 +221,9 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro }) {
       >
         MACRO ↗
       </button>
+
+      {/* Unleashed toggle — near MACRO button */}
+      <window.UnleashedToggle enabled={unleashed} onToggle={onToggleUnleashed} />
 
       {/* clock */}
       <div style={{
@@ -638,6 +641,25 @@ function App() {
   const [currentPortfolioId, setCurrentPortfolioId] = React.useState(null);
   const [pfNonce, setPfNonce] = React.useState(0);   // bumped on save → forces PortfolioPage re-fetch
 
+  /* ── Unleashed mode state ─────────────────────────────────── */
+  const [unleashed, setUnleashedState] = React.useState(false);
+  React.useEffect(() => {
+    window.API.fetchUnleashed().then(s => setUnleashedState(!!s.enabled));
+  }, []);
+
+  const toggleUnleashed = async (next) => {
+    const res = await window.API.setUnleashed(next);
+    const on = !!res.enabled;
+    setUnleashedState(on);
+    if (on) {
+      /* Play the entry tone once when toggling ON.
+       * Steve: swap ui/unleashed-entry.wav for your real sound — it's a one-file replace. */
+      try {
+        new Audio("/ui/unleashed-entry.wav").play().catch(() => {});
+      } catch (_) {}
+    }
+  };
+
   const watchlists = React.useMemo(
     () => [...customPresets, ...window.WATCHLISTS],
     [customPresets]
@@ -856,7 +878,8 @@ function App() {
   const topBarMacro = sensorsToTopBar(macroData);
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div className={unleashed ? "unleashed" : ""}
+         style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {!disclaimerAccepted
         ? <window.DisclaimerModal onAccept={() => {
             localStorage.setItem('banshee_disclaimer_accepted', 'true');
@@ -864,11 +887,14 @@ function App() {
           }} />
         : pinLocked && <window.PinLockScreen onUnlock={() => setPinLocked(false)} />
       }
+      <window.UnleashedBanner show={unleashed} />
       <TopBar
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         sidebarOpen={sidebarOpen}
         macro={topBarMacro}
         onMacro={() => setPage("macro")}
+        unleashed={unleashed}
+        onToggleUnleashed={toggleUnleashed}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
         <Sidebar

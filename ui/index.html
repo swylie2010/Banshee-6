@@ -105,6 +105,43 @@
   }
 
   button { font-family: inherit; color: inherit; }
+
+  /* ── Unleashed mode: CHROME override (distinct deep crimson, NOT sell-red #ef4444) ── */
+  /* Only --bg-*, --line*, --ink*, --cyan* are overridden.
+     --buy/#5eead4, --sell/#ef4444, --wait/#f59e0b are intentionally untouched —
+     they carry directional truth and must remain visually distinct from the danger chrome. */
+  .unleashed {
+    --bg-0: #0a0203;
+    --bg-1: #140406;
+    --bg-2: #1c0608;
+    --bg-3: #240a0c;
+    --bg-4: #2e0d10;
+    --line: #5c1620;
+    --line-2: #7f1d2b;
+    --line-hot: #c0392b;
+    --cyan: #ff5a5a;        /* accent → danger red (#ff5a5a ≠ sell #ef4444) */
+    --cyan-glow: rgba(255, 90, 90, 0.20);
+    --ink: #ffd9dd;
+    --ink-2: #e2a3aa;
+    --ink-3: #b87070;
+    --ink-4: #7f4040;
+    --amber: #f59e0b;       /* semantic amber preserved */
+    --magenta: #c084fc;     /* magenta preserved */
+  }
+  /* Locked non-dismissable warning banner — shown only when unleashed is ON */
+  .unleashed-banner {
+    background: #7f1d1d;
+    color: #ffe4e6;
+    font-weight: 700;
+    padding: 6px 14px;
+    text-align: center;
+    letter-spacing: 0.02em;
+    font-size: 13px;
+    border-bottom: 2px solid #c0392b;
+    position: relative;
+    z-index: 60;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>

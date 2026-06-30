@@ -819,4 +819,31 @@ async function fetchAuditSummary(days = 7) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary };
+/* fetch current Unleashed mode state */
+async function fetchUnleashed() {
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();            // {enabled: bool}
+  } catch (err) {
+    console.warn("[api] fetchUnleashed:", err.message);
+    return { enabled: false };
+  }
+}
+
+/* set Unleashed mode state; returns {status, enabled} */
+async function setUnleashed(enabled) {
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    return (await res.json());
+  } catch (err) {
+    console.warn("[api] setUnleashed:", err.message);
+    return { enabled };
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary, fetchUnleashed, setUnleashed };
