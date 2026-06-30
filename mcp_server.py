@@ -160,11 +160,37 @@ def get_watchlist() -> str:
 
 
 @mcp.tool()
+def get_unleashed_mode() -> str:
+    """
+    Report whether Banshee is in UNLEASHED mode (global, on/off).
+    In unleashed mode, short-term Triggers are surfaced even against the higher-timeframe
+    Bias (htf_bias), labeled with their risk. In conservative mode those are withheld (WAIT).
+    Use this to know which lens the radar/nexus verdicts are currently being read through.
+    """
+    return _get("/unleashed")
+
+
+@mcp.tool()
+def set_unleashed_mode(enabled: bool) -> str:
+    """
+    Flick Banshee UNLEASHED mode on (true) or off (false). GLOBAL and BINARY.
+    Unleashed widens the aperture: it surfaces actionable short-term Triggers (with stated
+    risk) that conservative mode buries under WAIT. It NEVER issues execute instructions —
+    it flags; you decide. The UI turns RED while unleashed. Returns the new state.
+    """
+    return _post("/unleashed", {"enabled": enabled})
+
+
+@mcp.tool()
 def get_asset_radar(symbol: str, mode: str = "swing", output_mode: str = "human") -> str:
     """
     Full multi-timeframe technical analysis for a single asset.
     Calculates: EMA 20/50/200, SuperTrend, Stochastic RSI, VWAP, swing S/R,
     volume pressure, funding rate (crypto), entry quality, and ATR trade plan.
+
+    Response includes htf_bias (dict: direction/conviction), trigger, alignment,
+    unleashed (bool), and — when unleashed — a frame caveat. Read htf_bias and
+    trigger separately rather than collapsing to the single verdict string.
 
     Args:
         symbol:      Ticker — crypto 'BTC/USD', stocks 'NVDA', futures 'GC=F'.
@@ -204,6 +230,10 @@ def synthesize_nexus(symbol: str, mode: str = "swing", use_ai: bool = True, outp
     """
     Full top-down Banshee synthesis: macro regime + micro technicals + news.
     The flagship tool — macro context, catalyst scan, live TA, and AI narrative.
+
+    Response includes htf_bias (dict: direction/conviction), trigger, alignment,
+    unleashed (bool), and — when unleashed — a frame caveat. Read htf_bias and
+    trigger separately rather than collapsing to the single verdict string.
 
     Args:
         symbol:      Ticker to analyze (e.g. 'BTC/USD', 'NVDA', 'SPY').
