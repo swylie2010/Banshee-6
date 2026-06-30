@@ -24,6 +24,7 @@ from core_state import (
     check_ai_budget,
 )
 from shared_data import load_providers, fetch_crypto_ohlcv
+import core_state
 import micro_engine
 import smc_engine
 import risk_engine
@@ -243,13 +244,14 @@ def fetch_all_radar_for_syms(syms: list) -> dict:
     """Fetch radar data for a list of symbols. Returns {sym: radar_result}."""
     cached_macro = _load_macro_cache()
     radar_sensors = cached_macro["mac_data"] if cached_macro and "mac_data" in cached_macro else None
+    _unleashed = core_state.load_unleashed()["enabled"]
     result = {}
     for sym in syms:
         try:
             tfs = get_ohlcv_cached(sym, "swing")
             if not tfs or "error" in tfs:
                 continue
-            r = micro_engine.run_analysis(sym, "swing", tfs, sensors=radar_sensors)
+            r = micro_engine.run_analysis(sym, "swing", tfs, sensors=radar_sensors, unleashed=_unleashed)
             if "error" not in r:
                 result[sym] = r
         except Exception:
@@ -304,6 +306,7 @@ def route_radar(
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
     mode  = MODE_ALIASES.get(mode.lower(), "swing")
+    _unleashed = core_state.load_unleashed()["enabled"]
     _rkey = f"radar:{symbol.upper()}:{mode}"
     _entry = _RESP_CACHE.get(_rkey)
     if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
@@ -317,7 +320,7 @@ def route_radar(
             return f"Error loading data for {symbol}. Check the ticker format."
         cached        = _load_macro_cache()
         radar_sensors = cached["mac_data"] if cached and "mac_data" in cached else None
-        res = micro_engine.run_analysis(symbol, mode, tfs, sensors=radar_sensors)
+        res = micro_engine.run_analysis(symbol, mode, tfs, sensors=radar_sensors, unleashed=_unleashed)
         if "error" in res:
             return f"Analysis error for {symbol}: {res['error']}"
         _RESP_CACHE[_rkey] = {"ts": time.time(), "res": res}
@@ -339,7 +342,11 @@ def route_radar(
             "price":                res["price"],
             "rsi":                  res.get("rsi", 50),
             "chg_pct":              res.get("chg_pct", 0.0),
-            "bias":                 _compute_bias(res.get("trends", {})),
+            "bias":                 res.get("bias", _compute_bias(res.get("trends", {}))),
+            "trigger":              res.get("trigger"),
+            "alignment":            res.get("alignment"),
+            "unleashed":            res.get("unleashed", False),
+            "frame":                res.get("frame", ""),
             "pre_signal":           res.get("pre_signal"),
             "setup_name":           res.get("setup_name"),
             "regime_bucket":        res.get("regime_bucket", "NEUTRAL"),
@@ -371,6 +378,11 @@ def route_radar(
             "price":         res["price"],
             "verdict":       res["verdict"],
             "edge":          res["edge"],
+            "bias":          res.get("bias"),
+            "trigger":       res.get("trigger"),
+            "alignment":     res.get("alignment"),
+            "unleashed":     res.get("unleashed", False),
+            "frame":         res.get("frame", ""),
             "pre_signal":    res.get("pre_signal"),
             "entry_quality": eq.get("quality"),
             "volume":        res.get("volume"),
@@ -454,6 +466,7 @@ def route_radar(
 @router.post("/scan", response_class=PlainTextResponse)
 def route_scan(req: ScanRequest):
     mode = MODE_ALIASES.get(req.mode.lower(), "swing")
+    _unleashed = core_state.load_unleashed()["enabled"]
 
     cached = _load_macro_cache()
     scan_sensors = cached["mac_data"] if cached and "mac_data" in cached else None
@@ -468,7 +481,7 @@ def route_scan(req: ScanRequest):
             tfs = micro_engine.load_and_prepare(sym, mode)
             if not tfs or "error" in tfs:
                 return None, f"{sym}: failed to load data"
-            res = micro_engine.run_analysis(sym, mode, tfs, sensors=scan_sensors)
+            res = micro_engine.run_analysis(sym, mode, tfs, sensors=scan_sensors, unleashed=_unleashed)
             if "error" in res:
                 return None, f"{sym}: {res['error']}"
             return {
@@ -487,6 +500,11 @@ def route_scan(req: ScanRequest):
                 "stop_multiplier":      res.get("stop_multiplier",   1.5),
                 "target_multiplier":    res.get("target_multiplier", 3.0),
                 "chandelier_exit":      res.get("chandelier_exit",   False),
+                "bias":                 res.get("bias"),
+                "trigger":              res.get("trigger"),
+                "alignment":            res.get("alignment"),
+                "unleashed":            res.get("unleashed", False),
+                "frame":                res.get("frame", ""),
             }, None
         except Exception as e:
             return None, f"{sym}: {e}"
@@ -515,6 +533,11 @@ def route_scan(req: ScanRequest):
                     "verdict":       r["verdict"],
                     "edge":          r["edge"],
                     "price":         r["price"],
+                    "bias":          r.get("bias"),
+                    "trigger":       r.get("trigger"),
+                    "alignment":     r.get("alignment"),
+                    "unleashed":     r.get("unleashed", False),
+                    "frame":         r.get("frame", ""),
                     "pre_signal":    r.get("pre_signal"),
                     "entry_quality": r["entry_quality"],
                     "volume":        r["volume"],
@@ -586,13 +609,14 @@ def route_nexus(
     _validate_symbol(symbol)
     from routes.admin import _build_news_context
     mode                 = MODE_ALIASES.get(mode.lower(), "swing")
+    _unleashed = core_state.load_unleashed()["enabled"]
     mac_data, news_lines, events = _build_news_context()
 
     mic_tfs = get_ohlcv_cached(symbol, mode)
     if not mic_tfs or "error" in mic_tfs:
         return f"Error: Failed to load data for {symbol}."
     domino_phase = mac_data.get("domino_phase", 0)
-    mic_data = micro_engine.run_analysis(symbol, mode, mic_tfs, domino_phase=domino_phase, sensors=mac_data)
+    mic_data = micro_engine.run_analysis(symbol, mode, mic_tfs, domino_phase=domino_phase, sensors=mac_data, unleashed=_unleashed)
     if "error" in mic_data:
         return f"Micro analysis error: {mic_data['error']}"
 
@@ -615,6 +639,11 @@ def route_nexus(
             "micro": {
                 "verdict":         mic_data.get("verdict"),
                 "edge":            mic_data.get("edge"),
+                "bias":            mic_data.get("bias"),
+                "trigger":         mic_data.get("trigger"),
+                "alignment":       mic_data.get("alignment"),
+                "unleashed":       mic_data.get("unleashed", False),
+                "frame":           mic_data.get("frame", ""),
                 "pre_signal":      mic_data.get("pre_signal"),
                 "price":           mic_data.get("price"),
                 "setup":           mic_data.get("setup_name"),

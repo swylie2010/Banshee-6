@@ -13,6 +13,7 @@ import micro_engine
 import sector_rotation_engine
 import banshee_ai
 import ledger_engine
+import core_state
 from core_state import _load_macro_cache, _sanitize
 import data_providers as _dp
 from cache_utils import ttl_cache
@@ -205,13 +206,14 @@ def _fetch_radar_for_syms(syms: list) -> dict:
     from routes.analysis import get_ohlcv_cached
     cached_macro = _load_macro_cache()
     radar_sensors = cached_macro["mac_data"] if cached_macro and "mac_data" in cached_macro else None
+    _unleashed = core_state.load_unleashed()["enabled"]
     result = {}
     for sym in syms:
         try:
             tfs = get_ohlcv_cached(sym, "swing")
             if not tfs or "error" in tfs:
                 continue
-            r = micro_engine.run_analysis(sym, "swing", tfs, sensors=radar_sensors)
+            r = micro_engine.run_analysis(sym, "swing", tfs, sensors=radar_sensors, unleashed=_unleashed)
             if "error" not in r:
                 result[sym] = r
         except Exception:

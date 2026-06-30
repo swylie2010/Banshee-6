@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, model_validator
 
 import banshee_ai
+import core_state
 import micro_engine
 import predator_engine
 import sector_rotation_engine
@@ -51,6 +52,10 @@ class SettingsResponse(BaseModel):
 
 class PredatorConfigBody(BaseModel):
     config: dict
+
+
+class UnleashedBody(BaseModel):
+    enabled: bool
 
 
 class PredatorRunRequest(BaseModel):
@@ -256,6 +261,19 @@ def route_predator_config_save(body: PredatorConfigBody):
     return {"status": "saved"}
 
 
+@router.get("/unleashed")
+def route_unleashed_get():
+    """Global Unleashed-mode toggle state."""
+    return core_state.load_unleashed()
+
+
+@router.post("/unleashed")
+def route_unleashed_set(body: UnleashedBody):
+    """Flick Unleashed mode on/off (global)."""
+    core_state.save_unleashed({"enabled": body.enabled})
+    return {"status": "saved", "enabled": body.enabled}
+
+
 @router.post("/predator/run")
 def route_predator_run(req: PredatorRunRequest):
     """Trigger a Daily Predator cycle."""
@@ -363,6 +381,7 @@ def route_ai_briefing(req: AIBriefingRequest):
         req.symbol, mode, tfs,
         domino_phase=mac_data.get("domino_phase", 0),
         sensors=mac_data,
+        unleashed=core_state.load_unleashed()["enabled"],
     )
     if "error" in mic_data:
         return f"Micro analysis error: {mic_data['error']}"
