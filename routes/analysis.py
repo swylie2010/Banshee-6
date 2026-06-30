@@ -699,7 +699,7 @@ def route_nexus(
         prompt   = banshee_ai.build_banshee_prompt(
             mac_data, mic_data, news_lines, manual_stories=[], include_macro=True
         )
-        briefing = banshee_ai.call_ai_briefing(cfg, prompt)
+        briefing = banshee_ai.call_ai_briefing(cfg, prompt, unleashed=_unleashed)
         out += f"\n\n{'─' * 60}\nAI BRIEFING ({cfg.get('type', 'AI')} / {cfg.get('model', '')}):\n{'─' * 60}\n{briefing}"
     elif use_ai:
         out += (

@@ -115,6 +115,21 @@ def build_banshee_prompt(macro_data: dict, micro_data: dict, news_lines: list = 
         if asym.get("reasons"):
             prompt += "Asymmetry Rationale: " + " | ".join(asym["reasons"]) + "\n"
 
+    bias = micro_data.get("bias")
+    trig = micro_data.get("trigger")
+    if bias and trig:
+        prompt += "\nTIMEFRAME-SEPARATED READ (do not collapse these):\n"
+        prompt += f"BIAS (higher timeframe): {bias.get('direction')} / {bias.get('conviction')}\n"
+        ext = trig.get("extended_reading", {})
+        prompt += f"TRIGGER (lower timeframe): {trig.get('direction')} (actionable={trig.get('actionable')})\n"
+        if ext.get("momentum_note"):
+            prompt += f"  - momentum: {ext['momentum_note']}\n"
+        if ext.get("mean_reversion_note"):
+            prompt += f"  - risk: {ext['mean_reversion_note']}\n"
+        prompt += f"ALIGNMENT: {micro_data.get('alignment')}\n"
+        if micro_data.get("frame"):
+            prompt += f"FRAME: {micro_data['frame']}\n"
+
     prompt += f"\nTrend Alignment:\n- {slow} Trend: {trends.get(slow, 'UNKNOWN')}\n- {mid} Trend: {trends.get(mid, 'UNKNOWN')}\n- {fast} Trend: {trends.get(fast, 'UNKNOWN')}\n\n"
     
     if funding.get("available"):
@@ -284,12 +299,28 @@ def build_macro_prompt(macro_data: dict, news_lines: list = [], rotation_context
     return prompt
 
 
-def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
+_UNLEASHED_OVERRIDE = (
+    "\n\n--- UNLEASHED OVERRIDE ---\n"
+    "You are in UNLEASHED mode. Make the short-term call directly; do not hedge it into a "
+    "non-answer. Evaluate SHORTS and LONGS symmetrically. When the higher-timeframe Bias and "
+    "the lower-timeframe Trigger conflict, state BOTH explicitly — e.g. 'Long-term bias: X; "
+    "short-term trigger: Y here, with risk Z.' These are short-term possibilities, not safe "
+    "trades; you surface and state the risk, the human/agent decides. Never instruct an execution."
+)
+
+
+def _apply_unleashed_override(system_prompt: str, unleashed: bool) -> str:
+    """Append the UNLEASHED OVERRIDE block to the system prompt when unleashed=True."""
+    return system_prompt + _UNLEASHED_OVERRIDE if unleashed else system_prompt
+
+
+def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None, unleashed: bool = False) -> str:
     """Execute an AI request against whichever provider is configured in Settings.
 
     Supports: Gemini, Claude/Anthropic, OpenAI, Ollama + any OpenAI-compatible provider
     (Groq, LM Studio, Jan, OpenRouter, etc.) via the Ollama/Custom path.
     Pass system_prompt_override to replace the default Banshee system prompt.
+    Pass unleashed=True to append the UNLEASHED OVERRIDE block to the system prompt.
     """
     system_prompt = system_prompt_override or (
         _load_prompt("default",
@@ -297,6 +328,7 @@ def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
             "Format briefings exactly as requested."
         ) + _EXTERNAL_CONTENT_GUARD
     )
+    system_prompt = _apply_unleashed_override(system_prompt, unleashed)
     provider = cfg.get("type", "").lower()
     try:
         if provider == "gemini":
@@ -380,7 +412,7 @@ def _split_prompt(prompt: str) -> list:
     ]
 
 
-def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = None) -> str:
+def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = None, unleashed: bool = False) -> str:
     """Sip mode: deliver sections sequentially with rolling WORKING_NOTES."""
     accumulated_notes = ""
     last_response = ""
@@ -403,7 +435,7 @@ def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = Non
                 "compact but complete enough for your next analysis to build on."
             )
 
-        last_response = call_ai(cfg, chunk_prompt, system_prompt_override)
+        last_response = call_ai(cfg, chunk_prompt, system_prompt_override, unleashed=unleashed)
 
         if not is_last and "WORKING_NOTES:" in last_response:
             notes = last_response.split("WORKING_NOTES:")[-1].strip()
@@ -412,11 +444,11 @@ def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = Non
     return last_response
 
 
-def call_ai_briefing(cfg: dict, prompt: str, system_prompt_override: str = None) -> str:
+def call_ai_briefing(cfg: dict, prompt: str, system_prompt_override: str = None, unleashed: bool = False) -> str:
     """Auto-route: single-shot if payload fits the chunk budget, chunked otherwise."""
     if _estimate_tokens(prompt) > CHUNK_BUDGET:
-        return call_ai_chunked(cfg, _split_prompt(prompt), system_prompt_override)
-    return call_ai(cfg, prompt, system_prompt_override)
+        return call_ai_chunked(cfg, _split_prompt(prompt), system_prompt_override, unleashed=unleashed)
+    return call_ai(cfg, prompt, system_prompt_override, unleashed=unleashed)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -615,7 +647,7 @@ Work through these steps in order:
 """
 
 
-_SMC_SYSTEM_PROMPT = (
+_SMC_SYSTEM_PROMPT_FALLBACK = (
     "You are Banshee's SMC Structure Analyst — a Smart Money Concepts specialist.\n"
     "Your job: read market structure across two timeframes and produce a concise, "
     "grounded narrative for a human trader.\n\n"
@@ -624,7 +656,7 @@ _SMC_SYSTEM_PROMPT = (
     "2. Be direct and specific. Reference actual price levels from the data.\n"
     "3. No hedging with 'may' or 'might' unless the data is genuinely ambiguous.\n"
     "4. If HTF and LTF conflict, call it out explicitly — that IS a signal.\n"
-    "5. You are reading structure, not recommending trades.\n"
+    "5. State the actionable read directly: name the most probable next move and the level that confirms or invalidates it. You surface the setup and its risk — you do not place the trade.\n"
     "6. Keep the total response under 300 words.\n"
     "7. Every SMC term (CHoCH, BOS, OB, FVG, OTE, EQH, EQL, etc.) must be followed "
     "by a plain-English clarification in parentheses on first use. "
@@ -640,12 +672,15 @@ _SMC_SYSTEM_PROMPT = (
     "**SCENARIO:** [what this structural setup points to — the most probable next move]"
 )
 
+_SMC_SYSTEM_PROMPT = _load_prompt("smc", _SMC_SYSTEM_PROMPT_FALLBACK)
+
 
 def smc_analysis(symbol: str,
                  htf_tf: str, htf_df, htf_smc: dict,
                  ltf_tf: str, ltf_df, ltf_smc: dict,
                  cfg: dict,
-                 flat_levels: list = None) -> str:
+                 flat_levels: list = None,
+                 unleashed: bool = False) -> str:
     """
     Generate an AI narrative for SMC cross-timeframe structure.
 
@@ -656,13 +691,14 @@ def smc_analysis(symbol: str,
       cfg              — AI provider config dict (from load_providers())
       flat_levels      — optional list from smc_engine.flatten_levels(); if provided,
                          nearby named reference levels are included in the AI context
+      unleashed        — when True, appends UNLEASHED OVERRIDE to the SMC system prompt
 
     Returns the narrative string or an error message prefixed with "AI call failed:".
     """
     prompt = build_smc_prompt(symbol, htf_tf, htf_df, htf_smc,
                               ltf_tf, ltf_df, ltf_smc,
                               flat_levels=flat_levels)
-    return call_ai(cfg, prompt, system_prompt_override=_SMC_SYSTEM_PROMPT)
+    return call_ai(cfg, prompt, system_prompt_override=_SMC_SYSTEM_PROMPT, unleashed=unleashed)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
