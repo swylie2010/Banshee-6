@@ -307,7 +307,7 @@ def route_radar(
     _validate_symbol(symbol)
     mode  = MODE_ALIASES.get(mode.lower(), "swing")
     _unleashed = core_state.load_unleashed()["enabled"]
-    _rkey = f"radar:{symbol.upper()}:{mode}"
+    _rkey = f"radar:{symbol.upper()}:{mode}:{int(_unleashed)}"
     _entry = _RESP_CACHE.get(_rkey)
     if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
         res    = _entry["res"]
@@ -534,7 +534,7 @@ def route_scan(req: ScanRequest):
                     "verdict":       r["verdict"],
                     "edge":          r["edge"],
                     "price":         r["price"],
-                    "htf_bias":      r.get("bias"),
+                    "htf_bias":      r.get("htf_bias"),
                     "trigger":       r.get("trigger"),
                     "alignment":     r.get("alignment"),
                     "unleashed":     r.get("unleashed", False),
