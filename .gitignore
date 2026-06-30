@@ -66,3 +66,6 @@ Thumbs.db
 ui/node_modules/
 ui/dist/
 dist/
+
+# Local working-memory archives (never ship)
+ACTIVE_TASK_ARCHIVE*.md

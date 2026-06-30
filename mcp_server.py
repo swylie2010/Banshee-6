@@ -203,6 +203,7 @@ def get_asset_radar(symbol: str, mode: str = "swing", output_mode: str = "human"
         {"symbol": symbol, "mode": mode, "output_mode": output_mode},
         RadarSchema,
         lambda p: _get("/radar", symbol=p["symbol"], mode=p["mode"], output_mode=p["output_mode"]),
+        signal_field="verdict",
     )
 
 
@@ -246,6 +247,7 @@ def synthesize_nexus(symbol: str, mode: str = "swing", use_ai: bool = True, outp
         {"symbol": symbol, "mode": mode, "use_ai": use_ai, "output_mode": output_mode},
         NexusSchema,
         lambda p: _get("/nexus", symbol=p["symbol"], mode=p["mode"], use_ai=p["use_ai"], output_mode=p["output_mode"]),
+        signal_field="verdict",
     )
 
 
