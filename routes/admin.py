@@ -368,6 +368,7 @@ def route_ai_briefing(req: AIBriefingRequest):
             htf_tf=htf_tf, htf_df=htf_df, htf_smc=htf_smc,
             ltf_tf=ltf_tf, ltf_df=ltf_df, ltf_smc=ltf_smc,
             cfg=cfg, flat_levels=flat_levels,
+            unleashed=core_state.load_unleashed()["enabled"],
         )
 
     # ── GH + Nexus tabs: macro/micro synthesis pathway ────────────────────────
@@ -436,11 +437,12 @@ def route_ai_briefing(req: AIBriefingRequest):
         except Exception:
             pass
 
+    _unleashed = core_state.load_unleashed()["enabled"]
     prompt = banshee_ai.build_banshee_prompt(
         mac_data, mic_data, news_lines, req.manual_stories, include_macro=True,
         geo_harmonic_context=geo_harmonic_context, tab=req.tab,
     )
-    return banshee_ai.call_ai_briefing(cfg, prompt)
+    return banshee_ai.call_ai_briefing(cfg, prompt, unleashed=_unleashed)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

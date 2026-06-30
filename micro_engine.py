@@ -788,6 +788,7 @@ def compute_verdict(trend_slow, trend_mid, trend_fast,
     # edge) but an actionable lower-timeframe Trigger exists, Unleashed surfaces it
     # as a setup (the buried short-term read). Non-WAIT verdicts are left intact in
     # both modes — Unleashed never flips or downgrades a verdict the engine produced.
+    # Fires on any actionable Trigger under a WAIT (neutral OR conflicting Bias), by design — broader than the plan's conflict-only text; conservative directional verdicts are guarded by test_conservative_conflict_verdict_unchanged.
     if unleashed and verdict == "WAIT — NO TRADE":
         _bta_cv = compute_bias_trigger_alignment(
             trend_slow, trend_mid, trend_fast,

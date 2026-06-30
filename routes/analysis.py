@@ -985,6 +985,7 @@ def route_smc(
             htf_tf=htf, htf_df=htf_df, htf_smc=htf_data,
             ltf_tf=ltf, ltf_df=ltf_df, ltf_smc=ltf_data,
             cfg=ai_cfg,
+            unleashed=core_state.load_unleashed()["enabled"],
         )
         out += f"\n\n{'─' * 50}\nAI STRUCTURE NARRATIVE:\n{'─' * 50}\n{narrative}"
     elif use_ai:
@@ -1046,6 +1047,7 @@ def route_smc_json(
                     htf_tf=htf, htf_df=htf_df, htf_smc=htf_smc,
                     ltf_tf=ltf, ltf_df=ltf_df, ltf_smc=ltf_smc,
                     cfg=ai_cfg, flat_levels=flat_levels,
+                    unleashed=core_state.load_unleashed()["enabled"],
                 )
             except Exception as e:
                 ai_narrative = f"AI error: {e}"

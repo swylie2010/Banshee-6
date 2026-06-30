@@ -126,7 +126,7 @@ def build_banshee_prompt(macro_data: dict, micro_data: dict, news_lines: list = 
             prompt += f"  - momentum: {ext['momentum_note']}\n"
         if ext.get("mean_reversion_note"):
             prompt += f"  - risk: {ext['mean_reversion_note']}\n"
-        prompt += f"ALIGNMENT: {micro_data.get('alignment')}\n"
+        prompt += f"ALIGNMENT: {micro_data.get('alignment', 'neutral')}\n"
         if micro_data.get("frame"):
             prompt += f"FRAME: {micro_data['frame']}\n"
 
