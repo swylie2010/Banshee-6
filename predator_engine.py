@@ -1081,6 +1081,32 @@ def today_briefing_exists() -> bool:
     return load_briefing_by_date(today) is not None
 
 
+# Morning gate for the background freshness loop: 8am local is before most market
+# opens but late enough to capture fresh pre-market news — and it stops a machine
+# left on overnight from firing a pointless run just after midnight.
+_AUTO_REFRESH_HOUR = 8
+
+
+def should_auto_refresh(hour_local: int, briefing_exists_today: bool, has_ai_key: bool) -> bool:
+    """Whether the background loop should auto-run today's Daily Predator.
+
+    True only when today's briefing is missing, an AI key is configured to run it,
+    and it's past the 8am-local morning gate. Pure function so the branch logic is
+    unit-testable without threads, network, or AI calls.
+    """
+    return (not briefing_exists_today) and has_ai_key and (hour_local >= _AUTO_REFRESH_HOUR)
+
+
+def briefing_is_stale(briefing) -> bool:
+    """True when a briefing is missing or not from today's (UTC) date — i.e. the
+    news the user is looking at is not current. Mirrors the UTC 'today' used by
+    today_briefing_exists()."""
+    if not briefing:
+        return True
+    today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+    return briefing.get("date") != today
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # FULL PIPELINE
 # ─────────────────────────────────────────────────────────────────────────────

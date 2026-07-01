@@ -141,6 +141,12 @@ function NewsPage({ onBack, manualStories = [], setManualStories }) {
   const TONE_COLOR = { BULLISH: "var(--buy)", BEARISH: "var(--sell)", NEUTRAL: "var(--ink-4)", MIXED: "var(--amber)" };
   const toneColor = TONE_COLOR[briefing?.macro_tone] || "var(--ink-4)";
 
+  // Staleness: briefings are dated in UTC (see predator_engine), so compare against
+  // the UTC date. When the loaded briefing isn't today's, we say so plainly rather
+  // than letting the user assume the news is current.
+  const utcToday = new Date().toISOString().slice(0, 10);
+  const stale = !!(briefing && briefing.date && briefing.date !== utcToday);
+
   const riskDots = (level) => {
     const colors = ["#4caf50","#8bc34a","var(--amber)","#ff9800","var(--sell)"];
     return Array.from({ length: 5 }, (_, i) => (
@@ -190,6 +196,21 @@ function NewsPage({ onBack, manualStories = [], setManualStories }) {
           </div>
         ) : (
           <>
+            {/* Staleness warning — the briefing on screen is not from today */}
+            {stale && (
+              <div className="mono" style={{ fontSize: 12, color: "var(--amber)",
+                background: "rgba(255,193,7,0.08)", border: "1px solid var(--amber)", borderRadius: 4,
+                padding: "8px 12px", marginBottom: 14, display: "flex", alignItems: "center",
+                justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+                <span>⚠ Showing news from {briefing.date} — not today's. Auto-refreshes each morning after 8am local.</span>
+                <button onClick={handleRun} disabled={running}
+                  style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.1em",
+                    background: "var(--amber)", color: "#000", border: "none", padding: "3px 10px",
+                    borderRadius: 3, cursor: running ? "default" : "pointer" }}>
+                  {running ? "◌ refreshing…" : "↻ refresh now"}
+                </button>
+              </div>
+            )}
             {/* Masthead */}
             <div style={{ textAlign: "center", marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
               <div className="mono" style={{ fontSize: 18, fontWeight: 700, letterSpacing: "0.3em", color: "var(--ink)" }}>THE DAILY PREDATOR</div>

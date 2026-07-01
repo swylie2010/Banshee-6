@@ -14,7 +14,9 @@ JSON endpoints (/macro/sensors, /ohlcv, /smc/json, /predator/*, /ai/briefing) re
 import os
 import sys
 import json
+import time
 import uuid
+import threading
 import secrets as _secrets
 from datetime import datetime, timezone
 from pathlib import Path
@@ -364,7 +366,34 @@ def _init_token():
     _BANSHEE_TOKEN = p["banshee_token"]
 
 
+def _maybe_refresh_predator():
+    """One freshness check: run today's Daily Predator if it's missing, an AI key
+    is configured, and it's past the 8am-local gate. Best-effort — the analysis
+    path reads whatever briefing is current, so freshness must never disturb the
+    server or block a request."""
+    try:
+        import predator_engine
+        ai_cfg  = (load_providers() or {}).get("AI_API")
+        has_key = bool(ai_cfg and ai_cfg.get("key"))
+        if predator_engine.should_auto_refresh(datetime.now().hour,
+                                               predator_engine.today_briefing_exists(),
+                                               has_key):
+            predator_engine.run_daily_cycle(ai_cfg, force=False)
+    except Exception:
+        pass  # freshness is best-effort; never crash the Core
+
+
+def _predator_freshness_loop():
+    """Daemon: keep today's Predator briefing fresh without a manual click. Fires
+    shortly after boot (covers a fresh launch) and rechecks every 30 min (covers a
+    machine left running across midnight — the first post-8am check runs the day)."""
+    while True:
+        _maybe_refresh_predator()
+        time.sleep(30 * 60)
+
+
 if __name__ == "__main__":
     _init_token()
+    threading.Thread(target=_predator_freshness_loop, daemon=True).start()
     print(f"Banshee Core starting on http://127.0.0.1:{PORT}")
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
