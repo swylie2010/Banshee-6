@@ -10,6 +10,7 @@ import os
 import time
 import threading
 import traceback
+import secrets
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,18 @@ _MACRO_CACHE_LOCK    = threading.Lock()
 _KILL_SWITCH_LOCK    = threading.Lock()
 _UNLEASHED_FILE      = Path.home() / ".banshee_unleashed.json"
 _UNLEASHED_LOCK      = threading.Lock()
+
+# ── Unleashed prompt profiles (editable override layer) ──────────────────────
+DEFAULT_UNLEASHED_OVERRIDE = (
+    "\n\n--- UNLEASHED OVERRIDE ---\n"
+    "You are in UNLEASHED mode. Make the short-term call directly; do not hedge it into a "
+    "non-answer. Evaluate SHORTS and LONGS symmetrically. When the higher-timeframe Bias and "
+    "the lower-timeframe Trigger conflict, state BOTH explicitly — e.g. 'Long-term bias: X; "
+    "short-term trigger: Y here, with risk Z.' These are short-term possibilities, not safe "
+    "trades; you surface and state the risk, the human/agent decides. Never instruct an execution."
+)
+_UNLEASHED_PROFILES_FILE = Path.home() / ".banshee_unleashed_profiles.json"
+_UNLEASHED_PROFILES_LOCK = threading.Lock()
 
 
 # ── Pure utility functions ────────────────────────────────────────────────────
@@ -170,6 +183,96 @@ def save_unleashed(state: dict) -> None:
             _UNLEASHED_FILE.write_text(json.dumps({"enabled": bool(state.get("enabled", False))}, indent=2))
     except Exception:
         pass
+
+
+def _default_unleashed_profiles() -> dict:
+    return {
+        "active": "default",
+        "profiles": {
+            "default": {
+                "name": "Default Unleashed",
+                "override": DEFAULT_UNLEASHED_OVERRIDE,
+                "locked": True,
+            }
+        },
+    }
+
+
+def load_unleashed_profiles() -> dict:
+    """Editable Unleashed override profiles. The Default profile is always present,
+    locked, and its override is force-reset to the canonical constant — the immutable
+    safety net. Falls back to a fresh Default set on any read/parse error."""
+    data = None
+    try:
+        if _UNLEASHED_PROFILES_FILE.exists():
+            loaded = json.loads(_UNLEASHED_PROFILES_FILE.read_text())
+            if isinstance(loaded, dict) and isinstance(loaded.get("profiles"), dict):
+                data = loaded
+    except Exception:
+        data = None
+    if data is None:
+        return _default_unleashed_profiles()
+    # Enforce the Default invariant every load.
+    data["profiles"]["default"] = {
+        "name": "Default Unleashed",
+        "override": DEFAULT_UNLEASHED_OVERRIDE,
+        "locked": True,
+    }
+    if data.get("active") not in data["profiles"]:
+        data["active"] = "default"
+    return data
+
+
+def save_unleashed_profiles(data: dict) -> None:
+    try:
+        with _UNLEASHED_PROFILES_LOCK:
+            _UNLEASHED_PROFILES_FILE.write_text(json.dumps(data, indent=2))
+    except Exception:
+        pass
+
+
+def get_active_unleashed_override() -> str:
+    data = load_unleashed_profiles()
+    prof = data["profiles"].get(data["active"]) or data["profiles"]["default"]
+    return prof.get("override", DEFAULT_UNLEASHED_OVERRIDE)
+
+
+def get_active_unleashed_profile() -> dict:
+    data = load_unleashed_profiles()
+    prof = data["profiles"].get(data["active"], data["profiles"]["default"])
+    return {"id": data["active"], "name": prof.get("name", "Default Unleashed")}
+
+
+def upsert_unleashed_profile(pid, name: str, override: str) -> dict:
+    if pid == "default":
+        return {"ok": False, "error": "The Default Unleashed profile is locked and cannot be edited."}
+    data = load_unleashed_profiles()
+    if not pid:
+        pid = "u_" + secrets.token_hex(3)
+    data["profiles"][pid] = {"name": name, "override": override}
+    save_unleashed_profiles(data)
+    return {"ok": True, "id": pid}
+
+
+def delete_unleashed_profile(pid: str) -> dict:
+    if pid == "default":
+        return {"ok": False, "error": "The Default Unleashed profile cannot be deleted."}
+    data = load_unleashed_profiles()
+    if pid in data["profiles"]:
+        del data["profiles"][pid]
+        if data.get("active") == pid:
+            data["active"] = "default"
+        save_unleashed_profiles(data)
+    return {"ok": True}
+
+
+def set_active_unleashed_profile(pid: str) -> dict:
+    data = load_unleashed_profiles()
+    if pid not in data["profiles"]:
+        return {"ok": False, "error": f"No such profile: {pid}"}
+    data["active"] = pid
+    save_unleashed_profiles(data)
+    return {"ok": True, "active": pid}
 
 
 def _log_error(context: str, exc: Exception) -> None:
