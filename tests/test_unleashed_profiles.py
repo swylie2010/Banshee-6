@@ -29,6 +29,14 @@ def test_upsert_creates_and_activates(tmp_path, monkeypatch):
     assert core_state.get_active_unleashed_profile() == {"id": pid, "name": "My Setting 1"}
 
 
+def test_created_profile_has_locked_false(tmp_path, monkeypatch):
+    _patch(tmp_path, monkeypatch)
+    pid = core_state.upsert_unleashed_profile(None, "Custom", "OV")["id"]
+    prof = core_state.load_unleashed_profiles()["profiles"][pid]
+    # Stored shape matches the documented {name, override, locked} contract.
+    assert prof == {"name": "Custom", "override": "OV", "locked": False}
+
+
 def test_cannot_edit_locked_default(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
     res = core_state.upsert_unleashed_profile("default", "Hacked", "evil")

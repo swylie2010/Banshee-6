@@ -248,8 +248,14 @@ def upsert_unleashed_profile(pid, name: str, override: str) -> dict:
         return {"ok": False, "error": "The Default Unleashed profile is locked and cannot be edited."}
     data = load_unleashed_profiles()
     if not pid:
+        # token_hex(3) is plenty of entropy for a handful of profiles; the loop
+        # guards against the astronomically unlikely collision so we never clobber.
         pid = "u_" + secrets.token_hex(3)
-    data["profiles"][pid] = {"name": name, "override": override}
+        while pid in data["profiles"]:
+            pid = "u_" + secrets.token_hex(3)
+    # Custom profiles carry locked=False so every stored entry matches the
+    # documented {name, override, locked} shape (Default is the only locked one).
+    data["profiles"][pid] = {"name": name, "override": override, "locked": False}
     save_unleashed_profiles(data)
     return {"ok": True, "id": pid}
 
