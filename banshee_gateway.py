@@ -13,6 +13,7 @@ Schemas live here alongside the gateway class — one model per tool.
 import datetime
 import json
 import pathlib
+import re
 import secrets
 import time
 from typing import Callable, Optional, Type
@@ -200,15 +201,37 @@ def _session_suffix(token: str) -> str:
 
 
 def _extract_signal(response_text: str, signal_field: Optional[str]) -> Optional[str]:
+    """Pull the tool's headline signal for the audit log.
+
+    A tool opts in by naming its signal_field (e.g. "verdict"). The value has to
+    be recovered from whichever shape the tool actually returned:
+      • JSON (output_mode='agent'/'full') → the top-level signal_field key.
+      • Plain text (output_mode='human', the DEFAULT) → the "<LABEL>: value" line,
+        where LABEL is the field name upper-cased. An optional leading word is
+        tolerated so "verdict" matches both "VERDICT:" and "MICRO VERDICT:".
+        The value ends at the first '|' or '(' delimiter or end of line.
+    Returns None when the field is absent — most calls are human-mode text, so the
+    text path is what keeps the Observatory signal column from being always empty.
+    """
     if not signal_field:
         return None
+    # 1) Structured JSON response.
     try:
         data = json.loads(response_text)
         if isinstance(data, dict):
             val = data.get(signal_field)
-            return str(val) if val is not None else None
+            if val is not None:
+                sig = str(val).strip()
+                return sig or None
     except Exception:
         pass
+    # 2) Human-narrative text.
+    label = re.escape(signal_field.upper())
+    m = re.search(rf"(?im)^\s*(?:[A-Z]+\s+)?{label}:\s*(.+?)\s*(?:\||\(|$)", response_text)
+    if m:
+        sig = m.group(1).strip()
+        if sig:
+            return sig
     return None
 
 

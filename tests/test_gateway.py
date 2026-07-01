@@ -118,6 +118,68 @@ def test_anon_session_when_no_token(tmp_audit):
     assert entry["session"] == "anon"
 
 
+# ── Signal extraction (Observatory signal_field) ──────────────────────────────
+# The audit "signal" is the tool's headline verdict. A tool must (a) opt in by
+# passing signal_field and (b) actually surface that value in its response —
+# which for the default output_mode='human' is a text line, not JSON.
+
+def test_signal_extracted_from_json_response(tmp_audit):
+    """output_mode='agent' returns JSON — read the top-level key."""
+    g = _make_gateway()
+    g.call("get_asset_radar", {"symbol": "NVDA", "mode": "swing", "output_mode": "agent"},
+           gw.RadarSchema, lambda p: json.dumps({"verdict": "STRONG BUY", "edge": 7}),
+           signal_field="verdict")
+    entry = json.loads(tmp_audit.read_text().strip())
+    assert entry["outcome"]["signal"] == "STRONG BUY"
+
+
+def test_signal_extracted_from_human_text_radar(tmp_audit):
+    """output_mode='human' (the default) is narrative text — scan the VERDICT line."""
+    g = _make_gateway()
+    human = "\n".join([
+        "[cache: live]",
+        "ASSET: NVDA  |  PRICE: $123.4500",
+        "VERDICT: STRONG BUY  |  EDGE SCORE: 7",
+        "ENTRY QUALITY: GOOD",
+    ])
+    g.call("get_asset_radar", {"symbol": "NVDA", "mode": "swing", "output_mode": "human"},
+           gw.RadarSchema, lambda p: human, signal_field="verdict")
+    entry = json.loads(tmp_audit.read_text().strip())
+    assert entry["outcome"]["signal"] == "STRONG BUY"
+
+
+def test_signal_extracted_from_human_text_nexus(tmp_audit):
+    """Nexus labels its verdict 'MICRO VERDICT:' — the label prefix is tolerated."""
+    g = _make_gateway()
+    human = "\n".join([
+        "MACRO REGIME: NEUTRAL",
+        "MICRO VERDICT: BUY SETUP  (Edge: 5)",
+        "NARRATIVE: ...",
+    ])
+    g.call("synthesize_nexus", {"symbol": "BTC/USD", "mode": "swing"},
+           gw.NexusSchema, lambda p: human, signal_field="verdict")
+    entry = json.loads(tmp_audit.read_text().strip())
+    assert entry["outcome"]["signal"] == "BUY SETUP"
+
+
+def test_no_signal_field_means_no_signal(tmp_audit):
+    """A tool that never opts in logs no signal, even if its text has a VERDICT line."""
+    g = _make_gateway()
+    g.call("get_regime", {}, None, lambda p: "VERDICT: STRONG BUY  |  X")
+    entry = json.loads(tmp_audit.read_text().strip())
+    assert "signal" not in entry["outcome"]
+
+
+def test_signal_absent_when_text_has_no_verdict(tmp_audit):
+    """Opted-in tool whose response carries no verdict logs no signal (not a crash)."""
+    g = _make_gateway()
+    g.call("get_asset_radar", {"symbol": "NVDA", "mode": "swing", "output_mode": "human"},
+           gw.RadarSchema, lambda p: "ASSET: NVDA  |  PRICE: $1.00\nNO SIGNAL LINE HERE",
+           signal_field="verdict")
+    entry = json.loads(tmp_audit.read_text().strip())
+    assert "signal" not in entry["outcome"]
+
+
 # ── Schema-specific validation ─────────────────────────────────────────────────
 
 def test_nexus_rejects_invalid_mode(tmp_audit):

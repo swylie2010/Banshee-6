@@ -1,4 +1,5 @@
 """tests/test_audit_routes.py — tests for GET /audit/entries and GET /audit/summary."""
+import datetime
 import json
 import pathlib
 import pytest
@@ -6,6 +7,17 @@ from fastapi.testclient import TestClient
 
 import banshee_gateway as gw
 import banshee_core as bc
+
+
+def _recent_ts(minutes_ago=0):
+    """A UTC audit timestamp inside the summary's rolling window.
+
+    Summary tests assert on aggregates, not on absolute dates, so their entries
+    must simply be recent. Hardcoded dates silently age out of the `days` window
+    and turn these into time-bombs — anchor to now instead.
+    """
+    dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=minutes_ago)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @pytest.fixture()
@@ -95,13 +107,13 @@ def test_summary_empty_log(client, tmp_audit):
 
 def test_summary_counts_tools(client, tmp_audit):
     _write_entries(tmp_audit, [
-        {"id": "aud_1", "ts": "2026-06-20T10:00:00Z", "tool": "synthesize_nexus",
+        {"id": "aud_1", "ts": _recent_ts(180), "tool": "synthesize_nexus",
          "session": "anon", "request": {"symbol": "AAPL"}, "validation": {"passed": True, "rules_checked": [], "violations": []},
          "outcome": {"status": "success", "duration_ms": 300}},
-        {"id": "aud_2", "ts": "2026-06-20T11:00:00Z", "tool": "synthesize_nexus",
+        {"id": "aud_2", "ts": _recent_ts(120), "tool": "synthesize_nexus",
          "session": "anon", "request": {"symbol": "NVDA"}, "validation": {"passed": True, "rules_checked": [], "violations": []},
          "outcome": {"status": "success", "duration_ms": 280}},
-        {"id": "aud_3", "ts": "2026-06-20T12:00:00Z", "tool": "get_regime",
+        {"id": "aud_3", "ts": _recent_ts(60), "tool": "get_regime",
          "session": "anon", "request": {}, "validation": {"passed": True, "rules_checked": [], "violations": []},
          "outcome": {"status": "success", "duration_ms": 40}},
     ])
@@ -115,11 +127,11 @@ def test_summary_counts_tools(client, tmp_audit):
 
 def test_summary_validation_failure_rate(client, tmp_audit):
     _write_entries(tmp_audit, [
-        {"id": "aud_1", "ts": "2026-06-20T10:00:00Z", "tool": "get_asset_radar",
+        {"id": "aud_1", "ts": _recent_ts(120), "tool": "get_asset_radar",
          "session": "anon", "request": {"symbol": "AAPL", "mode": "badmode"},
          "validation": {"passed": False, "rules_checked": [], "violations": [{"rule": "mode"}]},
          "outcome": {"status": "rejected", "duration_ms": 0}},
-        {"id": "aud_2", "ts": "2026-06-20T11:00:00Z", "tool": "get_regime",
+        {"id": "aud_2", "ts": _recent_ts(60), "tool": "get_regime",
          "session": "anon", "request": {}, "validation": {"passed": True, "rules_checked": [], "violations": []},
          "outcome": {"status": "success", "duration_ms": 40}},
     ])
@@ -130,10 +142,10 @@ def test_summary_validation_failure_rate(client, tmp_audit):
 
 def test_summary_top_tickers(client, tmp_audit):
     _write_entries(tmp_audit, [
-        {"id": "aud_1", "ts": "2026-06-20T10:00:00Z", "tool": "synthesize_nexus",
+        {"id": "aud_1", "ts": _recent_ts(120), "tool": "synthesize_nexus",
          "session": "anon", "request": {"symbol": "AAPL"}, "validation": {"passed": True, "rules_checked": [], "violations": []},
          "outcome": {"status": "success", "duration_ms": 300}},
-        {"id": "aud_2", "ts": "2026-06-20T11:00:00Z", "tool": "get_asset_radar",
+        {"id": "aud_2", "ts": _recent_ts(60), "tool": "get_asset_radar",
          "session": "anon", "request": {"symbol": "AAPL"}, "validation": {"passed": True, "rules_checked": [], "violations": []},
          "outcome": {"status": "success", "duration_ms": 200}},
     ])
