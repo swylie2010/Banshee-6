@@ -236,6 +236,25 @@ function ManualPage({ onBack }) {
           </div>
         </div>
 
+        {/* UNLEASHED PROMPT PROFILES */}
+        <div style={CARD}>
+          <ManSectionHdr title="UNLEASHED PROMPT PROFILES" accent="var(--sell)" sub="SETTINGS · UNLEASHED PROMPT PROFILES" />
+          <div style={{ padding: "14px 16px" }}>
+            <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.7, marginBottom: 14 }}>
+              Prompt Profiles let you rewrite how Banshee's AI talks — but only inside Unleashed mode. Standard Banshee always runs the safe Default prompt, which you cannot change; that safety never goes away. A profile only edits the Unleashed OVERRIDE layer that gets added on top of the base analysis. The base prompt (including Banshee's defense against manipulative news text) stays intact underneath — your edits can't remove it.
+            </div>
+            <div style={{ background: "var(--bg-3)", border: "1px solid var(--line)", padding: "10px 14px", marginBottom: 12 }}>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.1em", marginBottom: 8 }}>HOW TO USE IT</div>
+              <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.75 }}>
+                Settings → Unleashed Prompt Profiles. Duplicate the Default, rename it, and edit. Set it active, then flip Unleashed ON — the RED frame will show which profile is live. Reset to Default text anytime; the Default profile itself can never be edited or deleted.
+              </div>
+            </div>
+            <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.06em", lineHeight: 1.7 }}>
+              Tips: the override is read by BOTH the Nexus briefing and the SMC narrative, so write guidance that makes sense for each — Nexus reasons over macro + micro + news, while SMC reasons over structure (order blocks, FVGs, BOS/CHoCH). Keep the spirit of Unleashed: surface short-term possibilities and STATE THE RISK; never instruct an execution. The wilder the prompt, the more you should sanity-check the output.
+            </div>
+          </div>
+        </div>
+
         {/* XABCD PATTERNS */}
         <div style={{ ...CARD, marginBottom: 20 }}>
           <ManSectionHdr title="XABCD HARMONIC PATTERNS" accent="var(--amber)" sub="GH TAB · XABCD SECTION" />
