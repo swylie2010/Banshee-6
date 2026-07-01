@@ -648,6 +648,14 @@ function App() {
     window.API.fetchUnleashed().then(s => setUnleashedState(!!s.enabled));
   }, []);
 
+  const [unleashedProfile, setUnleashedProfile] = React.useState("Default Unleashed");
+  React.useEffect(() => {
+    window.API.fetchUnleashedProfiles().then(d => {
+      const act = (d.profiles || []).find(p => p.id === d.active);
+      if (act) setUnleashedProfile(act.name);
+    });
+  }, [unleashed]);
+
   const toggleUnleashed = async (next) => {
     const res = await window.API.setUnleashed(next);
     const on = !!res.enabled;
@@ -888,7 +896,7 @@ function App() {
           }} />
         : pinLocked && <window.PinLockScreen onUnlock={() => setPinLocked(false)} />
       }
-      <window.UnleashedBanner show={unleashed} />
+      <window.UnleashedBanner show={unleashed} profileName={unleashedProfile} />
       <TopBar
         onToggleSidebar={() => setSidebarOpen(o => !o)}
         sidebarOpen={sidebarOpen}

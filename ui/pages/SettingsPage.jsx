@@ -480,6 +480,124 @@ function PinSettings() {
   );
 }
 
+function PromptProfilesSection() {
+  const [profiles, setProfiles] = React.useState([]);
+  const [activeId, setActiveId] = React.useState("default");
+  const [selId, setSelId]       = React.useState("default");
+  const [draft, setDraft]       = React.useState("");
+  const [status, setStatus]     = React.useState("");
+  const [newName, setNewName]   = React.useState("");
+  const [naming, setNaming]     = React.useState(false);
+
+  const selected = profiles.find(p => p.id === selId) || profiles.find(p => p.id === "default");
+  const isLocked = !!(selected && selected.locked);
+
+  const load = React.useCallback(async () => {
+    const d = await window.API.fetchUnleashedProfiles();
+    setProfiles(d.profiles || []);
+    setActiveId(d.active || "default");
+  }, []);
+  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { if (selected) setDraft(selected.override || ""); }, [selId, profiles]);
+
+  const flash = (m) => { setStatus(m); setTimeout(() => setStatus(""), 2500); };
+
+  async function onSave() {
+    if (isLocked) return;
+    const r = await window.API.saveUnleashedProfile({ id: selId, name: selected.name, override: draft });
+    if (r.status === "saved") { flash("✓ Saved"); await load(); }
+    else flash("✗ " + (r.message || "save failed"));
+  }
+  function onSaveAs() { setNaming(true); }
+  async function confirmSaveAs() {
+    const name = newName.trim();
+    if (!name) { flash("✗ Name required"); return; }
+    const r = await window.API.saveUnleashedProfile({ name, override: draft });
+    if (r.status === "saved") { setNaming(false); setNewName(""); setSelId(r.id); flash("✓ Created"); await load(); }
+    else flash("✗ " + (r.message || "save failed"));
+  }
+  async function onDelete() {
+    if (isLocked) return;
+    const r = await window.API.deleteUnleashedProfile(selId);
+    if (r.status === "deleted") { setSelId("default"); flash("✓ Deleted"); await load(); }
+    else flash("✗ " + (r.message || "delete failed"));
+  }
+  async function onActivate() {
+    const r = await window.API.setActiveUnleashedProfile(selId);
+    if (r.status === "saved") { flash("✓ Activated"); await load(); }
+    else flash("✗ " + (r.message || "activate failed"));
+  }
+  function onReset() {
+    const def = profiles.find(p => p.id === "default");
+    if (def) setDraft(def.override || "");
+  }
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div className="mono" style={{ fontSize: 12, color: "var(--cyan)", letterSpacing: "0.22em", fontWeight: 700, marginBottom: 8 }}>
+        UNLEASHED PROMPT PROFILES
+      </div>
+      <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", maxWidth: 560, marginBottom: 14, lineHeight: 1.5 }}>
+        These edit ONLY the Unleashed override layer. Standard Banshee always uses the safe
+        Default prompt — it is never changed here. A custom profile only takes effect while
+        Unleashed is ON, and the RED Unleashed frame will name it.
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+        <select value={selId} onChange={e => setSelId(e.target.value)}
+                className="mono" style={{ fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+          {profiles.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name}{p.id === activeId ? "  ● active" : ""}{p.locked ? "  (locked)" : ""}
+            </option>
+          ))}
+        </select>
+        <button onClick={onActivate} className="mono"
+                style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+          Set Active
+        </button>
+      </div>
+
+      <textarea value={draft} onChange={e => setDraft(e.target.value)} readOnly={isLocked}
+                rows={10}
+                style={{ width: "100%", fontFamily: "monospace", fontSize: 13, lineHeight: 1.5,
+                         padding: 10, background: isLocked ? "var(--bg-1)" : "var(--bg-2)",
+                         color: "var(--ink)", border: "1px solid var(--line)", resize: "vertical" }} />
+
+      {naming && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Profile name (e.g. My Setting 1)"
+                 className="mono" style={{ flex: 1, fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }} />
+          <button onClick={confirmSaveAs} className="mono" style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--buy)", color: "#000", border: "none" }}>Create</button>
+          <button onClick={() => setNaming(false)} className="mono" style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>Cancel</button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <button onClick={onSave} disabled={isLocked} className="mono"
+                style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer",
+                         background: "var(--buy)", color: "#000", border: "none", opacity: isLocked ? 0.4 : 1 }}>
+          Save
+        </button>
+        <button onClick={onSaveAs} className="mono"
+                style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+          {isLocked ? "Duplicate to Edit" : "Save As New…"}
+        </button>
+        <button onClick={onReset} className="mono"
+                style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+          Reset to Default text
+        </button>
+        <button onClick={onDelete} disabled={isLocked} className="mono"
+                style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer",
+                         background: "transparent", color: "var(--sell)", border: "1px solid var(--sell)", opacity: isLocked ? 0.4 : 1 }}>
+          Delete
+        </button>
+        {status && <span className="mono" style={{ fontSize: 12, alignSelf: "center", color: status.startsWith("✗") ? "var(--sell)" : "var(--buy)" }}>{status}</span>}
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage({ onBack }) {
   const [loaded, setLoaded]         = useState(false);
   const [fredKey, setFredKey]       = useState("");
@@ -737,6 +855,11 @@ function SettingsPage({ onBack }) {
           <SettingsSection title="▸ MCP CONNECTION">
             <MCPConnectionBlock />
           </SettingsSection>
+        </div>
+
+        {/* UNLEASHED PROMPT PROFILES — full width */}
+        <div style={{ gridColumn: "1 / -1" }}>
+          <PromptProfilesSection />
         </div>
 
       </div>

@@ -3673,11 +3673,12 @@ window.DisclaimerModal = function DisclaimerModal({ onAccept }) {
 
 /* Non-dismissable banner; appears only while unleashed is ON.
  * There is no close button — it disappears only when the toggle is flicked off. */
-function UnleashedBanner({ show }) {
+function UnleashedBanner({ show, profileName }) {
   if (!show) return null;
+  const suffix = profileName && profileName !== "Default Unleashed" ? ` · ${profileName}` : "";
   return (
     <div className="unleashed-banner">
-      UNLEASHED — Banshee can't keep up with the market. That's your job.
+      UNLEASHED{suffix} — Banshee can't keep up with the market. That's your job.
       These are short-term possibilities, not safe trades.
     </div>
   );
