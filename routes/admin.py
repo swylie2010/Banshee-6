@@ -58,6 +58,16 @@ class UnleashedBody(BaseModel):
     enabled: bool
 
 
+class ProfileBody(BaseModel):
+    id: str | None = None
+    name: str
+    override: str
+
+
+class ActiveProfileBody(BaseModel):
+    id: str
+
+
 class PredatorRunRequest(BaseModel):
     watchlist: list[str] = []
     force: bool = False
@@ -272,6 +282,47 @@ def route_unleashed_set(body: UnleashedBody):
     """Flick Unleashed mode on/off (global)."""
     core_state.save_unleashed({"enabled": body.enabled})
     return {"status": "saved", "enabled": body.enabled}
+
+
+@router.get("/unleashed/profiles")
+def route_unleashed_profiles_get():
+    """List Unleashed override profiles + the active id."""
+    data = core_state.load_unleashed_profiles()
+    return {
+        "active": data["active"],
+        "profiles": [
+            {"id": pid, "name": p.get("name", pid),
+             "override": p.get("override", ""), "locked": bool(p.get("locked", False))}
+            for pid, p in data["profiles"].items()
+        ],
+    }
+
+
+@router.post("/unleashed/profiles")
+def route_unleashed_profiles_upsert(body: ProfileBody):
+    """Create (no id) or update an Unleashed profile. Rejects editing the locked Default."""
+    res = core_state.upsert_unleashed_profile(body.id, body.name, body.override)
+    if not res["ok"]:
+        raise HTTPException(status_code=422, detail=res["error"])
+    return {"status": "saved", "id": res["id"]}
+
+
+@router.post("/unleashed/profiles/active")
+def route_unleashed_profiles_active(body: ActiveProfileBody):
+    """Select the active Unleashed profile."""
+    res = core_state.set_active_unleashed_profile(body.id)
+    if not res["ok"]:
+        raise HTTPException(status_code=422, detail=res["error"])
+    return {"status": "saved", "active": res["active"]}
+
+
+@router.delete("/unleashed/profiles/{pid}")
+def route_unleashed_profiles_delete(pid: str):
+    """Delete an Unleashed profile. Rejects deleting the Default."""
+    res = core_state.delete_unleashed_profile(pid)
+    if not res["ok"]:
+        raise HTTPException(status_code=422, detail=res["error"])
+    return {"status": "deleted"}
 
 
 @router.post("/predator/run")

@@ -1,0 +1,54 @@
+import core_state
+import banshee_core as bc
+from fastapi.testclient import TestClient
+
+
+def _client(tmp_path, monkeypatch):
+    monkeypatch.setattr(core_state, "_UNLEASHED_PROFILES_FILE", tmp_path / "p.json")
+    return TestClient(bc.app)
+
+
+def test_list_profiles_seeds_default(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.get("/unleashed/profiles")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["active"] == "default"
+    assert any(p["id"] == "default" and p["locked"] for p in d["profiles"])
+
+
+def test_create_and_activate_profile(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.post("/unleashed/profiles", json={"name": "My Setting 1", "override": "OV1"})
+    assert r.status_code == 200
+    pid = r.json()["id"]
+    r2 = c.post("/unleashed/profiles/active", json={"id": pid})
+    assert r2.status_code == 200
+    assert core_state.get_active_unleashed_override() == "OV1"
+
+
+def test_edit_default_rejected(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.post("/unleashed/profiles", json={"id": "default", "name": "x", "override": "y"})
+    assert r.status_code == 422
+
+
+def test_delete_default_rejected(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.delete("/unleashed/profiles/default")
+    assert r.status_code == 422
+
+
+def test_delete_profile(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    pid = c.post("/unleashed/profiles", json={"name": "Temp", "override": "Z"}).json()["id"]
+    r = c.delete(f"/unleashed/profiles/{pid}")
+    assert r.status_code == 200
+    ids = [p["id"] for p in c.get("/unleashed/profiles").json()["profiles"]]
+    assert pid not in ids
+
+
+def test_set_active_unknown_rejected(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    r = c.post("/unleashed/profiles/active", json={"id": "nope"})
+    assert r.status_code == 422
