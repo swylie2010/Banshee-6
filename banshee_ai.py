@@ -8,6 +8,7 @@ within the context of global risk.
 
 import math
 import os
+import core_state
 from datetime import datetime, timezone
 from pydantic import BaseModel, field_validator
 from typing import Literal, List
@@ -299,19 +300,17 @@ def build_macro_prompt(macro_data: dict, news_lines: list = [], rotation_context
     return prompt
 
 
-_UNLEASHED_OVERRIDE = (
-    "\n\n--- UNLEASHED OVERRIDE ---\n"
-    "You are in UNLEASHED mode. Make the short-term call directly; do not hedge it into a "
-    "non-answer. Evaluate SHORTS and LONGS symmetrically. When the higher-timeframe Bias and "
-    "the lower-timeframe Trigger conflict, state BOTH explicitly — e.g. 'Long-term bias: X; "
-    "short-term trigger: Y here, with risk Z.' These are short-term possibilities, not safe "
-    "trades; you surface and state the risk, the human/agent decides. Never instruct an execution."
-)
+# Canonical Default override now lives in core_state (single source of truth for
+# both seeding the Default profile and the here-alias). Retained name for back-compat.
+_UNLEASHED_OVERRIDE = core_state.DEFAULT_UNLEASHED_OVERRIDE
 
 
 def _apply_unleashed_override(system_prompt: str, unleashed: bool) -> str:
-    """Append the UNLEASHED OVERRIDE block to the system prompt when unleashed=True."""
-    return system_prompt + _UNLEASHED_OVERRIDE if unleashed else system_prompt
+    """Append the ACTIVE Unleashed profile's override when unleashed=True.
+    When off, returns the base prompt unchanged (standard Banshee)."""
+    if not unleashed:
+        return system_prompt
+    return system_prompt + core_state.get_active_unleashed_override()
 
 
 def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None, unleashed: bool = False) -> str:
@@ -672,7 +671,10 @@ _SMC_SYSTEM_PROMPT_FALLBACK = (
     "**SCENARIO:** [what this structural setup points to — the most probable next move]"
 )
 
-_SMC_SYSTEM_PROMPT = _load_prompt("smc", _SMC_SYSTEM_PROMPT_FALLBACK)
+def _smc_system_prompt() -> str:
+    """Load the SMC system prompt fresh each call so edits to prompts/smc.txt take
+    effect without a backend restart (parity with the per-call 'default' prompt)."""
+    return _load_prompt("smc", _SMC_SYSTEM_PROMPT_FALLBACK)
 
 
 def smc_analysis(symbol: str,
@@ -698,7 +700,7 @@ def smc_analysis(symbol: str,
     prompt = build_smc_prompt(symbol, htf_tf, htf_df, htf_smc,
                               ltf_tf, ltf_df, ltf_smc,
                               flat_levels=flat_levels)
-    return call_ai(cfg, prompt, system_prompt_override=_SMC_SYSTEM_PROMPT, unleashed=unleashed)
+    return call_ai(cfg, prompt, system_prompt_override=_smc_system_prompt(), unleashed=unleashed)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

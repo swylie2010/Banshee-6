@@ -18,7 +18,9 @@ def test_prompt_includes_bias_trigger_block():
     assert "BEARISH" in text and "SHORT" in text
 
 
-def test_call_ai_appends_override_only_when_unleashed(monkeypatch):
+def test_call_ai_appends_override_only_when_unleashed(monkeypatch, tmp_path):
+    import core_state
+    monkeypatch.setattr(core_state, "_UNLEASHED_PROFILES_FILE", tmp_path / "p.json")
     captured = {}
     def fake_provider(cfg, prompt, system_prompt):
         captured["sys"] = system_prompt
