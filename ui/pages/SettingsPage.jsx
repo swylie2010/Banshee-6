@@ -503,7 +503,7 @@ function PromptProfilesSection() {
   const flash = (m) => { setStatus(m); setTimeout(() => setStatus(""), 2500); };
 
   async function onSave() {
-    if (isLocked) return;
+    if (isLocked || !selected) return;  // no selection (e.g. profile list failed to load) → nothing to save
     const r = await window.API.saveUnleashedProfile({ id: selId, name: selected.name, override: draft });
     if (r.status === "saved") { flash("✓ Saved"); await load(); }
     else flash("✗ " + (r.message || "save failed"));
