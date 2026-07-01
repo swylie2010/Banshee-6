@@ -846,4 +846,59 @@ async function setUnleashed(enabled) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary, fetchUnleashed, setUnleashed };
+async function fetchUnleashedProfiles() {
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed/profiles`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();            // {active, profiles:[{id,name,override,locked}]}
+  } catch (err) {
+    console.warn("[api] fetchUnleashedProfiles:", err.message);
+    return { active: "default", profiles: [] };
+  }
+}
+
+async function saveUnleashedProfile(profile) {    // {id?, name, override}
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed/profiles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    });
+    const data = await res.json();
+    if (!res.ok) return { status: "error", message: data.detail || `HTTP ${res.status}` };
+    return { status: "saved", id: data.id };
+  } catch (err) {
+    console.warn("[api] saveUnleashedProfile:", err.message);
+    return { status: "error", message: err.message };
+  }
+}
+
+async function setActiveUnleashedProfile(id) {
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed/profiles/active`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { status: "error", message: data.detail || `HTTP ${res.status}` };
+    return { status: "saved", active: data.active };
+  } catch (err) {
+    console.warn("[api] setActiveUnleashedProfile:", err.message);
+    return { status: "error", message: err.message };
+  }
+}
+
+async function deleteUnleashedProfile(id) {
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed/profiles/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) return { status: "error", message: data.detail || `HTTP ${res.status}` };
+    return { status: "deleted" };
+  } catch (err) {
+    console.warn("[api] deleteUnleashedProfile:", err.message);
+    return { status: "error", message: err.message };
+  }
+}
+
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary, fetchUnleashed, setUnleashed, fetchUnleashedProfiles, saveUnleashedProfile, setActiveUnleashedProfile, deleteUnleashedProfile };
