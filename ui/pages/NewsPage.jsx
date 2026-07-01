@@ -202,7 +202,7 @@ function NewsPage({ onBack, manualStories = [], setManualStories }) {
                 background: "rgba(255,193,7,0.08)", border: "1px solid var(--amber)", borderRadius: 4,
                 padding: "8px 12px", marginBottom: 14, display: "flex", alignItems: "center",
                 justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
-                <span>⚠ Showing news from {briefing.date} — not today's. Auto-refreshes each morning after 8am local.</span>
+                <span>⚠ Showing news from {briefing.date} — not today's. Auto-refreshes each morning after 8am local if an AI API is enabled.</span>
                 <button onClick={handleRun} disabled={running}
                   style={{ fontFamily: "inherit", fontSize: 11, letterSpacing: "0.1em",
                     background: "var(--amber)", color: "#000", border: "none", padding: "3px 10px",
