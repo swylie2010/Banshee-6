@@ -22,6 +22,12 @@ from pydantic import BaseModel, Field, field_validator
 
 _AUDIT_PATH = pathlib.Path.home() / ".banshee_audit.jsonl"
 
+# Bounded growth: at ~316 bytes/entry, 5 MB ≈ 16k entries — far more than the
+# 90-day summary window, so rotation almost never severs it. Keeping 2 backups
+# caps total audit disk at ~15 MB.
+_AUDIT_MAX_BYTES = 5 * 1024 * 1024
+_AUDIT_BACKUPS = 2
+
 VALID_MODES = ["long_term", "swing", "sniper", "active", "position"]
 VALID_TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"]
 
@@ -235,8 +241,35 @@ def _extract_signal(response_text: str, signal_field: Optional[str]) -> Optional
     return None
 
 
+def _rotate_if_needed() -> None:
+    """Cap unbounded growth of the audit log.
+
+    Size-based: when the live file reaches _AUDIT_MAX_BYTES, cascade
+    <path> → <path>.1 → <path>.2 (dropping the oldest) and start a fresh live
+    file. The summary reads only the live file by design, so history beyond the
+    newest backup is intentionally shed. Best-effort — a rotation failure must
+    never crash a tool call.
+    """
+    try:
+        path = _AUDIT_PATH
+        if not path.exists() or path.stat().st_size < _AUDIT_MAX_BYTES:
+            return
+        backup = lambda i: path.parent / f"{path.name}.{i}"
+        oldest = backup(_AUDIT_BACKUPS)
+        if oldest.exists():
+            oldest.unlink()
+        for i in range(_AUDIT_BACKUPS - 1, 0, -1):
+            src = backup(i)
+            if src.exists():
+                src.rename(backup(i + 1))
+        path.rename(backup(1))
+    except Exception:
+        pass
+
+
 def _write_entry(entry: dict) -> None:
     try:
+        _rotate_if_needed()
         with open(_AUDIT_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception:

@@ -180,6 +180,40 @@ def test_signal_absent_when_text_has_no_verdict(tmp_audit):
     assert "signal" not in entry["outcome"]
 
 
+# ── Audit-log rotation (bounded growth) ───────────────────────────────────────
+
+def _backup(path, i):
+    return path.parent / f"{path.name}.{i}"
+
+
+def test_audit_log_rotates_when_oversized(tmp_audit, monkeypatch):
+    """Once the live log passes the size cap, it rotates to <path>.1 and starts fresh."""
+    monkeypatch.setattr(gw, "_AUDIT_MAX_BYTES", 200)
+    g = _make_gateway()
+    for _ in range(20):
+        g.call("get_regime", {}, None, lambda p: "REGIME: TRENDING")
+    assert _backup(tmp_audit, 1).exists()          # rotation happened
+    assert tmp_audit.stat().st_size < 200 * 4      # live file stays bounded
+
+
+def test_audit_log_rotation_caps_backups(tmp_audit, monkeypatch):
+    """Never keep more than _AUDIT_BACKUPS rotated files — disk is bounded."""
+    monkeypatch.setattr(gw, "_AUDIT_MAX_BYTES", 100)
+    monkeypatch.setattr(gw, "_AUDIT_BACKUPS", 2)
+    g = _make_gateway()
+    for _ in range(50):
+        g.call("get_regime", {}, None, lambda p: "REGIME: TRENDING extra padding")
+    assert _backup(tmp_audit, 2).exists()
+    assert not _backup(tmp_audit, 3).exists()
+
+
+def test_audit_log_no_rotation_under_threshold(tmp_audit):
+    """A small log is never rotated — history stays intact for the summary window."""
+    g = _make_gateway()
+    g.call("get_regime", {}, None, lambda p: "ok")
+    assert not _backup(tmp_audit, 1).exists()
+
+
 # ── Schema-specific validation ─────────────────────────────────────────────────
 
 def test_nexus_rejects_invalid_mode(tmp_audit):

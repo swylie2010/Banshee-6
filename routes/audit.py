@@ -4,7 +4,6 @@ import datetime
 import json
 import pathlib
 from collections import Counter, defaultdict
-from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse

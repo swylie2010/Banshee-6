@@ -292,7 +292,7 @@ def test_get_paper_gridbot_no_lag_warning_on_error():
     with patch.object(mcp_server.gateway, "call",
                       return_value="BANSHEE CORE OFFLINE"):
         result = mcp_server.get_paper_gridbot()
-    assert "lag" not in result.lower() or "15 min" not in result
+    assert "lag" not in result.lower() and "15 min" not in result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

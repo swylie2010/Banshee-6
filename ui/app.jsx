@@ -418,7 +418,7 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
             { id: "journal",  label: "TRADE JOURNAL",  icon: "◎" },
             { id: "options",  label: "OPTIONS",        icon: "◆" },
             { id: "gridbot",  label: "GRIDBOT",        icon: "⊞" },
-            { id: "observatory", label: "OBSERVATORY", icon: "◈" },
+            { id: "observatory", label: "OBSERVATORY", icon: "✧" },
             { id: "lab",      label: "SIGNAL LAB",     icon: "◬" },
             { id: "settings", label: "SETTINGS",       icon: "⚙" },
             { id: "manual",   label: "MANUAL",         icon: "◌" },
