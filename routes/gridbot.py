@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 import gridbot_engine
 import gridbot_sim
-from core_state import _PAPER_GRIDBOT_PATH
+from core_state import _PAPER_GRIDBOT_PATH, _log_error
 
 router = APIRouter()
 
@@ -65,7 +65,8 @@ async def route_gridbot_analyze(
             return JSONResponse({"error": result["error"]}, status_code=400)
         return result
     except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
+        _log_error("gridbot/analyze", exc)
+        return JSONResponse({"error": "internal error"}, status_code=500)
 
 
 # ── Paper trading routes ───────────────────────────────────────────────────────
@@ -97,7 +98,8 @@ async def route_gridbot_paper_deploy(
             sym, float(capital), int(grid_count), float(fee_pct), range_min, range_max,
         )
     except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
+        _log_error("gridbot/paper", exc)
+        return JSONResponse({"error": "internal error"}, status_code=500)
 
     if "error" in config:
         return JSONResponse({"error": config["error"]}, status_code=400)

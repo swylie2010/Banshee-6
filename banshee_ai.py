@@ -39,6 +39,28 @@ _EXTERNAL_CONTENT_GUARD = (
 )
 
 
+def sanitize_external(text: str) -> str:
+    """Neutralize any attempt by untrusted external text to break out of the
+    <external_content> guard by embedding its own tag markers.
+
+    Without this, a crafted RSS headline containing a literal '</external_content>'
+    would close the guarded region early and land the rest of its payload in the
+    trusted part of the prompt (a real prompt-injection bypass). We replace the
+    angle brackets of any external_content marker with lookalike characters so the
+    text stays visible but can never be parsed as a real tag.
+    """
+    if not text:
+        return text
+    # Kill both open and close markers, case-insensitively, however they're spaced.
+    import re as _re
+    return _re.sub(
+        r"<\s*/?\s*external_content\s*>",
+        lambda m: m.group(0).replace("<", "‹").replace(">", "›"),
+        text,
+        flags=_re.IGNORECASE,
+    )
+
+
 class AssetNote(BaseModel):
     sym: str
     note: str
@@ -183,7 +205,7 @@ def build_banshee_prompt(macro_data: dict, micro_data: dict, news_lines: list = 
         )
         prompt += "<external_content>\n"
         for line in news_lines:
-            prompt += f"{line}\n"
+            prompt += f"{sanitize_external(str(line))}\n"
         prompt += "</external_content>\n"
 
     if geo_harmonic_context:
@@ -281,7 +303,7 @@ def build_macro_prompt(macro_data: dict, news_lines: list = [], rotation_context
         prompt += "\n--- MARKET INTEL ---\n"
         prompt += "<external_content>\n"
         for line in news_lines:
-            prompt += f"{line}\n"
+            prompt += f"{sanitize_external(str(line))}\n"
         prompt += "</external_content>\n"
 
     if rotation_context:

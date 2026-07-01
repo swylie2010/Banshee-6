@@ -80,7 +80,9 @@ class _TokenGate(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
         if path not in {"/health", "/auth/token", "/favicon.ico"} and not path.startswith("/ui"):
-            if request.headers.get("x-banshee-token") != _BANSHEE_TOKEN:
+            _presented = request.headers.get("x-banshee-token") or ""
+            # constant-time compare avoids a (localhost-only, theoretical) timing side-channel
+            if not _secrets.compare_digest(_presented, _BANSHEE_TOKEN):
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
         return await call_next(request)
 

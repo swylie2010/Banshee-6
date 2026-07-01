@@ -21,7 +21,7 @@ import requests
 import feedparser
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from banshee_ai import _EXTERNAL_CONTENT_GUARD
+from banshee_ai import _EXTERNAL_CONTENT_GUARD, sanitize_external as _san
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PATHS
@@ -824,9 +824,9 @@ def _format_events_for_prompt(events: list[dict], label: str, cap: int = 12) -> 
             if ev.get("significance_flags")
             else ""
         )
-        lines.append(f"[{ev['source']}]{sig_tag} ({age_str}) {ev['title']}")
+        lines.append(_san(f"[{ev['source']}]{sig_tag} ({age_str}) {ev['title']}"))
         if ev.get("summary"):
-            lines.append(f"  → {ev['summary'][:150]}")
+            lines.append(_san(f"  → {ev['summary'][:150]}"))
     content = "\n".join(lines)
     return f"<external_content>\n{content}\n</external_content>"
 
@@ -882,7 +882,7 @@ def run_engine(
             inner = "--- YESTERDAY'S FLAGGED ITEMS (check if resolved/escalated) ---\n"
             for item in prev_items:
                 hl = item.get("headline") or item.get("title", "")
-                inner += f"- {hl}\n"
+                inner += f"- {_san(str(hl))}\n"
             yesterday_block = f"<external_content>\n{inner}</external_content>\n"
 
     constraints_block = ""

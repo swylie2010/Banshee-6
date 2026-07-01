@@ -193,22 +193,34 @@ def route_settings_test(body: SettingsBody):
             import requests as _req, urllib.parse as _up, socket as _sock, ipaddress as _ip
             base = (url or "http://localhost:11434").rstrip("/")
             _host = _up.urlparse(base).hostname or ""
+            # Local Ollama is the only allowed private target. Everything else must
+            # resolve to a public address, or we refuse. This guard FAILS CLOSED:
+            # any resolution error or private/link-local/loopback result is rejected.
+            _allow_local = _host in ("localhost", "127.0.0.1", "::1")
             try:
-                _addr = _ip.ip_address(_sock.gethostbyname(_host))
-                if _addr.is_private or _addr.is_loopback or _addr.is_link_local:
-                    if _host not in ("localhost", "127.0.0.1"):
-                        return JSONResponse(content={"status": "error", "message": "URL resolves to a private/internal address"})
+                # getaddrinfo covers IPv4 AND IPv6 (gethostbyname was IPv4-only and
+                # would throw on an IPv6 host, silently letting it through before).
+                _infos = _sock.getaddrinfo(_host, None)
+                _addrs = {_ip.ip_address(ai[4][0]) for ai in _infos}
             except Exception:
-                pass
+                return JSONResponse(content={"status": "error", "message": "Could not resolve host"})
+            if not _addrs:
+                return JSONResponse(content={"status": "error", "message": "Could not resolve host"})
+            for _addr in _addrs:
+                if (_addr.is_private or _addr.is_loopback or _addr.is_link_local
+                        or _addr.is_reserved or _addr.is_multicast) and not _allow_local:
+                    return JSONResponse(content={"status": "error", "message": "URL resolves to a private/internal address"})
+            # Do NOT follow redirects — a public host could 302 to 169.254.169.254 etc.
             r = _req.post(f"{base}/api/generate",
                           json={"model": model, "prompt": "Say OK", "stream": False},
-                          timeout=10)
+                          timeout=10, allow_redirects=False)
             r.raise_for_status()
             return {"status": "ok", "message": r.json().get("response", "")[:120]}
         else:
             return JSONResponse(content={"status": "error", "message": f"Unknown provider: {provider}"})
     except Exception as exc:
-        return JSONResponse(content={"status": "error", "message": str(exc)[:200]})
+        _log_error("settings/test", exc)
+        return JSONResponse(content={"status": "error", "message": "Provider test failed — see ~/.banshee_errors.log for details"})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -222,7 +234,8 @@ def route_data_sources_speed():
     try:
         return data_providers.get_speed_report()
     except Exception as exc:
-        return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
+        _log_error("data-sources/speed", exc)
+        return JSONResponse(content={"status": "error", "message": "internal error"}, status_code=500)
 
 
 @router.post("/settings/data-sources/test-coingecko")
@@ -233,7 +246,8 @@ async def route_data_sources_test_coingecko():
     try:
         return await asyncio.to_thread(data_providers.probe_coingecko_latency)
     except Exception as exc:
-        return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
+        _log_error("data-sources/test-coingecko", exc)
+        return JSONResponse(content={"status": "error", "message": "internal error"}, status_code=500)
 
 
 @router.post("/settings/data-sources/test-custom")
@@ -244,7 +258,8 @@ async def route_data_sources_test_custom():
     try:
         return await asyncio.to_thread(data_providers.probe_custom_latency)
     except Exception as exc:
-        return JSONResponse(content={"status": "error", "message": str(exc)[:200]}, status_code=500)
+        _log_error("data-sources/test-custom", exc)
+        return JSONResponse(content={"status": "error", "message": "internal error"}, status_code=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
