@@ -11,7 +11,8 @@ def test_load_seeds_default_when_missing(tmp_path, monkeypatch):
     data = core_state.load_unleashed_profiles()
     assert data["active"] == "default"
     assert data["profiles"]["default"]["locked"] is True
-    assert "UNLEASHED OVERRIDE" in data["profiles"]["default"]["override"]
+    assert "UNLEASHED OVERRIDE" in data["profiles"]["default"]["surfaces"]["nexus"]["text"]
+    assert "UNLEASHED OVERRIDE" in data["profiles"]["default"]["surfaces"]["smc"]["text"]
 
 
 def test_get_active_override_defaults_to_constant(tmp_path, monkeypatch):
@@ -21,25 +22,43 @@ def test_get_active_override_defaults_to_constant(tmp_path, monkeypatch):
 
 def test_upsert_creates_and_activates(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
-    res = core_state.upsert_unleashed_profile(None, "My Setting 1", "OVERRIDE ONE")
+    surfaces = {
+        "nexus": {"mode": "nudge", "text": "OVERRIDE ONE"},
+        "smc":   {"mode": "nudge", "text": "OVERRIDE ONE"},
+    }
+    res = core_state.upsert_unleashed_profile(None, "My Setting 1", surfaces)
     assert res["ok"] is True
     pid = res["id"]
     core_state.set_active_unleashed_profile(pid)
-    assert core_state.get_active_unleashed_override() == "OVERRIDE ONE"
+    prof = core_state.load_unleashed_profiles()["profiles"][pid]
+    assert prof["surfaces"]["nexus"] == {"mode": "nudge", "text": "OVERRIDE ONE"}
+    assert prof["surfaces"]["smc"] == {"mode": "nudge", "text": "OVERRIDE ONE"}
     assert core_state.get_active_unleashed_profile() == {"id": pid, "name": "My Setting 1"}
 
 
 def test_created_profile_has_locked_false(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
-    pid = core_state.upsert_unleashed_profile(None, "Custom", "OV")["id"]
+    surfaces = {
+        "nexus": {"mode": "nudge", "text": "OV"},
+        "smc":   {"mode": "nudge", "text": "OV"},
+    }
+    pid = core_state.upsert_unleashed_profile(None, "Custom", surfaces)["id"]
     prof = core_state.load_unleashed_profiles()["profiles"][pid]
-    # Stored shape matches the documented {name, override, locked} contract.
-    assert prof == {"name": "Custom", "override": "OV", "locked": False}
+    # Stored shape matches the documented {name, locked, surfaces} contract.
+    assert prof == {
+        "name": "Custom",
+        "locked": False,
+        "surfaces": {
+            "nexus": {"mode": "nudge", "text": "OV"},
+            "smc":   {"mode": "nudge", "text": "OV"},
+        },
+    }
 
 
 def test_cannot_edit_locked_default(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
-    res = core_state.upsert_unleashed_profile("default", "Hacked", "evil")
+    evil_surfaces = {"nexus": {"mode": "nudge", "text": "evil"}, "smc": {"mode": "nudge", "text": "evil"}}
+    res = core_state.upsert_unleashed_profile("default", "Hacked", evil_surfaces)
     assert res["ok"] is False
     assert core_state.get_active_unleashed_override() == core_state.DEFAULT_UNLEASHED_OVERRIDE
 
@@ -53,7 +72,8 @@ def test_cannot_delete_default(tmp_path, monkeypatch):
 
 def test_delete_active_falls_back_to_default(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
-    pid = core_state.upsert_unleashed_profile(None, "Temp", "X")["id"]
+    surfaces = {"nexus": {"mode": "nudge", "text": "X"}, "smc": {"mode": "nudge", "text": "X"}}
+    pid = core_state.upsert_unleashed_profile(None, "Temp", surfaces)["id"]
     core_state.set_active_unleashed_profile(pid)
     core_state.delete_unleashed_profile(pid)
     d = core_state.load_unleashed_profiles()
@@ -68,7 +88,8 @@ def test_default_override_is_immutable_on_load(tmp_path, monkeypatch):
         "profiles": {"default": {"name": "Default Unleashed", "override": "TAMPERED", "locked": False}},
     }))
     data = core_state.load_unleashed_profiles()
-    assert data["profiles"]["default"]["override"] == core_state.DEFAULT_UNLEASHED_OVERRIDE
+    assert data["profiles"]["default"]["surfaces"]["nexus"]["text"] == core_state.DEFAULT_UNLEASHED_OVERRIDE
+    assert data["profiles"]["default"]["surfaces"]["smc"]["text"] == core_state.DEFAULT_UNLEASHED_OVERRIDE
     assert data["profiles"]["default"]["locked"] is True
 
 

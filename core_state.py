@@ -185,23 +185,44 @@ def save_unleashed(state: dict) -> None:
         pass
 
 
+def _surface_slot(text: str, mode: str = "nudge") -> dict:
+    return {"mode": mode if mode in ("nudge", "rewrite") else "nudge", "text": text or ""}
+
+
 def _default_unleashed_profiles() -> dict:
     return {
         "active": "default",
         "profiles": {
             "default": {
                 "name": "Default Unleashed",
-                "override": DEFAULT_UNLEASHED_OVERRIDE,
                 "locked": True,
+                "surfaces": {
+                    "nexus": _surface_slot(DEFAULT_UNLEASHED_OVERRIDE),
+                    "smc":   _surface_slot(DEFAULT_UNLEASHED_OVERRIDE),
+                },
             }
         },
     }
 
 
+def _migrate_profile(prof: dict) -> dict:
+    """Upgrade a legacy {name, override, locked} profile to per-surface slots.
+    Idempotent: a profile already carrying `surfaces` is returned unchanged (with
+    any missing surface filled from stock)."""
+    if "surfaces" in prof and isinstance(prof["surfaces"], dict):
+        for surface in ("nexus", "smc"):
+            slot = prof["surfaces"].get(surface)
+            if not isinstance(slot, dict) or "mode" not in slot or "text" not in slot:
+                prof["surfaces"][surface] = _surface_slot("")
+        return prof
+    legacy = prof.pop("override", "") or ""
+    prof["surfaces"] = {"nexus": _surface_slot(legacy), "smc": _surface_slot(legacy)}
+    return prof
+
+
 def load_unleashed_profiles() -> dict:
-    """Editable Unleashed override profiles. The Default profile is always present,
-    locked, and its override is force-reset to the canonical constant — the immutable
-    safety net. Falls back to a fresh Default set on any read/parse error."""
+    """Editable Unleashed profiles. Every profile is migrated to the per-surface
+    schema on load; the Default profile is force-reset to the canonical constant."""
     data = None
     try:
         if _UNLEASHED_PROFILES_FILE.exists():
@@ -212,12 +233,10 @@ def load_unleashed_profiles() -> dict:
         data = None
     if data is None:
         return _default_unleashed_profiles()
+    for pid, prof in list(data["profiles"].items()):
+        data["profiles"][pid] = _migrate_profile(prof)
     # Enforce the Default invariant every load.
-    data["profiles"]["default"] = {
-        "name": "Default Unleashed",
-        "override": DEFAULT_UNLEASHED_OVERRIDE,
-        "locked": True,
-    }
+    data["profiles"]["default"] = _default_unleashed_profiles()["profiles"]["default"]
     if data.get("active") not in data["profiles"]:
         data["active"] = "default"
     return data
@@ -243,7 +262,7 @@ def get_active_unleashed_profile() -> dict:
     return {"id": data["active"], "name": prof.get("name", "Default Unleashed")}
 
 
-def upsert_unleashed_profile(pid, name: str, override: str) -> dict:
+def upsert_unleashed_profile(pid, name: str, surfaces: dict) -> dict:
     if pid == "default":
         return {"ok": False, "error": "The Default Unleashed profile is locked and cannot be edited."}
     data = load_unleashed_profiles()
@@ -254,8 +273,12 @@ def upsert_unleashed_profile(pid, name: str, override: str) -> dict:
         while pid in data["profiles"]:
             pid = "u_" + secrets.token_hex(3)
     # Custom profiles carry locked=False so every stored entry matches the
-    # documented {name, override, locked} shape (Default is the only locked one).
-    data["profiles"][pid] = {"name": name, "override": override, "locked": False}
+    # documented {name, surfaces, locked} shape (Default is the only locked one).
+    clean = {}
+    for surface in ("nexus", "smc"):
+        slot = (surfaces or {}).get(surface) or {}
+        clean[surface] = _surface_slot(slot.get("text", ""), slot.get("mode", "nudge"))
+    data["profiles"][pid] = {"name": name, "locked": False, "surfaces": clean}
     save_unleashed_profiles(data)
     return {"ok": True, "id": pid}
 
