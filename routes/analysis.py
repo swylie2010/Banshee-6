@@ -38,6 +38,14 @@ router = APIRouter()
 # Private / shared helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _effective_unleashed(param):
+    """Per-call override if provided (True/False), else the global switch.
+    Never writes global state."""
+    if param is not None:
+        return bool(param)
+    return core_state.load_unleashed()["enabled"]
+
+
 def get_ohlcv_cached(symbol: str, mode: str, deep: bool = False) -> dict:
     """Fetch TF DataFrames with a 5-minute in-memory cache.
     deep=True routes through the fast-then-complete Stage-2 poll and caches separately.
@@ -302,11 +310,12 @@ def route_radar(
     symbol: str = Query(...),
     mode: str = Query("swing"),
     output_mode: str = Query("human"),
+    unleashed: bool | None = None,
 ):
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
     mode  = MODE_ALIASES.get(mode.lower(), "swing")
-    _unleashed = core_state.load_unleashed()["enabled"]
+    _unleashed = _effective_unleashed(unleashed)
     _rkey = f"radar:{symbol.upper()}:{mode}:{int(_unleashed)}"
     _entry = _RESP_CACHE.get(_rkey)
     if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
@@ -465,9 +474,9 @@ def route_radar(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/scan", response_class=PlainTextResponse)
-def route_scan(req: ScanRequest):
+def route_scan(req: ScanRequest, unleashed: bool | None = None):
     mode = MODE_ALIASES.get(req.mode.lower(), "swing")
-    _unleashed = core_state.load_unleashed()["enabled"]
+    _unleashed = _effective_unleashed(unleashed)
 
     cached = _load_macro_cache()
     scan_sensors = cached["mac_data"] if cached and "mac_data" in cached else None
@@ -605,12 +614,13 @@ def route_nexus(
     mode: str = Query("swing"),
     use_ai: bool = Query(True),
     output_mode: str = Query("human"),
+    unleashed: bool | None = None,
 ):
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
     from routes.admin import _build_news_context
     mode                 = MODE_ALIASES.get(mode.lower(), "swing")
-    _unleashed = core_state.load_unleashed()["enabled"]
+    _unleashed = _effective_unleashed(unleashed)
     mac_data, news_lines, events = _build_news_context()
 
     mic_tfs = get_ohlcv_cached(symbol, mode)
@@ -931,6 +941,7 @@ def route_smc(
     ltf: str = Query("4h"),
     htf: str = Query("1d"),
     use_ai: bool = Query(True),
+    unleashed: bool | None = None,
 ):
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
@@ -985,7 +996,7 @@ def route_smc(
             htf_tf=htf, htf_df=htf_df, htf_smc=htf_data,
             ltf_tf=ltf, ltf_df=ltf_df, ltf_smc=ltf_data,
             cfg=ai_cfg,
-            unleashed=core_state.load_unleashed()["enabled"],
+            unleashed=_effective_unleashed(unleashed),
         )
         out += f"\n\n{'─' * 50}\nAI STRUCTURE NARRATIVE:\n{'─' * 50}\n{narrative}"
     elif use_ai:
@@ -1005,6 +1016,7 @@ def route_smc_json(
     ltf: str = Query("4h"),
     htf: str = Query(""),
     use_ai: bool = Query(False),
+    unleashed: bool | None = None,
 ):
     """Full SMC data dicts + serialised DataFrames for the Structure Map tab."""
     symbol = _norm_symbol(symbol)
@@ -1047,7 +1059,7 @@ def route_smc_json(
                     htf_tf=htf, htf_df=htf_df, htf_smc=htf_smc,
                     ltf_tf=ltf, ltf_df=ltf_df, ltf_smc=ltf_smc,
                     cfg=ai_cfg, flat_levels=flat_levels,
-                    unleashed=core_state.load_unleashed()["enabled"],
+                    unleashed=_effective_unleashed(unleashed),
                 )
             except Exception as e:
                 ai_narrative = f"AI error: {e}"
