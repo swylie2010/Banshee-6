@@ -1,4 +1,6 @@
 {
+  "name": "banshee-ui",
+  "license": "MIT",
   "scripts": {
     "build": "esbuild main.jsx --bundle --outfile=dist/bundle.js --format=iife --loader:.jsx=jsx",
     "watch": "esbuild main.jsx --bundle --outfile=dist/bundle.js --format=iife --loader:.jsx=jsx --watch"
