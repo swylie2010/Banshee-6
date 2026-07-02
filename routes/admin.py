@@ -61,7 +61,7 @@ class UnleashedBody(BaseModel):
 class ProfileBody(BaseModel):
     id: str | None = None
     name: str
-    override: str
+    surfaces: dict
 
 
 class ActiveProfileBody(BaseModel):
@@ -316,10 +316,26 @@ def route_unleashed_profiles_get():
 @router.post("/unleashed/profiles")
 def route_unleashed_profiles_upsert(body: ProfileBody):
     """Create (no id) or update an Unleashed profile. Rejects editing the locked Default."""
-    res = core_state.upsert_unleashed_profile(body.id, body.name, body.override)
+    res = core_state.upsert_unleashed_profile(body.id, body.name, body.surfaces)
     if not res["ok"]:
         raise HTTPException(status_code=422, detail=res["error"])
     return {"status": "saved", "id": res["id"]}
+
+
+@router.get("/unleashed/base")
+def route_unleashed_base(surface: str):
+    """Return the current base prompt for a surface (read-only, for the editor)."""
+    if surface == "nexus":
+        text = banshee_ai._load_prompt(
+            "default",
+            "You are the Banshee Autonomous Agent, a quantitative trading agent. "
+            "Format briefings exactly as requested.",
+        )
+    elif surface == "smc":
+        text = banshee_ai._smc_system_prompt()
+    else:
+        return JSONResponse({"detail": "unknown surface"}, status_code=400)
+    return {"surface": surface, "text": text}
 
 
 @router.post("/unleashed/profiles/active")
