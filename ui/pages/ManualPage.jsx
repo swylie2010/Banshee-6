@@ -241,16 +241,16 @@ function ManualPage({ onBack }) {
           <ManSectionHdr title="UNLEASHED PROMPT PROFILES" accent="var(--sell)" sub="SETTINGS · UNLEASHED PROMPT PROFILES" />
           <div style={{ padding: "14px 16px" }}>
             <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.7, marginBottom: 14 }}>
-              Prompt Profiles let you rewrite how Banshee's AI talks — but only inside Unleashed mode. Standard Banshee always runs the safe Default prompt, which you cannot change; that safety never goes away. A profile only edits the Unleashed OVERRIDE layer that gets added on top of the base analysis. The base prompt (including Banshee's defense against manipulative news text) stays intact underneath — your edits can't remove it.
+              Prompt Profiles let you shape how Banshee's AI talks — but only inside Unleashed mode. Standard Banshee always runs the safe base prompt, which you cannot change here; that safety never goes away. You edit two independent surfaces: <strong style={{ color: "var(--ink)" }}>NEXUS</strong> (the synthesis — macro + micro + news) and <strong style={{ color: "var(--ink)" }}>SMC</strong> (market structure — order blocks, FVGs, BOS/CHoCH). SMC feeds Nexus, so an SMC edit propagates upward into the synthesis too. The news-injection guard (Banshee's defense against manipulative headlines) is always on and can't be edited away.
             </div>
             <div style={{ background: "var(--bg-3)", border: "1px solid var(--line)", padding: "10px 14px", marginBottom: 12 }}>
-              <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.1em", marginBottom: 8 }}>HOW TO USE IT</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.1em", marginBottom: 8 }}>TWO MODES PER SURFACE</div>
               <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.75 }}>
-                Settings → Unleashed Prompt Profiles. Duplicate the Default, rename it, and edit. Set it active, then flip Unleashed ON — the RED frame will show which profile is live. Reset to Default text anytime; the Default profile itself can never be edited or deleted.
+                <strong style={{ color: "var(--ink)" }}>Nudge (add on top)</strong> appends your text after the base prompt — safe, small, additive. <strong style={{ color: "var(--ink)" }}>Rewrite (replace)</strong> edits a copy of the base prompt that replaces it — more power, and it can change the output format. Switching a surface to Rewrite seeds the box with a copy of the base, so you're never staring at a blank editor (and <em>Reset to base copy</em> restores it). Each panel's <em>Show base prompt</em> toggle reveals the current base read-only — that panel is the canonical wording of what you're adding to.
               </div>
             </div>
             <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", letterSpacing: "0.06em", lineHeight: 1.7 }}>
-              Tips: the override is read by BOTH the Nexus briefing and the SMC narrative, so write guidance that makes sense for each — Nexus reasons over macro + micro + news, while SMC reasons over structure (order blocks, FVGs, BOS/CHoCH). Keep the spirit of Unleashed: surface short-term possibilities and STATE THE RISK; never instruct an execution. The wilder the prompt, the more you should sanity-check the output.
+              Settings → Unleashed Prompt Profiles. Save As to make your own profile, edit either surface, Set Active, then flip Unleashed ON — the RED frame names the live profile. The locked Default is your one-click undo: switch back to it anytime; it can never be edited or deleted. Keep the spirit of Unleashed: surface short-term possibilities and STATE THE RISK; never instruct an execution. The wilder the prompt, the more you should sanity-check the output.
             </div>
           </div>
         </div>
