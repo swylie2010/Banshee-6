@@ -857,7 +857,7 @@ async function fetchUnleashedProfiles() {
   }
 }
 
-async function saveUnleashedProfile(profile) {    // {id?, name, override}
+async function saveUnleashedProfile(profile) {    // {id?, name, surfaces}
   try {
     const res = await _fetch(`${API_BASE}/unleashed/profiles`, {
       method: "POST",
@@ -870,6 +870,18 @@ async function saveUnleashedProfile(profile) {    // {id?, name, override}
   } catch (err) {
     console.warn("[api] saveUnleashedProfile:", err.message);
     return { status: "error", message: err.message };
+  }
+}
+
+/* fetch the base (built-in) Unleashed prompt text for a surface ("nexus" | "smc") */
+async function fetchBasePrompt(surface) {
+  try {
+    const res = await _fetch(`${API_BASE}/unleashed/base?surface=${encodeURIComponent(surface)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();            // {surface, text}
+  } catch (err) {
+    console.warn("[api] fetchBasePrompt:", err.message);
+    return { surface, text: "" };
   }
 }
 
@@ -901,4 +913,4 @@ async function deleteUnleashedProfile(id) {
   }
 }
 
-window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary, fetchUnleashed, setUnleashed, fetchUnleashedProfiles, saveUnleashedProfile, setActiveUnleashedProfile, deleteUnleashedProfile };
+window.API = { fetchOHLCV, fetchRadar, fetchMacro, fetchSMC, fetchPresets, savePresets, fetchGH, fetchXABCD, fetchAIBriefing, fetchSettings, saveSettings, testAIConnection, fetchStrategies, fetchExecutionPlan, fetchTrades, closeTrade, updateLevels, updateOutcome, syncAlpaca, fetchFeedbackSynthesis, fetchPredatorBriefing, runPredator, journalOpen, coreSymbol, fetchRotation, fetchPortfolios, createPortfolio, updatePortfolio, fetchPortfolioAnalysis, resolveSymbol, fetchOptionsUniverse, fetchOptionsCandidate, gradeOption, listWheels, createWheel, getWheel, postWheelEvent, deleteWheel, runScenario, learnRecap, learnCompare, learnWhyNot, listPaperWheels, getPaperWheel, createPaperWheel, submitPaperCC, getPaperWheelCalls, deletePaperWheel, getPaperWheelAlerts, postPaperWheelEvent, analyzeGridbot, deployPaperGridbot, getPaperGridbot, stopPaperGridbot, shutdownBanshee, fetchDataSourceSpeed, testCoinGecko, testCustomSource, fetchAuditEntries, fetchAuditSummary, fetchUnleashed, setUnleashed, fetchUnleashedProfiles, saveUnleashedProfile, fetchBasePrompt, setActiveUnleashedProfile, deleteUnleashedProfile };
