@@ -8,7 +8,7 @@ const MCP_CONFIG_SNIPPET = `{
   "mcpServers": {
     "banshee-pro": {
       "command": "python",
-      "args": ["C:/Users/swyli/AntiEverything/Banshee_6/mcp_server.py"]
+      "args": ["/absolute/path/to/Banshee_6/mcp_server.py"]
     }
   }
 }`;
