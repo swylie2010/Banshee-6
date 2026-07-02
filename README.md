@@ -4,6 +4,8 @@
 
 **A trading-analysis tool that runs entirely on your own computer.** Banshee watches the markets, spots the footprints institutional money leaves behind in price data, and explains — in plain English — what it's seeing. It flags; you decide. It never places a trade.
 
+![Banshee 6 — the main analysis terminal in Unleashed mode](assets/unleashed.png)
+
 ---
 
 ## What it does
@@ -18,6 +20,22 @@
 - **Observatory** — every AI tool call is logged and auditable, so you can always see exactly what Banshee did and why
 - **MCP server** — lets an AI agent (like Claude Code) talk directly to Banshee, pulling live analysis into your conversations
 - **Pluggable data** — Coinbase, CoinGecko, Alpaca, yfinance, or your own REST endpoint, in a latency-ranked chain; opt-in per source, so Banshee is never locked to any single feed
+
+---
+
+## A look inside
+
+**Macro Weather** — the sensor grid catching a *stealth fear* pattern: institutional tail-risk hedging (SKEW) is elevated while VIX stays calm, the kind of below-the-surface divergence the headline numbers miss.
+
+![Macro Weather sensor grid with stealth-fear pattern alerts](assets/macro-weather.png)
+
+**Geo-Harmonic** — harmonic arcs and an XABCD scan drawn over live price.
+
+![Geo-Harmonic arcs and XABCD structure on the BTC chart](assets/geo-harmonic.png)
+
+**The Daily Predator** — an AI news briefing that scores each catalyst by significance and folds it into every analysis.
+
+![The Daily Predator AI news briefing](assets/predator.png)
 
 ---
 
