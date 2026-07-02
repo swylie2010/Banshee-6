@@ -32,6 +32,29 @@ def test_create_and_activate_profile(tmp_path, monkeypatch):
     assert core_state.resolve_unleashed("smc", "BASE") == "BASE\nOV1"
 
 
+def test_list_profiles_returns_surfaces_not_override(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    surfaces = {
+        "nexus": {"mode": "rewrite", "text": "N-TEXT"},
+        "smc": {"mode": "nudge", "text": "S-TEXT"},
+    }
+    pid = c.post("/unleashed/profiles", json={"name": "Surfaced", "surfaces": surfaces}).json()["id"]
+
+    profiles = c.get("/unleashed/profiles").json()["profiles"]
+
+    # No profile object may carry the dead 'override' key.
+    assert all("override" not in p for p in profiles)
+
+    created = next(p for p in profiles if p["id"] == pid)
+    assert created["surfaces"]["nexus"] == {"mode": "rewrite", "text": "N-TEXT"}
+    assert created["surfaces"]["smc"] == {"mode": "nudge", "text": "S-TEXT"}
+
+    # The Default profile must also expose surfaces.
+    default = next(p for p in profiles if p["id"] == "default")
+    assert "surfaces" in default
+    assert "nexus" in default["surfaces"] and "smc" in default["surfaces"]
+
+
 def test_edit_default_rejected(tmp_path, monkeypatch):
     c = _client(tmp_path, monkeypatch)
     surfaces = {

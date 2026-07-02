@@ -307,7 +307,9 @@ def route_unleashed_profiles_get():
         "active": data["active"],
         "profiles": [
             {"id": pid, "name": p.get("name", pid),
-             "override": p.get("override", ""), "locked": bool(p.get("locked", False))}
+             "surfaces": p.get("surfaces", {"nexus": {"mode": "nudge", "text": ""},
+                                            "smc": {"mode": "nudge", "text": ""}}),
+             "locked": bool(p.get("locked", False))}
             for pid, p in data["profiles"].items()
         ],
     }
