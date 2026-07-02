@@ -327,29 +327,11 @@ def build_macro_prompt(macro_data: dict, news_lines: list = [], rotation_context
 _UNLEASHED_OVERRIDE = core_state.DEFAULT_UNLEASHED_OVERRIDE
 
 
-def _apply_unleashed_override(system_prompt: str, unleashed: bool) -> str:
-    """Append the ACTIVE Unleashed profile's override when unleashed=True.
-    When off, returns the base prompt unchanged (standard Banshee)."""
-    if not unleashed:
-        return system_prompt
-    return system_prompt + core_state.get_active_unleashed_override()
-
-
-def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None, unleashed: bool = False) -> str:
-    """Execute an AI request against whichever provider is configured in Settings.
-
-    Supports: Gemini, Claude/Anthropic, OpenAI, Ollama + any OpenAI-compatible provider
-    (Groq, LM Studio, Jan, OpenRouter, etc.) via the Ollama/Custom path.
-    Pass system_prompt_override to replace the default Banshee system prompt.
-    Pass unleashed=True to append the UNLEASHED OVERRIDE block to the system prompt.
-    """
-    system_prompt = system_prompt_override or (
-        _load_prompt("default",
-            "You are the Banshee Autonomous Agent, a quantitative trading agent. "
-            "Format briefings exactly as requested."
-        ) + _EXTERNAL_CONTENT_GUARD
-    )
-    system_prompt = _apply_unleashed_override(system_prompt, unleashed)
+def _dispatch_provider(cfg: dict, system_prompt: str, prompt: str) -> str:
+    """Send the already-assembled system_prompt verbatim to whichever provider is
+    configured in Settings. Supports: Gemini, Claude/Anthropic, OpenAI, Ollama + any
+    OpenAI-compatible provider (Groq, LM Studio, Jan, OpenRouter, etc.) via the
+    Ollama/Custom path."""
     provider = cfg.get("type", "").lower()
     try:
         if provider == "gemini":
@@ -411,6 +393,27 @@ def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None, unleashe
         return f"AI call failed ({provider}): {e}"
 
 
+def call_ai(cfg: dict, prompt: str, system_prompt_override: str = None,
+            unleashed: bool = False, surface: str = "nexus") -> str:
+    """Execute an AI request against whichever provider is configured in Settings.
+
+    Supports: Gemini, Claude/Anthropic, OpenAI, Ollama + any OpenAI-compatible provider
+    (Groq, LM Studio, Jan, OpenRouter, etc.) via the Ollama/Custom path.
+    Pass system_prompt_override to replace the default Banshee system prompt.
+    Pass unleashed=True to apply the ACTIVE Unleashed profile's override for the given
+    surface ('nexus'|'smc') to resolve the right Unleashed slot.
+    The external-content guard is always appended last, outside any editable text.
+    """
+    base = system_prompt_override or _load_prompt(
+        "default",
+        "You are the Banshee Autonomous Agent, a quantitative trading agent. "
+        "Format briefings exactly as requested.",
+    )
+    reasoning = core_state.resolve_unleashed(surface, base) if unleashed else base
+    system_prompt = reasoning + _EXTERNAL_CONTENT_GUARD
+    return _dispatch_provider(cfg, system_prompt, prompt)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SIP ARCHITECTURE — chunked briefing for context-limited models
 # ─────────────────────────────────────────────────────────────────────────────
@@ -433,7 +436,8 @@ def _split_prompt(prompt: str) -> list:
     ]
 
 
-def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = None, unleashed: bool = False) -> str:
+def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = None,
+                    unleashed: bool = False, surface: str = "nexus") -> str:
     """Sip mode: deliver sections sequentially with rolling WORKING_NOTES."""
     accumulated_notes = ""
     last_response = ""
@@ -456,7 +460,7 @@ def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = Non
                 "compact but complete enough for your next analysis to build on."
             )
 
-        last_response = call_ai(cfg, chunk_prompt, system_prompt_override, unleashed=unleashed)
+        last_response = call_ai(cfg, chunk_prompt, system_prompt_override, unleashed=unleashed, surface=surface)
 
         if not is_last and "WORKING_NOTES:" in last_response:
             notes = last_response.split("WORKING_NOTES:")[-1].strip()
@@ -465,11 +469,12 @@ def call_ai_chunked(cfg: dict, sections: list, system_prompt_override: str = Non
     return last_response
 
 
-def call_ai_briefing(cfg: dict, prompt: str, system_prompt_override: str = None, unleashed: bool = False) -> str:
+def call_ai_briefing(cfg: dict, prompt: str, system_prompt_override: str = None,
+                     unleashed: bool = False, surface: str = "nexus") -> str:
     """Auto-route: single-shot if payload fits the chunk budget, chunked otherwise."""
     if _estimate_tokens(prompt) > CHUNK_BUDGET:
-        return call_ai_chunked(cfg, _split_prompt(prompt), system_prompt_override, unleashed=unleashed)
-    return call_ai(cfg, prompt, system_prompt_override, unleashed=unleashed)
+        return call_ai_chunked(cfg, _split_prompt(prompt), system_prompt_override, unleashed=unleashed, surface=surface)
+    return call_ai(cfg, prompt, system_prompt_override, unleashed=unleashed, surface=surface)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -722,7 +727,8 @@ def smc_analysis(symbol: str,
     prompt = build_smc_prompt(symbol, htf_tf, htf_df, htf_smc,
                               ltf_tf, ltf_df, ltf_smc,
                               flat_levels=flat_levels)
-    return call_ai(cfg, prompt, system_prompt_override=_smc_system_prompt(), unleashed=unleashed)
+    return call_ai(cfg, prompt, system_prompt_override=_smc_system_prompt(),
+                   unleashed=unleashed, surface="smc")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -77,6 +77,17 @@ def test_call_ai_default_prompt_contains_guard():
     )
 
 
+def test_smc_surface_prompt_ends_with_guard(monkeypatch, tmp_path):
+    import banshee_ai, core_state as cs
+    monkeypatch.setattr(cs, "_UNLEASHED_PROFILES_FILE", tmp_path / "p.json")
+    captured = {}
+    monkeypatch.setattr(banshee_ai, "_dispatch_provider",
+                        lambda cfg, s, p: captured.setdefault("sys", s) or "ok", raising=False)
+    banshee_ai.call_ai({"type": "gemini", "key": "x", "model": "m"}, "u",
+                       system_prompt_override="SMC BASE", unleashed=False, surface="smc")
+    assert captured["sys"].endswith(banshee_ai._EXTERNAL_CONTENT_GUARD)
+
+
 def test_pass1_system_contains_guard():
     from predator_engine import _PASS1_SYSTEM
     assert "external_content" in _PASS1_SYSTEM
