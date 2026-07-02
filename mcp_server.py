@@ -182,7 +182,8 @@ def set_unleashed_mode(enabled: bool) -> str:
 
 
 @mcp.tool()
-def get_asset_radar(symbol: str, mode: str = "swing", output_mode: str = "human") -> str:
+def get_asset_radar(symbol: str, mode: str = "swing", output_mode: str = "human",
+                     unleashed: bool | None = None) -> str:
     """
     Full multi-timeframe technical analysis for a single asset.
     Calculates: EMA 20/50/200, SuperTrend, Stochastic RSI, VWAP, swing S/R,
@@ -197,18 +198,24 @@ def get_asset_radar(symbol: str, mode: str = "swing", output_mode: str = "human"
         mode:        'long_term' (W/D/4H), 'swing' (D/4H/1H) [default], 'sniper' (4H/1H/15m).
                      Aliases: 'active' → swing, 'position' → long_term.
         output_mode: 'human' [default] — full narrative. 'agent' — compact JSON.
+        unleashed:   Optional per-call override of the UNLEASHED lens for this call
+                     only (True/False). Omit to use the current global switch. Never
+                     mutates global state, and the override is recorded in this call's
+                     audit trail — a distinct, per-call audited decision.
     """
     return gateway.call(
         "get_asset_radar",
-        {"symbol": symbol, "mode": mode, "output_mode": output_mode},
+        {"symbol": symbol, "mode": mode, "output_mode": output_mode, "unleashed": unleashed},
         RadarSchema,
-        lambda p: _get("/radar", symbol=p["symbol"], mode=p["mode"], output_mode=p["output_mode"]),
+        lambda p: _get("/radar", symbol=p["symbol"], mode=p["mode"], output_mode=p["output_mode"],
+                        unleashed=p.get("unleashed")),
         signal_field="verdict",
     )
 
 
 @mcp.tool()
-def scan_assets(symbols: list[str], mode: str = "swing", output_mode: str = "human") -> str:
+def scan_assets(symbols: list[str], mode: str = "swing", output_mode: str = "human",
+                 unleashed: bool | None = None) -> str:
     """
     Scans a list of symbols and returns a ranked leaderboard sorted by absolute edge score.
     Answers: 'What's the best trade on my watchlist right now?'
@@ -217,17 +224,26 @@ def scan_assets(symbols: list[str], mode: str = "swing", output_mode: str = "hum
         symbols:     List of tickers, e.g. ['BTC/USD', 'ETH/USD', 'NVDA', 'SPY'].
         mode:        Same as get_asset_radar — 'long_term', 'swing' [default], 'sniper'.
         output_mode: 'human' [default] — formatted table. 'agent' — compact JSON array.
+        unleashed:   Optional per-call override of the UNLEASHED lens for this scan
+                     only (True/False). Omit to use the current global switch. Never
+                     mutates global state, and the override is recorded in this call's
+                     audit trail — a distinct, per-call audited decision.
     """
     return gateway.call(
         "scan_assets",
-        {"symbols": symbols, "mode": mode, "output_mode": output_mode},
+        {"symbols": symbols, "mode": mode, "output_mode": output_mode, "unleashed": unleashed},
         ScanSchema,
-        lambda p: _post("/scan", {"symbols": p["symbols"], "mode": p["mode"], "output_mode": p["output_mode"]}),
+        lambda p: _post(
+            "/scan" + (f"?unleashed={'true' if p.get('unleashed') else 'false'}"
+                       if p.get("unleashed") is not None else ""),
+            {"symbols": p["symbols"], "mode": p["mode"], "output_mode": p["output_mode"]},
+        ),
     )
 
 
 @mcp.tool()
-def synthesize_nexus(symbol: str, mode: str = "swing", use_ai: bool = True, output_mode: str = "human") -> str:
+def synthesize_nexus(symbol: str, mode: str = "swing", use_ai: bool = True, output_mode: str = "human",
+                      unleashed: bool | None = None) -> str:
     """
     Full top-down Banshee synthesis: macro regime + micro technicals + news.
     The flagship tool — macro context, catalyst scan, live TA, and AI narrative.
@@ -241,12 +257,17 @@ def synthesize_nexus(symbol: str, mode: str = "swing", use_ai: bool = True, outp
         mode:        'long_term', 'swing' [default], or 'sniper'.
         use_ai:      Set False to skip the AI call and return structured data only.
         output_mode: 'human' [default] — full narrative. 'agent' — compact JSON.
+        unleashed:   Optional per-call override of the UNLEASHED lens for this call
+                     only (True/False). Omit to use the current global switch. Never
+                     mutates global state, and the override is recorded in this call's
+                     audit trail — a distinct, per-call audited decision.
     """
     return gateway.call(
         "synthesize_nexus",
-        {"symbol": symbol, "mode": mode, "use_ai": use_ai, "output_mode": output_mode},
+        {"symbol": symbol, "mode": mode, "use_ai": use_ai, "output_mode": output_mode, "unleashed": unleashed},
         NexusSchema,
-        lambda p: _get("/nexus", symbol=p["symbol"], mode=p["mode"], use_ai=p["use_ai"], output_mode=p["output_mode"]),
+        lambda p: _get("/nexus", symbol=p["symbol"], mode=p["mode"], use_ai=p["use_ai"],
+                        output_mode=p["output_mode"], unleashed=p.get("unleashed")),
         signal_field="verdict",
     )
 

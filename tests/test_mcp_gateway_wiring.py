@@ -94,7 +94,7 @@ def test_get_asset_radar_routes_through_gateway():
     mc.assert_called_once()
     args = mc.call_args[0]
     assert args[0] == "get_asset_radar"
-    assert args[1] == {"symbol": "NVDA", "mode": "sniper", "output_mode": "agent"}
+    assert args[1] == {"symbol": "NVDA", "mode": "sniper", "output_mode": "agent", "unleashed": None}
     assert args[2] is gw.RadarSchema
     assert result == "RADAR"
 
