@@ -17,7 +17,7 @@ def test_load_seeds_default_when_missing(tmp_path, monkeypatch):
 
 def test_get_active_override_defaults_to_constant(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
-    assert core_state.get_active_unleashed_override() == core_state.DEFAULT_UNLEASHED_OVERRIDE
+    assert core_state.resolve_unleashed("nexus", "BASE") == "BASE\n" + core_state.DEFAULT_UNLEASHED_OVERRIDE.strip()
 
 
 def test_upsert_creates_and_activates(tmp_path, monkeypatch):
@@ -60,7 +60,7 @@ def test_cannot_edit_locked_default(tmp_path, monkeypatch):
     evil_surfaces = {"nexus": {"mode": "nudge", "text": "evil"}, "smc": {"mode": "nudge", "text": "evil"}}
     res = core_state.upsert_unleashed_profile("default", "Hacked", evil_surfaces)
     assert res["ok"] is False
-    assert core_state.get_active_unleashed_override() == core_state.DEFAULT_UNLEASHED_OVERRIDE
+    assert core_state.resolve_unleashed("nexus", "BASE") == "BASE\n" + core_state.DEFAULT_UNLEASHED_OVERRIDE.strip()
 
 
 def test_cannot_delete_default(tmp_path, monkeypatch):
@@ -78,7 +78,7 @@ def test_delete_active_falls_back_to_default(tmp_path, monkeypatch):
     core_state.delete_unleashed_profile(pid)
     d = core_state.load_unleashed_profiles()
     assert d["active"] == "default"
-    assert core_state.get_active_unleashed_override() == core_state.DEFAULT_UNLEASHED_OVERRIDE
+    assert core_state.resolve_unleashed("nexus", "BASE") == "BASE\n" + core_state.DEFAULT_UNLEASHED_OVERRIDE.strip()
 
 
 def test_default_override_is_immutable_on_load(tmp_path, monkeypatch):
@@ -96,4 +96,4 @@ def test_default_override_is_immutable_on_load(tmp_path, monkeypatch):
 def test_corrupt_file_falls_back(tmp_path, monkeypatch):
     _patch(tmp_path, monkeypatch)
     (tmp_path / "p.json").write_text("not json{{")
-    assert core_state.get_active_unleashed_override() == core_state.DEFAULT_UNLEASHED_OVERRIDE
+    assert core_state.resolve_unleashed("nexus", "BASE") == "BASE\n" + core_state.DEFAULT_UNLEASHED_OVERRIDE.strip()
