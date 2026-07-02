@@ -320,9 +320,12 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["ema_50"]  = df["close"].ewm(span=EMA_MED,  adjust=False).mean()
     df["ema_200"] = df["close"].ewm(span=EMA_SLOW, adjust=False).mean()
 
+    # Wilder's smoothing (ewm alpha=1/period) — matches TradingView and most
+    # charts. Plain rolling().mean() here would be Cutler's RSI, which reads a
+    # few points different and makes Banshee "look wrong" next to a chart.
     delta = df["close"].diff()
-    gain  = delta.where(delta > 0, 0).rolling(RSI_PERIOD).mean()
-    loss  = (-delta.where(delta < 0, 0)).rolling(RSI_PERIOD).mean()
+    gain  = delta.where(delta > 0, 0.0).ewm(alpha=1 / RSI_PERIOD, adjust=False).mean()
+    loss  = (-delta.where(delta < 0, 0.0)).ewm(alpha=1 / RSI_PERIOD, adjust=False).mean()
     df["rsi"] = 100 - (100 / (1 + gain / loss.replace(0, np.nan)))
 
     df = add_stoch_rsi(df)
@@ -937,8 +940,11 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
     if not df_fast.empty and "atr" in df_fast.columns:
         atr_val = float(df_fast.iloc[-1]["atr"])
         if not np.isnan(atr_val) and atr_val > 0:
+            # This ratio is just the profile's configured bracket (target ÷ stop),
+            # NOT a per-setup grade — it's identical for every setup on the asset.
+            # Label it honestly so "3:1" doesn't read as "this trade is excellent."
             rr = round(target_mult / stop_mult, 2)
-            rr_q = ("EXCELLENT" if rr >= 3 else "GOOD" if rr >= 2 else "MARGINAL") + f" ({rr:.1f}:1)"
+            rr_q = f"configured bracket ({rr:.1f}:1)"
             atr_plan = {
                 "atr":          round(atr_val, 6),
                 "entry":        round(price, 6),
@@ -957,10 +963,16 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
     safety = knowledge_graph.evaluate_asset_safety(symbol, domino_phase)
     
     last_fast = df_fast.iloc[-1] if not df_fast.empty else pd.Series(dtype=float)
-    bb_lower = float(last_fast.get("bb_lower", 0)) if not last_fast.empty and not pd.isna(last_fast.get("bb_lower")) else 0.0
-    bb_upper = float(last_fast.get("bb_upper", 1)) if not last_fast.empty and not pd.isna(last_fast.get("bb_upper")) else 1.0
-    bb_width = bb_upper - bb_lower if bb_upper != bb_lower else 1.0
-    bb_pos = (price - bb_lower) / bb_width
+    # Guard data-poor bars: if the Bollinger bands are missing/NaN or degenerate,
+    # a 0→1 fallback made bb_pos ≈ raw price (e.g. ~60000). Default to 0.5
+    # (mid-band / neutral) when the bands aren't genuinely available. A price
+    # legitimately outside real bands is preserved (bb_pos may be <0 or >1).
+    _bbl = last_fast.get("bb_lower") if not last_fast.empty else None
+    _bbu = last_fast.get("bb_upper") if not last_fast.empty else None
+    if _bbl is not None and _bbu is not None and not pd.isna(_bbl) and not pd.isna(_bbu) and float(_bbu) > float(_bbl):
+        bb_pos = (price - float(_bbl)) / (float(_bbu) - float(_bbl))
+    else:
+        bb_pos = 0.5
 
     indicators = {
         "rsi": float(last_fast.get("rsi", 50)) if not last_fast.empty and not pd.isna(last_fast.get("rsi")) else 50.0,
