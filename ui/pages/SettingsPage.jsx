@@ -531,8 +531,7 @@ function PromptProfilesSection() {
   const [draft, setDraft]       = React.useState({ nexus: { mode: "nudge", text: "" }, smc: { mode: "nudge", text: "" } });
   const [bases, setBases]       = React.useState({ nexus: "", smc: "" });
   const [status, setStatus]     = React.useState("");
-  const [newName, setNewName]   = React.useState("");
-  const [naming, setNaming]     = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState("");
 
   const selected = profiles.find(p => p.id === selId) || profiles.find(p => p.id === "default");
   const isLocked = !!(selected && selected.locked);
@@ -550,12 +549,12 @@ function PromptProfilesSection() {
       setBases({ nexus: n.text || "", smc: s.text || "" });
     })();
   }, []);
-  // Only reset `draft` when the SELECTED PROFILE actually changes (or first arrives).
+  // Only reset `draft`/`nameDraft` when the SELECTED PROFILE actually changes (or first arrives).
   // `load()` mints a fresh `profiles` array after every activate/delete/save, which would
   // otherwise re-fire this effect and discard unsaved edits (edit a surface, click "Set
   // Active" without saving -> edit lost). Guard on the previously-loaded selId via a ref,
   // and only advance that ref once `selId` is actually present in `profiles` -- during the
-  // brief window after "Save As New" sets selId to the new profile's id but before the
+  // brief window after "Duplicate to edit" sets selId to the new profile's id but before the
   // reloaded `profiles` list contains it, `selected` falls back to the default profile, and
   // we must not treat that fallback as "loaded" or the real surfaces would never populate.
   const prevSelIdRef = React.useRef(null);
@@ -564,6 +563,7 @@ function PromptProfilesSection() {
     const selIdPresent = profiles.some(p => p.id === selId);
     if (selIdPresent && prevSelIdRef.current !== selId) {
       setDraft(JSON.parse(JSON.stringify(selected.surfaces)));
+      setNameDraft(selected.name);
       prevSelIdRef.current = selId;
     }
   }, [selId, profiles]);
@@ -573,16 +573,20 @@ function PromptProfilesSection() {
 
   async function onSave() {
     if (isLocked || !selected) return;
-    const r = await window.API.saveUnleashedProfile({ id: selId, name: selected.name, surfaces: draft });
+    const name = (nameDraft || "").trim() || selected.name;
+    const r = await window.API.saveUnleashedProfile({ id: selId, name, surfaces: draft });
     if (r.ok || r.status === "saved") { flash("✓ Saved"); await load(); } else flash("✗ " + (r.error || r.message || "save failed"));
   }
-  function onSaveAs() { setNaming(true); }
-  async function confirmSaveAs() {
-    const name = newName.trim();
-    if (!name) { flash("✗ Name required"); return; }
-    const r = await window.API.saveUnleashedProfile({ name, surfaces: draft });
-    if (r.ok || r.status === "saved") { setNaming(false); setNewName(""); setSelId(r.id); flash("✓ Created"); await load(); }
-    else flash("✗ " + (r.error || r.message || "save failed"));
+  // One-click duplicate: no separate "type a name, then Create" step. Immediately saves a
+  // NEW profile seeded from the current draft (so it also captures any in-progress, unsaved
+  // edits) named after the profile being duplicated, selects it, and leaves the user editing
+  // it right away. Replaces the old two-step "Save As New" naming-block flow.
+  async function onDuplicate() {
+    if (!selected) return;
+    const copyName = `${selected.name} (copy)`;
+    const r = await window.API.saveUnleashedProfile({ name: copyName, surfaces: draft });
+    if (r.ok || r.status === "saved") { setSelId(r.id); flash("✓ Duplicated — now editing your copy"); await load(); }
+    else flash("✗ " + (r.error || r.message || "duplicate failed"));
   }
   async function onDelete() {
     if (isLocked) return;
@@ -605,40 +609,49 @@ function PromptProfilesSection() {
         cannot be edited here. A custom profile takes effect only while Unleashed is ON; the RED frame names it.
       </div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+      {/* Compact control bar — lives ABOVE the two tall surface panels below, so nothing
+          critical (dropdown, Set Active, rename, Save, Duplicate, Delete, and their
+          feedback) is ever buried under them / below the fold. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap",
+                    padding: 10, background: "var(--bg-2)", border: "1px solid var(--line)" }}>
         <select value={selId} onChange={e => setSelId(e.target.value)} className="mono"
-          style={{ fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+          style={{ fontSize: 13, padding: "6px 8px", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
           {profiles.map(p => (
             <option key={p.id} value={p.id}>{p.name}{p.id === activeId ? "  ● active" : ""}{p.locked ? "  (locked)" : ""}</option>
           ))}
         </select>
         <button onClick={onActivate} className="mono"
           style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>Set Active</button>
+
+        <input value={nameDraft} onChange={e => setNameDraft(e.target.value)} disabled={isLocked}
+          placeholder="Profile name" className="mono" title={isLocked ? "Default's name can't be edited — duplicate it to rename" : "Rename this profile"}
+          style={{ fontSize: 13, padding: "6px 8px", minWidth: 160, background: isLocked ? "var(--bg-1)" : "var(--bg-3)",
+                   color: "var(--ink)", border: "1px solid var(--line)", opacity: isLocked ? 0.5 : 1,
+                   cursor: isLocked ? "not-allowed" : "text" }} />
+
+        <button onClick={onSave} disabled={isLocked} className="mono"
+          style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer", background: "var(--buy)", color: "#000", border: "none", opacity: isLocked ? 0.4 : 1 }}>Save</button>
+        <button onClick={onDuplicate} className="mono"
+          style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+          {isLocked ? "Duplicate to edit" : "Duplicate as copy"}
+        </button>
+        <button onClick={onDelete} disabled={isLocked} className="mono"
+          style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer", background: "transparent", color: "var(--sell)", border: "1px solid var(--sell)", opacity: isLocked ? 0.4 : 1 }}>Delete</button>
+
+        {status && <span className="mono" style={{ fontSize: 12, color: status.startsWith("✗") ? "var(--sell)" : "var(--buy)" }}>{status}</span>}
       </div>
+
+      {isLocked && (
+        <div className="mono" style={{ fontSize: 12, color: "var(--ink)", lineHeight: 1.5, marginBottom: 14,
+                                        padding: "8px 12px", background: "var(--bg-2)", border: "1px solid var(--line)" }}>
+          🔒 Default is locked — it's your safety net and can't be edited. Click "Duplicate to edit" above to make your own copy.
+        </div>
+      )}
 
       <SurfacePanel label="NEXUS (synthesis)" hint="The top-level read that ties macro → structure → micro → news together."
         slot={draft.nexus} base={bases.nexus} locked={isLocked} onChange={s => setSurface("nexus", s)} />
       <SurfacePanel label="SMC (structure)" hint="Market-structure analysis. SMC feeds Nexus, so edits here propagate upward."
         slot={draft.smc} base={bases.smc} locked={isLocked} onChange={s => setSurface("smc", s)} />
-
-      {naming && (
-        <div style={{ display: "flex", gap: 8, marginTop: 4, marginBottom: 10 }}>
-          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Profile name (e.g. My Setting 1)"
-            className="mono" style={{ flex: 1, fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }} />
-          <button onClick={confirmSaveAs} className="mono" style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--buy)", color: "#000", border: "none" }}>Create</button>
-          <button onClick={() => setNaming(false)} className="mono" style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>Cancel</button>
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-        <button onClick={onSave} disabled={isLocked} className="mono"
-          style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer", background: "var(--buy)", color: "#000", border: "none", opacity: isLocked ? 0.4 : 1 }}>Save</button>
-        <button onClick={onSaveAs} className="mono"
-          style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>{isLocked ? "Duplicate to Edit" : "Save As New…"}</button>
-        <button onClick={onDelete} disabled={isLocked} className="mono"
-          style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer", background: "transparent", color: "var(--sell)", border: "1px solid var(--sell)", opacity: isLocked ? 0.4 : 1 }}>Delete</button>
-        {status && <span className="mono" style={{ fontSize: 12, alignSelf: "center", color: status.startsWith("✗") ? "var(--sell)" : "var(--buy)" }}>{status}</span>}
-      </div>
     </div>
   );
 }
@@ -733,7 +746,7 @@ function SettingsPage({ onBack }) {
   };
 
   return (
-    <div style={{ position: "absolute", inset: 0, background: "var(--bg-1)", display: "flex", flexDirection: "column", zIndex: 30, animation: "fadeIn 200ms ease" }}>
+    <div className="settings-surface" style={{ position: "absolute", inset: 0, background: "var(--bg-1)", display: "flex", flexDirection: "column", zIndex: 30, animation: "fadeIn 200ms ease" }}>
 
       {/* header */}
       <div style={{ height: 52, padding: "0 18px", flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 18, background: "var(--bg-2)" }}>
