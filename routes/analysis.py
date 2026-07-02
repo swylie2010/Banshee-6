@@ -941,10 +941,10 @@ def route_smc(
     ltf: str = Query("4h"),
     htf: str = Query("1d"),
     use_ai: bool = Query(True),
-    unleashed: bool | None = None,
 ):
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
+    _unleashed = core_state.load_unleashed()["enabled"]
     _rkey  = f"smc:{symbol.upper()}:{ltf}:{htf}:{use_ai}"
     _entry = _RESP_CACHE.get(_rkey)
     if _entry and (time.time() - _entry["ts"]) < _RESP_TTL:
@@ -996,7 +996,7 @@ def route_smc(
             htf_tf=htf, htf_df=htf_df, htf_smc=htf_data,
             ltf_tf=ltf, ltf_df=ltf_df, ltf_smc=ltf_data,
             cfg=ai_cfg,
-            unleashed=_effective_unleashed(unleashed),
+            unleashed=_unleashed,
         )
         out += f"\n\n{'─' * 50}\nAI STRUCTURE NARRATIVE:\n{'─' * 50}\n{narrative}"
     elif use_ai:
@@ -1016,11 +1016,11 @@ def route_smc_json(
     ltf: str = Query("4h"),
     htf: str = Query(""),
     use_ai: bool = Query(False),
-    unleashed: bool | None = None,
 ):
     """Full SMC data dicts + serialised DataFrames for the Structure Map tab."""
     symbol = _norm_symbol(symbol)
     _validate_symbol(symbol)
+    _unleashed = core_state.load_unleashed()["enabled"]
     ltf_df, ltf_err = _fetch_smc_df(symbol, ltf)
     if ltf_err or ltf_df is None or (hasattr(ltf_df, "empty") and ltf_df.empty):
         return JSONResponse(content={"error": f"LTF load failed: {ltf_err or 'empty'}"})
@@ -1059,7 +1059,7 @@ def route_smc_json(
                     htf_tf=htf, htf_df=htf_df, htf_smc=htf_smc,
                     ltf_tf=ltf, ltf_df=ltf_df, ltf_smc=ltf_smc,
                     cfg=ai_cfg, flat_levels=flat_levels,
-                    unleashed=_effective_unleashed(unleashed),
+                    unleashed=_unleashed,
                 )
             except Exception as e:
                 ai_narrative = f"AI error: {e}"

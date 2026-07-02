@@ -88,6 +88,31 @@ def test_smc_surface_prompt_ends_with_guard(monkeypatch, tmp_path):
     assert captured["sys"].endswith(banshee_ai._EXTERNAL_CONTENT_GUARD)
 
 
+def test_rewrite_profile_still_ends_with_guard(monkeypatch, tmp_path):
+    """A REWRITE-mode profile replaces the base prompt wholesale — it must not be
+    able to strip the trailing guard, since call_ai() appends the guard AFTER
+    resolve_unleashed() runs, outside any editable text."""
+    import banshee_ai, core_state as cs
+
+    monkeypatch.setattr(cs, "_UNLEASHED_PROFILES_FILE", tmp_path / "p.json")
+    rewrite_text = "COMPLETELY NEW PROMPT NO GUARD HERE"
+    pid = cs.upsert_unleashed_profile(
+        None, "Rewrite Test",
+        {"nexus": {"mode": "rewrite", "text": rewrite_text},
+         "smc":   {"mode": "nudge", "text": ""}},
+    )["id"]
+    cs.set_active_unleashed_profile(pid)
+
+    captured = {}
+    monkeypatch.setattr(banshee_ai, "_dispatch_provider",
+                        lambda cfg, s, p: captured.setdefault("sys", s) or "ok", raising=False)
+    banshee_ai.call_ai({"type": "gemini", "key": "x", "model": "m"}, "u",
+                       unleashed=True, surface="nexus")
+
+    assert captured["sys"].endswith(banshee_ai._EXTERNAL_CONTENT_GUARD)
+    assert rewrite_text in captured["sys"]
+
+
 def test_pass1_system_contains_guard():
     from predator_engine import _PASS1_SYSTEM
     assert "external_content" in _PASS1_SYSTEM

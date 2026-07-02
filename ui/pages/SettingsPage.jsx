@@ -550,8 +550,22 @@ function PromptProfilesSection() {
       setBases({ nexus: n.text || "", smc: s.text || "" });
     })();
   }, []);
+  // Only reset `draft` when the SELECTED PROFILE actually changes (or first arrives).
+  // `load()` mints a fresh `profiles` array after every activate/delete/save, which would
+  // otherwise re-fire this effect and discard unsaved edits (edit a surface, click "Set
+  // Active" without saving -> edit lost). Guard on the previously-loaded selId via a ref,
+  // and only advance that ref once `selId` is actually present in `profiles` -- during the
+  // brief window after "Save As New" sets selId to the new profile's id but before the
+  // reloaded `profiles` list contains it, `selected` falls back to the default profile, and
+  // we must not treat that fallback as "loaded" or the real surfaces would never populate.
+  const prevSelIdRef = React.useRef(null);
   React.useEffect(() => {
-    if (selected && selected.surfaces) setDraft(JSON.parse(JSON.stringify(selected.surfaces)));
+    if (!selected) return;
+    const selIdPresent = profiles.some(p => p.id === selId);
+    if (selIdPresent && prevSelIdRef.current !== selId) {
+      setDraft(JSON.parse(JSON.stringify(selected.surfaces)));
+      prevSelIdRef.current = selId;
+    }
   }, [selId, profiles]);
 
   const flash = (m) => { setStatus(m); setTimeout(() => setStatus(""), 2500); };

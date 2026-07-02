@@ -850,7 +850,7 @@ async function fetchUnleashedProfiles() {
   try {
     const res = await _fetch(`${API_BASE}/unleashed/profiles`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();            // {active, profiles:[{id,name,override,locked}]}
+    return await res.json();            // {active, profiles:[{id,name,surfaces,locked}]}
   } catch (err) {
     console.warn("[api] fetchUnleashedProfiles:", err.message);
     return { active: "default", profiles: [] };
