@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -98,8 +98,35 @@ app.include_router(_gridbot_router)
 app.include_router(_audit_router)
 
 
+# Origins the browser UI is served from (mirrors the CORS allow-list above).
+_UI_ORIGINS = frozenset({"http://localhost:8765", "http://127.0.0.1:8765"})
+
+
+def _is_same_origin(request: Request) -> bool:
+    """True if the request looks like it came from the Banshee UI page itself.
+
+    /auth/token is token-exempt (it's the bootstrap that hands the browser the
+    token), so its only guard is origin. The browser stamps its own fetches
+    with Sec-Fetch-Site / Origin / Referer; a bare GET from a script or a
+    mistaken local AI agent carries none of these → refused.
+
+    Limitation: a deliberate non-browser client can forge these headers. This
+    stops the accidental/naive case (the probable one), not a determined
+    adversary — that needs OS-level socket auth (tracked for the real-trading
+    milestone). See ACTIVE_TASK.md.
+    """
+    if request.headers.get("sec-fetch-site") == "same-origin":
+        return True
+    if request.headers.get("origin") in _UI_ORIGINS:
+        return True
+    referer = request.headers.get("referer") or ""
+    return any(referer.startswith(o) for o in _UI_ORIGINS)
+
+
 @app.get("/auth/token")
-async def route_auth_token():
+async def route_auth_token(request: Request):
+    if not _is_same_origin(request):
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
     return {"token": _BANSHEE_TOKEN}
 
 
