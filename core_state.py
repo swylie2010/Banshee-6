@@ -207,13 +207,25 @@ def _default_unleashed_profiles() -> dict:
 
 def _migrate_profile(prof: dict) -> dict:
     """Upgrade a legacy {name, override, locked} profile to per-surface slots.
-    Idempotent: a profile already carrying `surfaces` is returned unchanged (with
-    any missing surface filled from stock)."""
-    if "surfaces" in prof and isinstance(prof["surfaces"], dict):
+    Idempotent: a profile already carrying `surfaces` is re-normalized through
+    `_surface_slot` (mode re-clamped, text coerced) and its `surfaces` dict is
+    rebuilt from scratch so extraneous surface keys are dropped and any missing
+    surface is filled from stock. A non-dict entry (hand-corrupted file) is
+    replaced with a fresh Recovered profile so the load stays fail-safe."""
+    if not isinstance(prof, dict):
+        return {"name": "Recovered", "locked": False,
+                "surfaces": {"nexus": _surface_slot(""), "smc": _surface_slot("")}}
+    existing = prof.get("surfaces")
+    if isinstance(existing, dict):
+        rebuilt = {}
         for surface in ("nexus", "smc"):
-            slot = prof["surfaces"].get(surface)
-            if not isinstance(slot, dict) or "mode" not in slot or "text" not in slot:
-                prof["surfaces"][surface] = _surface_slot("")
+            slot = existing.get(surface)
+            if isinstance(slot, dict):
+                rebuilt[surface] = _surface_slot(slot.get("text", ""), slot.get("mode", "nudge"))
+            else:
+                rebuilt[surface] = _surface_slot("")
+        prof.pop("override", None)
+        prof["surfaces"] = rebuilt
         return prof
     legacy = prof.pop("override", "") or ""
     prof["surfaces"] = {"nexus": _surface_slot(legacy), "smc": _surface_slot(legacy)}
