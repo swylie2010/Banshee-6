@@ -480,11 +480,56 @@ function PinSettings() {
   );
 }
 
+function SurfacePanel({ label, hint, slot, base, locked, onChange }) {
+  const [showBase, setShowBase] = React.useState(false);
+  const mode = slot.mode || "nudge";
+  const setMode = (m) => {
+    // First switch to rewrite on an empty box → seed with the base copy.
+    if (m === "rewrite" && !(slot.text || "").trim()) onChange({ mode: m, text: base });
+    else onChange({ ...slot, mode: m });
+  };
+  return (
+    <div style={{ marginBottom: 18, border: "1px solid var(--line)", padding: 12 }}>
+      <div className="mono" style={{ fontSize: 12, color: "var(--ink)", fontWeight: 700, marginBottom: 4 }}>{label}</div>
+      <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 8 }}>{hint}</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        {["nudge", "rewrite"].map(m => (
+          <button key={m} onClick={() => !locked && setMode(m)} className="mono"
+            style={{ fontSize: 11, padding: "4px 10px", cursor: locked ? "not-allowed" : "pointer",
+                     background: mode === m ? "var(--cyan)" : "var(--bg-3)",
+                     color: mode === m ? "#000" : "var(--ink)", border: "1px solid var(--line)" }}>
+            {m === "nudge" ? "Nudge (add on top)" : "Rewrite (replace)"}
+          </button>
+        ))}
+        {mode === "rewrite" && !locked && (
+          <button onClick={() => onChange({ mode, text: base })} className="mono"
+            style={{ fontSize: 11, padding: "4px 10px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+            Reset to base copy
+          </button>
+        )}
+      </div>
+      <textarea value={slot.text || ""} onChange={e => onChange({ ...slot, text: e.target.value })} readOnly={locked}
+        rows={mode === "rewrite" ? 12 : 6} placeholder={mode === "nudge" ? "Text added after the base prompt…" : "The full prompt Banshee will use for this surface…"}
+        style={{ width: "100%", fontFamily: "monospace", fontSize: 13, lineHeight: 1.5, padding: 10,
+                 background: locked ? "var(--bg-1)" : "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)", resize: "vertical" }} />
+      <button onClick={() => setShowBase(s => !s)} className="mono"
+        style={{ fontSize: 11, marginTop: 6, padding: "2px 6px", cursor: "pointer", background: "transparent", color: "var(--cyan)", border: "none" }}>
+        {showBase ? "▾ Hide base prompt" : "▸ Show base prompt (what you're adding to)"}
+      </button>
+      {showBase && (
+        <pre className="mono" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 6, padding: 10, whiteSpace: "pre-wrap",
+             background: "var(--bg-1)", color: "var(--ink-4)", border: "1px solid var(--line)", maxHeight: 220, overflow: "auto" }}>{base}</pre>
+      )}
+    </div>
+  );
+}
+
 function PromptProfilesSection() {
   const [profiles, setProfiles] = React.useState([]);
   const [activeId, setActiveId] = React.useState("default");
   const [selId, setSelId]       = React.useState("default");
-  const [draft, setDraft]       = React.useState("");
+  const [draft, setDraft]       = React.useState({ nexus: { mode: "nudge", text: "" }, smc: { mode: "nudge", text: "" } });
+  const [bases, setBases]       = React.useState({ nexus: "", smc: "" });
   const [status, setStatus]     = React.useState("");
   const [newName, setNewName]   = React.useState("");
   const [naming, setNaming]     = React.useState(false);
@@ -498,38 +543,41 @@ function PromptProfilesSection() {
     setActiveId(d.active || "default");
   }, []);
   React.useEffect(() => { load(); }, [load]);
-  React.useEffect(() => { if (selected) setDraft(selected.override || ""); }, [selId, profiles]);
+  React.useEffect(() => {
+    (async () => {
+      const n = await window.API.fetchBasePrompt("nexus");
+      const s = await window.API.fetchBasePrompt("smc");
+      setBases({ nexus: n.text || "", smc: s.text || "" });
+    })();
+  }, []);
+  React.useEffect(() => {
+    if (selected && selected.surfaces) setDraft(JSON.parse(JSON.stringify(selected.surfaces)));
+  }, [selId, profiles]);
 
   const flash = (m) => { setStatus(m); setTimeout(() => setStatus(""), 2500); };
+  const setSurface = (surface, slot) => setDraft(d => ({ ...d, [surface]: slot }));
 
   async function onSave() {
-    if (isLocked || !selected) return;  // no selection (e.g. profile list failed to load) → nothing to save
-    const r = await window.API.saveUnleashedProfile({ id: selId, name: selected.name, override: draft });
-    if (r.status === "saved") { flash("✓ Saved"); await load(); }
-    else flash("✗ " + (r.message || "save failed"));
+    if (isLocked || !selected) return;
+    const r = await window.API.saveUnleashedProfile({ id: selId, name: selected.name, surfaces: draft });
+    if (r.ok || r.status === "saved") { flash("✓ Saved"); await load(); } else flash("✗ " + (r.error || r.message || "save failed"));
   }
   function onSaveAs() { setNaming(true); }
   async function confirmSaveAs() {
     const name = newName.trim();
     if (!name) { flash("✗ Name required"); return; }
-    const r = await window.API.saveUnleashedProfile({ name, override: draft });
-    if (r.status === "saved") { setNaming(false); setNewName(""); setSelId(r.id); flash("✓ Created"); await load(); }
-    else flash("✗ " + (r.message || "save failed"));
+    const r = await window.API.saveUnleashedProfile({ name, surfaces: draft });
+    if (r.ok || r.status === "saved") { setNaming(false); setNewName(""); setSelId(r.id); flash("✓ Created"); await load(); }
+    else flash("✗ " + (r.error || r.message || "save failed"));
   }
   async function onDelete() {
     if (isLocked) return;
     const r = await window.API.deleteUnleashedProfile(selId);
-    if (r.status === "deleted") { setSelId("default"); flash("✓ Deleted"); await load(); }
-    else flash("✗ " + (r.message || "delete failed"));
+    if (r.ok || r.status === "deleted") { setSelId("default"); flash("✓ Deleted"); await load(); } else flash("✗ delete failed");
   }
   async function onActivate() {
     const r = await window.API.setActiveUnleashedProfile(selId);
-    if (r.status === "saved") { flash("✓ Activated"); await load(); }
-    else flash("✗ " + (r.message || "activate failed"));
-  }
-  function onReset() {
-    const def = profiles.find(p => p.id === "default");
-    if (def) setDraft(def.override || "");
+    if (r.ok || r.status === "saved") { flash("✓ Activated"); await load(); } else flash("✗ activate failed");
   }
 
   return (
@@ -538,60 +586,43 @@ function PromptProfilesSection() {
         UNLEASHED PROMPT PROFILES
       </div>
       <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", maxWidth: 560, marginBottom: 14, lineHeight: 1.5 }}>
-        These edit ONLY the Unleashed override layer. Standard Banshee always uses the safe
-        Default prompt — it is never changed here. A custom profile only takes effect while
-        Unleashed is ON, and the RED Unleashed frame will name it.
+        Edit Nexus (synthesis) and SMC (structure) independently. These affect ONLY Unleashed —
+        standard Banshee always uses the safe base prompts. The news-injection guard is always on and
+        cannot be edited here. A custom profile takes effect only while Unleashed is ON; the RED frame names it.
       </div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
-        <select value={selId} onChange={e => setSelId(e.target.value)}
-                className="mono" style={{ fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+        <select value={selId} onChange={e => setSelId(e.target.value)} className="mono"
+          style={{ fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }}>
           {profiles.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.name}{p.id === activeId ? "  ● active" : ""}{p.locked ? "  (locked)" : ""}
-            </option>
+            <option key={p.id} value={p.id}>{p.name}{p.id === activeId ? "  ● active" : ""}{p.locked ? "  (locked)" : ""}</option>
           ))}
         </select>
         <button onClick={onActivate} className="mono"
-                style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
-          Set Active
-        </button>
+          style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>Set Active</button>
       </div>
 
-      <textarea value={draft} onChange={e => setDraft(e.target.value)} readOnly={isLocked}
-                rows={10}
-                style={{ width: "100%", fontFamily: "monospace", fontSize: 13, lineHeight: 1.5,
-                         padding: 10, background: isLocked ? "var(--bg-1)" : "var(--bg-2)",
-                         color: "var(--ink)", border: "1px solid var(--line)", resize: "vertical" }} />
+      <SurfacePanel label="NEXUS (synthesis)" hint="The top-level read that ties macro → structure → micro → news together."
+        slot={draft.nexus} base={bases.nexus} locked={isLocked} onChange={s => setSurface("nexus", s)} />
+      <SurfacePanel label="SMC (structure)" hint="Market-structure analysis. SMC feeds Nexus, so edits here propagate upward."
+        slot={draft.smc} base={bases.smc} locked={isLocked} onChange={s => setSurface("smc", s)} />
 
       {naming && (
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 4, marginBottom: 10 }}>
           <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Profile name (e.g. My Setting 1)"
-                 className="mono" style={{ flex: 1, fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }} />
+            className="mono" style={{ flex: 1, fontSize: 13, padding: "6px 8px", background: "var(--bg-2)", color: "var(--ink)", border: "1px solid var(--line)" }} />
           <button onClick={confirmSaveAs} className="mono" style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--buy)", color: "#000", border: "none" }}>Create</button>
           <button onClick={() => setNaming(false)} className="mono" style={{ fontSize: 12, padding: "6px 12px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>Cancel</button>
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
         <button onClick={onSave} disabled={isLocked} className="mono"
-                style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer",
-                         background: "var(--buy)", color: "#000", border: "none", opacity: isLocked ? 0.4 : 1 }}>
-          Save
-        </button>
+          style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer", background: "var(--buy)", color: "#000", border: "none", opacity: isLocked ? 0.4 : 1 }}>Save</button>
         <button onClick={onSaveAs} className="mono"
-                style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
-          {isLocked ? "Duplicate to Edit" : "Save As New…"}
-        </button>
-        <button onClick={onReset} className="mono"
-                style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>
-          Reset to Default text
-        </button>
+          style={{ fontSize: 12, padding: "6px 14px", cursor: "pointer", background: "var(--bg-3)", color: "var(--ink)", border: "1px solid var(--line)" }}>{isLocked ? "Duplicate to Edit" : "Save As New…"}</button>
         <button onClick={onDelete} disabled={isLocked} className="mono"
-                style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer",
-                         background: "transparent", color: "var(--sell)", border: "1px solid var(--sell)", opacity: isLocked ? 0.4 : 1 }}>
-          Delete
-        </button>
+          style={{ fontSize: 12, padding: "6px 14px", cursor: isLocked ? "not-allowed" : "pointer", background: "transparent", color: "var(--sell)", border: "1px solid var(--sell)", opacity: isLocked ? 0.4 : 1 }}>Delete</button>
         {status && <span className="mono" style={{ fontSize: 12, alignSelf: "center", color: status.startsWith("✗") ? "var(--sell)" : "var(--buy)" }}>{status}</span>}
       </div>
     </div>
