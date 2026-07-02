@@ -262,10 +262,21 @@ def save_unleashed_profiles(data: dict) -> None:
         pass
 
 
-def get_active_unleashed_override() -> str:
+def resolve_unleashed(surface: str, base: str) -> str:
+    """Effective reasoning prompt for a surface under the ACTIVE profile.
+    Nudge → base + text; Rewrite → text; unknown/blank → base unchanged.
+    The injection guard is NOT applied here — banshee_ai appends it last."""
     data = load_unleashed_profiles()
     prof = data["profiles"].get(data["active"]) or data["profiles"]["default"]
-    return prof.get("override", DEFAULT_UNLEASHED_OVERRIDE)
+    slot = (prof.get("surfaces") or {}).get(surface)
+    if not isinstance(slot, dict):
+        return base
+    text = (slot.get("text") or "").strip()
+    if not text:
+        return base
+    if slot.get("mode") == "rewrite":
+        return text
+    return base + "\n" + text
 
 
 def get_active_unleashed_profile() -> dict:

@@ -74,3 +74,30 @@ def test_non_dict_profile_entry_recovered_on_load(tmp_path, monkeypatch):
     assert rec["locked"] is False
     assert set(rec["surfaces"].keys()) == {"nexus", "smc"}
     assert rec["surfaces"]["nexus"] == {"mode": "nudge", "text": ""}
+
+
+def test_resolve_nudge_appends(tmp_path, monkeypatch):
+    _reset(tmp_path, monkeypatch)
+    cs.upsert_unleashed_profile("", "P", {"nexus": {"mode": "nudge", "text": "ADD ME"},
+                                          "smc":   {"mode": "nudge", "text": ""}})
+    data = cs.load_unleashed_profiles()
+    pid = [k for k in data["profiles"] if k != "default"][0]
+    cs.set_active_unleashed_profile(pid)
+    assert cs.resolve_unleashed("nexus", "BASE") == "BASE\nADD ME"
+    # blank text ⇒ stock base
+    assert cs.resolve_unleashed("smc", "SMCBASE") == "SMCBASE"
+
+
+def test_resolve_rewrite_replaces(tmp_path, monkeypatch):
+    _reset(tmp_path, monkeypatch)
+    cs.upsert_unleashed_profile("", "P", {"nexus": {"mode": "rewrite", "text": "WHOLE NEW"},
+                                          "smc":   {"mode": "nudge", "text": ""}})
+    data = cs.load_unleashed_profiles()
+    pid = [k for k in data["profiles"] if k != "default"][0]
+    cs.set_active_unleashed_profile(pid)
+    assert cs.resolve_unleashed("nexus", "BASE") == "WHOLE NEW"
+
+
+def test_resolve_unknown_surface_returns_base(tmp_path, monkeypatch):
+    _reset(tmp_path, monkeypatch)
+    assert cs.resolve_unleashed("nope", "BASE") == "BASE"
