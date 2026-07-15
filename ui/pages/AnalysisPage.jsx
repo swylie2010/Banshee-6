@@ -295,7 +295,12 @@ function AnalysisPage({ asset, macroWarning, initialTab, onBack, manualStories =
   const showGH    = tab === "gh";
   const showXABCD = tab === "gh";
 
-  const allWarnings = computeWarnings(smcData, ghData, xabcdData, asset);
+  // Data-quality flags first (thin history, blank TFs) so they frame the SMC/GH
+  // warnings below — same single-source mapping the hub uses.
+  const allWarnings = [
+    ...window.radarDataCards(asset?.warnings),
+    ...computeWarnings(smcData, ghData, xabcdData, asset),
+  ];
 
   /* nexus calcs for trade panel */
   const dir = asset.verdict === "SELL" ? -1 : 1;

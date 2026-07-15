@@ -1,6 +1,7 @@
 """routes/analysis.py — radar, SMC, geo-harmonic, analysis tools."""
 
 import json
+import logging
 import os
 import re
 import time
@@ -305,6 +306,22 @@ def route_watchlist():
 # ROUTE — Asset Radar (single symbol)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _radar_error(symbol: str, message: str, output_mode: str):
+    """Return a radar failure the frontend can actually render — never a bare 500.
+
+    A blank search box masquerades as success, so every failure path must carry a
+    message. In 'full' (JSON) mode the UI/AI consumer reads {error} from the
+    payload; otherwise it's a plain sentence for text/MCP callers. [actionable_errors]
+
+    Inputs:  symbol, a human message, the requested output_mode.
+    Returns: JSONResponse (full mode) or a plain string (side effect: none).
+    """
+    text = f"{message} ({symbol})"
+    if output_mode == "full":
+        return JSONResponse(content={"error": text, "symbol": symbol})
+    return text
+
+
 @router.get("/radar", response_class=PlainTextResponse)
 def route_radar(
     symbol: str = Query(...),
@@ -326,12 +343,18 @@ def route_radar(
     else:
         tfs = get_ohlcv_cached(symbol, mode)
         if not tfs or "error" in tfs:
-            return f"Error loading data for {symbol}. Check the ticker format."
+            return _radar_error(symbol, "Couldn't load price data — check the ticker.", output_mode)
         cached        = _load_macro_cache()
         radar_sensors = cached["mac_data"] if cached and "mac_data" in cached else None
-        res = micro_engine.run_analysis(symbol, mode, tfs, sensors=radar_sensors, unleashed=_unleashed)
+        # Safety net: a thin/odd symbol must never 500 into a blank search box.
+        # Surface the failure (and log it) instead of swallowing it. [actionable_errors]
+        try:
+            res = micro_engine.run_analysis(symbol, mode, tfs, sensors=radar_sensors, unleashed=_unleashed)
+        except Exception as exc:
+            logging.getLogger("banshee.radar").exception("radar analysis failed for %s", symbol)
+            return _radar_error(symbol, f"Analysis failed — {exc}", output_mode)
         if "error" in res:
-            return f"Analysis error for {symbol}: {res['error']}"
+            return _radar_error(symbol, res["error"], output_mode)
         _RESP_CACHE[_rkey] = {"ts": time.time(), "res": res}
         source = "cache" if (cached and "mac_data" in cached) else "live"
 

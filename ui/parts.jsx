@@ -2267,6 +2267,28 @@ function AlertStrip({ warnings }) {
   );
 }
 
+/* Turn the radar payload's `warnings` dict into AlertStrip cards. These are
+ * DATA-QUALITY flags the engine already computed (thin history, blank
+ * timeframes, extreme momentum) but the UI wasn't showing — an invisible
+ * caveat reads as "Banshee is confident" when it isn't. Newly-listed / thinly
+ * traded tickers (IPO summer) lean on these heavily. Single source of truth so
+ * both the hub and the analysis page map the same way. Returns [] when clean. */
+function radarDataCards(rw) {
+  const cards = [];
+  if (!rw) return cards;
+  if (rw.limited_history?.length)
+    cards.push({ section: "DATA", level: "warn",
+      text: `Limited history on ${rw.limited_history.join(", ")} — too few bars for full analysis. Treat this read as provisional.` });
+  if (rw.missing_timeframes?.length)
+    cards.push({ section: "DATA", level: "warn",
+      text: `No data yet on ${rw.missing_timeframes.join(", ")} — those timeframes are blank.` });
+  (rw.extreme_rsi || []).forEach(t => cards.push({ section: "MOMENTUM", level: "warn", text: t }));
+  (rw.weak_adx || []).forEach(t => cards.push({ section: "TREND", level: "info", text: t }));
+  (rw.rsi_divergences || []).forEach(d => cards.push({ section: "DIVERGENCE", level: "info",
+    text: `${d} RSI divergence on the slow timeframe — momentum may be turning.` }));
+  return cards;
+}
+
 /* ── RotationSection — sector rotation engine panel ─────────── */
 function RotationSection({ data, loading }) {
   const sty = {
@@ -2459,6 +2481,7 @@ window.smcToZones   = smcToZones;
 window.smcToMarkers = smcToMarkers;
 window.AlertCard    = AlertCard;
 window.AlertStrip   = AlertStrip;
+window.radarDataCards = radarDataCards;
 window.MacroSensorCard = MacroSensorCard;
 window.RotationSection = RotationSection;
 

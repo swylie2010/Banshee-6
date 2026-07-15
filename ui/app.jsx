@@ -245,6 +245,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, macro, onMacro, unleashed, onTog
 /* ── Sidebar ───────────────────────────────────────────────── */
 function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFocusedSym, radarData, onSearch, onSettings, onMacro, onNews, onLab, onRisk, onJournal, onManual, onOptions, onGridbot, onObservatory, currentPage, onPresetsOpen }) {
   const [searchVal, setSearchVal] = useState("");
+  const [searchError, setSearchError] = useState("");   // shown under the box when a lookup can't open
   const [shutdownState, setShutdownState] = useState("idle"); // idle | gridbot_warn | confirm | done
   const [gridbotSym, setGridbotSym] = React.useState(null);
   const wl = watchlists.find(w => w.id === watchlist);
@@ -272,16 +273,22 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
           <window.Label style={{ marginBottom: 6 }}>LOOK UP SYMBOL</window.Label>
           <form
-            onSubmit={e => {
+            onSubmit={async e => {
               e.preventDefault();
               const sym = searchVal.trim().toUpperCase();
-              if (sym) { onSearch(sym); setSearchVal(""); }
+              if (!sym) return;
+              setSearchError("");
+              // onSearch returns "" on success or a message on failure. Keep the
+              // typed text on failure so the user can fix a typo and retry.
+              const err = await onSearch(sym);
+              if (err) setSearchError(err);
+              else { setSearchError(""); setSearchVal(""); }
             }}
             style={{ display: "flex", gap: 6, marginTop: 6 }}
           >
             <input
               value={searchVal}
-              onChange={e => setSearchVal(e.target.value)}
+              onChange={e => { setSearchVal(e.target.value); if (searchError) setSearchError(""); }}
               placeholder="TICKER…"
               maxLength={12}
               style={{
@@ -301,6 +308,12 @@ function Sidebar({ open, watchlists, watchlist, setWatchlist, focusedSym, setFoc
               fontSize: 13, fontWeight: 700, letterSpacing: "0.14em",
             }}>GO</button>
           </form>
+          {searchError && (
+            <div style={{
+              marginTop: 6, color: "var(--amber)", fontSize: 11, lineHeight: 1.4,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}>{searchError}</div>
+          )}
         </div>
 
         {/* watchlist selector */}
@@ -550,6 +563,7 @@ function mergeRadar(base, live) {
     atr:            live.atr_plan?.atr  ?? base.atr,
     volume:         live.volume         ?? base.volume,
     session_weight: typeof live.session_weight === "number" ? live.session_weight : base.session_weight,
+    warnings:       live.warnings       ?? base.warnings,   // data-quality flags shown on the hub/analysis view
   };
 }
 
@@ -738,14 +752,17 @@ function App() {
   // it. Only fires on a page CHANGE, so manual toggling within a space is respected.
   useEffect(() => { setSidebarOpen(page === "grid"); }, [page]);
 
-  /* symbol search via sidebar */
+  /* symbol search via sidebar.
+   * Returns "" on success, or a human message on failure — the sidebar shows it
+   * under the box. A silent no-op makes Banshee look broken, so we NEVER just
+   * swallow the failure here. */
   async function handleSymbolSearch(sym) {
     /* resolve names/pairs to a known ticker first: "BITCOIN"/"BTC/USD"/"APPLE"
      * all open the matching default asset directly. */
     const known = resolveKnownAsset(sym);
     if (known) {
       setFocusedSym(known.sym); setOpenSym(known.sym); setPage("hub"); setCustomAsset(null);
-      return;
+      return "";
     }
     /* unknown ticker — fetch radar as typed (keeps the user's "/USD" suffix,
      * which forces crypto resolution on the backend, e.g. HYPE/USD ≠ HYPE stock). */
@@ -761,11 +778,17 @@ function App() {
         rsi:     typeof res.rsi === "number" ? Math.round(res.rsi) : 50,
         atr:     res.atr_plan?.atr ?? 0,
         vol:     1, _live: true,
+        warnings: res.warnings,   // thin-history / momentum flags → shown on the hub
       };
       setCustomAsset(asset); setFocusedSym(sym); setOpenSym(sym); setPage("hub");
-    } else {
-      console.warn(`[search] symbol not found: ${sym}`);
+      return "";
     }
+    /* The backend hands back {error} when it couldn't analyse the symbol; a null
+     * res means the request itself failed. Either way, tell the user. */
+    console.warn(`[search] could not open ${sym}`);
+    return (res && res.error)
+      ? String(res.error)
+      : `No data for "${sym}" — it may be unlisted or unsupported.`;
   }
 
   /* fetch macro on mount */

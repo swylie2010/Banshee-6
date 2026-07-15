@@ -409,8 +409,14 @@ def _psychological_levels(price: float) -> list:
 
 def find_sr_levels(df: pd.DataFrame, price: float, tolerance: float=0.005) -> tuple:
     if df.empty: return [], []
-    highs = df[df["swing_high"].notna()]["swing_high"].values
-    lows  = df[df["swing_low"].notna()]["swing_low"].values
+    # Thin history (<30 bars) skips indicator-building, so the swing columns can
+    # be absent. When they are, use price-derived psychological levels alone
+    # instead of crashing — a silent blank makes Banshee look broken, and these
+    # levels are real (they come straight from price). [actionable_errors]
+    highs = df[df["swing_high"].notna()]["swing_high"].values \
+        if "swing_high" in df.columns else np.array([], dtype=float)
+    lows = df[df["swing_low"].notna()]["swing_low"].values \
+        if "swing_low" in df.columns else np.array([], dtype=float)
     psych = np.array(_psychological_levels(price))
 
     all_levels = sorted(np.concatenate([highs, lows, psych]))
@@ -474,7 +480,11 @@ def score_timeframe(df: pd.DataFrame, profile: dict = None) -> tuple:
 
     Returns (bull_score, bear_score, signals_list).
     """
-    if df.empty or len(df) < 5:
+    # "ema_20" is the first column add_all_indicators writes, so its absence
+    # means this frame was too thin (<30 bars) for indicators. Treat such a
+    # timeframe as neutral (no signal) rather than reading missing columns and
+    # crashing the whole analysis. [actionable_errors]
+    if df.empty or len(df) < 5 or "ema_20" not in df.columns:
         return 0, 0, []
     last, prev = df.iloc[-1], df.iloc[-2]
     bull, bear, signals = 0.0, 0.0, []
@@ -1021,6 +1031,13 @@ def run_analysis(symbol: str, mode: str, tfs: dict, domino_phase: int = 0, senso
         "volume": vol_signal, "funding_rate": funding, "atr_plan": atr_plan,
         "warnings": {
             "missing_timeframes": [labels[i] for i, df in enumerate([df_slow, df_mid, df_fast]) if df.empty],
+            # Timeframes that HAVE data but too few bars (<30) for the full
+            # indicator set — the read is real but shallow. Surfacing this keeps
+            # a thin symbol (e.g. a newly-listed ETF) from looking broken.
+            "limited_history": [
+                labels[i] for i, df in enumerate([df_slow, df_mid, df_fast])
+                if not df.empty and "ema_20" not in df.columns
+            ],
             "extreme_rsi": (
                 [f"RSI OVERBOUGHT ({indicators['rsi']:.1f}) — Overextended, pullback risk"]
                 if indicators["rsi"] > 75 else

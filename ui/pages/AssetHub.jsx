@@ -280,6 +280,18 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
         <window.PowerBar value={macroVal} segments={36} />
       </div>
 
+      {/* data-quality caveats (thin history, blank timeframes, extreme momentum).
+          A silent read on a newly-listed ticker looks like confidence it doesn't
+          have — surface the flags the engine already computed. */}
+      {(() => {
+        const cards = window.radarDataCards(asset.warnings);
+        return cards.length ? (
+          <div style={{ padding: "10px 18px 0 18px", flex: "0 0 auto" }}>
+            <window.AlertStrip warnings={cards} />
+          </div>
+        ) : null;
+      })()}
+
       {/* main grid: chart left, trade rec right */}
       <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 12, padding: "12px 12px 0 12px" }}>
 
