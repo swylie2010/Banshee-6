@@ -70,3 +70,4 @@ dist/
 # Local working-memory archives (never ship)
 ACTIVE_TASK_ARCHIVE*.md
 remote_access.flag
+docs/superpowers/
