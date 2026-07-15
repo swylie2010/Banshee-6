@@ -4,6 +4,11 @@ setlocal EnableDelayedExpansion
 set "BANSHEE_DIR=%~dp0"
 if "%BANSHEE_DIR:~-1%"=="\" set "BANSHEE_DIR=%BANSHEE_DIR:~0,-1%"
 
+rem --- Remote access toggle: if remote_access.flag sits next to this file, bind
+rem all interfaces (0.0.0.0) so this PC's Tailscale address is reachable from your
+rem phone. No flag = local only (127.0.0.1), the safe default for a fresh download.
+if exist "%BANSHEE_DIR%\remote_access.flag" set "BANSHEE_HOST=0.0.0.0"
+
 set "VENV_DIR=%BANSHEE_DIR%\.venv"
 set "VENV_PYTHON=%VENV_DIR%\Scripts\python.exe"
 set "VENV_PIP=%VENV_DIR%\Scripts\pip.exe"
@@ -126,6 +131,7 @@ timeout /t 6 /nobreak >nul
 
 echo       Opening Banshee 6 UI...
 if not defined BANSHEE_HOST start "" "http://localhost:8765/ui/"
+if /i "%BANSHEE_HOST%"=="0.0.0.0" start "" "http://localhost:8765/ui/"
 
 echo.
 echo Banshee 6 is running at http://localhost:8765/ui/
