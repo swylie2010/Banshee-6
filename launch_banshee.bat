@@ -125,7 +125,7 @@ echo       Waiting for Core to boot...
 timeout /t 6 /nobreak >nul
 
 echo       Opening Banshee 6 UI...
-start "" "http://localhost:8765/ui/"
+if not defined BANSHEE_HOST start "" "http://localhost:8765/ui/"
 
 echo.
 echo Banshee 6 is running at http://localhost:8765/ui/
