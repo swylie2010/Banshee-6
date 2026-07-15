@@ -66,3 +66,32 @@ def test_foreign_origin_forbidden():
     """An Origin that isn't the Banshee UI is refused."""
     r = _raw_client().get("/auth/token", headers={"origin": "http://evil.example"})
     assert r.status_code == 403
+
+
+# ── Remote access (Tailscale): the UI is served on a non-localhost host ────────
+# The gate must judge same-origin against the Host actually served, not a
+# hardcoded localhost list — otherwise opening Banshee at the PC's Tailscale IP
+# on a phone would 403 the token bootstrap and blank the app.
+_TS = "http://100.64.1.2:8765"   # a Tailscale-range (100.64.0.0/10) address
+
+
+def test_tailscale_origin_matching_host_allows():
+    """Origin host == the Host we answered on → same origin → token served,
+    with no Sec-Fetch-Site and no localhost involved."""
+    r = TestClient(bc.app, base_url=_TS).get("/auth/token", headers={"origin": _TS})
+    assert r.status_code == 200
+    assert r.json()["token"] == bc._BANSHEE_TOKEN
+
+
+def test_tailscale_referer_matching_host_allows():
+    """Same, via the Referer fallback (some fetches carry Referer, not Origin)."""
+    r = TestClient(bc.app, base_url=_TS).get("/auth/token", headers={"referer": f"{_TS}/ui/"})
+    assert r.status_code == 200
+    assert r.json()["token"] == bc._BANSHEE_TOKEN
+
+
+def test_foreign_origin_on_tailscale_host_forbidden():
+    """A cross-origin page still can't mint a token when Banshee runs on a
+    Tailscale host: its Origin (≠ our Host) fails the dynamic match → 403."""
+    r = TestClient(bc.app, base_url=_TS).get("/auth/token", headers={"origin": "http://evil.example"})
+    assert r.status_code == 403

@@ -46,7 +46,7 @@ window._requestOHLCV = function(sym, onResult) {
         _ohlcvCache[s] = 'loading';
         try {
           const pair = window.API.coreSymbol(s);
-          const res  = await fetch(`http://localhost:8765/ohlcv?symbol=${encodeURIComponent(pair)}&mode=swing`);
+          const res  = await fetch(`${window.location.origin}/ohlcv?symbol=${encodeURIComponent(pair)}&mode=swing`);
           const data = await res.json();
           const recs = data.tfs?.['1h'];
           _ohlcvCache[s] = recs?.length

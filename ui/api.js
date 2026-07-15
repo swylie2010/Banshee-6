@@ -7,7 +7,11 @@
  *  request to the old mock fallback.)
  */
 
-const API_BASE = "http://localhost:8765";
+// Derive the API base from the origin the page was actually served from, so the
+// UI works whether it's opened at localhost, 127.0.0.1, or the PC's Tailscale
+// address on a phone. Same-origin also means the browser marks these requests
+// same-origin, satisfying the /auth/token bootstrap gate.
+const API_BASE = window.location.origin;
 
 /* mode implied by a given timeframe */
 const TF_TO_MODE = {

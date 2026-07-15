@@ -110,6 +110,12 @@ def _is_same_origin(request: Request) -> bool:
     with Sec-Fetch-Site / Origin / Referer; a bare GET from a script or a
     mistaken local AI agent carries none of these → refused.
 
+    Same-origin is judged dynamically against the Host actually served, so the
+    UI works from ANY bind address (localhost, 127.0.0.1, a Tailscale IP on a
+    phone) with nothing hardcoded. This matters because a plain-http, non-
+    localhost origin (a Tailscale IP) may not receive Sec-Fetch-Site at all, so
+    the Origin/Referer-host-equals-Host match is the reliable path.
+
     Limitation: a deliberate non-browser client can forge these headers. This
     stops the accidental/naive case (the probable one), not a determined
     adversary — that needs OS-level socket auth (tracked for the real-trading
@@ -117,9 +123,19 @@ def _is_same_origin(request: Request) -> bool:
     """
     if request.headers.get("sec-fetch-site") == "same-origin":
         return True
-    if request.headers.get("origin") in _UI_ORIGINS:
-        return True
+    host    = request.headers.get("host") or ""
+    origin  = request.headers.get("origin") or ""
     referer = request.headers.get("referer") or ""
+    # Dynamic same-origin: the Origin/Referer host equals the Host we answered on
+    # → page and API are the same server, whatever address that is. A cross-origin
+    # page sends its OWN origin (≠ our Host) and is correctly refused.
+    if host and origin and origin.split("://", 1)[-1] == host:
+        return True
+    if host and referer and referer.split("://", 1)[-1].split("/", 1)[0] == host:
+        return True
+    # Legacy localhost allow-list — harmless belt-and-suspenders for the local case.
+    if origin in _UI_ORIGINS:
+        return True
     return any(referer.startswith(o) for o in _UI_ORIGINS)
 
 
@@ -421,8 +437,52 @@ def _predator_freshness_loop():
         time.sleep(30 * 60)
 
 
+def _tailscale_ip() -> str | None:
+    """This machine's Tailscale IPv4 (via the tailscale CLI), or None if unavailable.
+
+    A Tailscale IPv4 always sits in the 100.64.0.0/10 CGNAT range, so we sanity-
+    check the "100." prefix before trusting it — a mistyped/empty result never
+    becomes a bind address. Returns None (never raises) so the caller can fall
+    back to localhost. Side effect: shells out to `tailscale`.
+    """
+    try:
+        import subprocess
+        out = subprocess.run(["tailscale", "ip", "-4"],
+                             capture_output=True, text=True, timeout=5)
+        lines = (out.stdout or "").strip().splitlines()
+        ip = lines[0].strip() if lines else ""
+        return ip if ip.startswith("100.") else None
+    except Exception:
+        return None
+
+
+def _resolve_bind_host() -> str:
+    """Choose the network interface Banshee listens on. Default = local only.
+
+    Reads BANSHEE_HOST. Unset → "127.0.0.1" (reachable only from this PC — the
+    safe default, unchanged from before). To open it up deliberately:
+      - "tailscale" → bind ONLY this machine's Tailscale IP, so a phone on your
+        tailnet can reach it while regular wifi/LAN cannot. Falls back to
+        127.0.0.1 (with a warning) if Tailscale isn't up — never binds wider
+        than asked.
+      - any literal host/IP ("0.0.0.0", "100.x.y.z") → used verbatim (power user).
+    """
+    host = os.environ.get("BANSHEE_HOST", "").strip()
+    if not host:
+        return "127.0.0.1"
+    if host.lower() == "tailscale":
+        ip = _tailscale_ip()
+        if ip:
+            return ip
+        print("  WARNING: BANSHEE_HOST=tailscale but no Tailscale IP found — "
+              "staying on 127.0.0.1 (local only). Is Tailscale running?")
+        return "127.0.0.1"
+    return host
+
+
 if __name__ == "__main__":
     _init_token()
     threading.Thread(target=_predator_freshness_loop, daemon=True).start()
-    print(f"Banshee Core starting on http://127.0.0.1:{PORT}")
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    _host = _resolve_bind_host()
+    print(f"Banshee Core starting on http://{_host}:{PORT}")
+    uvicorn.run(app, host=_host, port=PORT, log_level="warning")
