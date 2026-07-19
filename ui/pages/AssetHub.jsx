@@ -176,9 +176,24 @@ function computeWarnings(smcData, ghData, xabcdData, asset) {
   return warnings;
 }
 
+/* Tracks device orientation so the chart can trade portrait width for
+   landscape height on mobile instead of squashing into an unreadable box. */
+function useIsLandscape() {
+  const q = "(orientation: landscape)";
+  const [land, setLand] = React.useState(window.matchMedia(q).matches);
+  React.useEffect(() => {
+    const mq = window.matchMedia(q);
+    const h = e => setLand(e.matches);
+    mq.addEventListener("change", h); setLand(mq.matches);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+  return land;
+}
+
 /* ── AssetHub — standard overview (Page 2) ─────────────────── */
 function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate }) {
   const isMobile = window.useIsMobile();
+  const isLandscape = useIsLandscape();
   const [mode, setMode] = useState("swing");
   const [tf, setTf] = useState("1H");
   const [simPanel, setSimPanel]   = useState(false);
@@ -335,18 +350,39 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
             </div>
           </div>
 
-          <div style={{ position: "relative", ...(isMobile ? { flex: "0 0 auto", height: 300 } : { flex: 1, minHeight: 0 }), background: "var(--bg-2)", border: "1px solid var(--line)", padding: 10 }}>
-            <window.Chart symbol={asset.sym} tf={tf} height={300} accent={c.fg}
-              smcData={null} smcLoading={false}
-              ghData={null} ghLoading={false}
-              xabcdData={null} xabcdLoading={false}
-              showSMC={false} setShowSMC={() => {}}
-              showGH={false} setShowGH={() => {}}
-              showXABCD={false} setShowXABCD={() => {}}
-              showEMA={showEMA} setShowEMA={setShowEMA}
-              showVWAP={showVWAP} setShowVWAP={setShowVWAP}
-              showStoch={showStoch} setShowStoch={setShowStoch} />
-          </div>
+          {(() => {
+            // Desktop is untouched (flex:1 fills the column). Mobile portrait can't fit
+            // a readable chart in a thumb-wide column, so it shows a rotate affordance
+            // instead of rendering a squashed live chart; mobile landscape trades the
+            // freed-up width for a tall chart that dominates the screen.
+            const chartMode = !isMobile ? "desktop" : (isLandscape ? "landscape" : "portrait");
+            const chartBoxStyle = {
+              position: "relative", background: "var(--bg-2)", border: "1px solid var(--line)", padding: 10,
+              ...(chartMode === "landscape" ? { flex: "0 0 auto", height: "78vh" }
+                : chartMode === "portrait" ? { flex: "0 0 auto", height: 120, display: "flex", alignItems: "center", justifyContent: "center" }
+                : { flex: 1, minHeight: 0 }),
+            };
+            return (
+              <div style={chartBoxStyle}>
+                {chartMode === "portrait" ? (
+                  <div className="mono" style={{ fontSize: 13, color: "var(--ink-3)", textAlign: "center", letterSpacing: "0.04em", padding: "0 12px" }}>
+                    ⟳ Rotate to landscape for the full chart
+                  </div>
+                ) : (
+                  <window.Chart symbol={asset.sym} tf={tf} height={chartMode === "landscape" ? Math.round(window.innerHeight * 0.72) : 300} accent={c.fg}
+                    smcData={null} smcLoading={false}
+                    ghData={null} ghLoading={false}
+                    xabcdData={null} xabcdLoading={false}
+                    showSMC={false} setShowSMC={() => {}}
+                    showGH={false} setShowGH={() => {}}
+                    showXABCD={false} setShowXABCD={() => {}}
+                    showEMA={showEMA} setShowEMA={setShowEMA}
+                    showVWAP={showVWAP} setShowVWAP={setShowVWAP}
+                    showStoch={showStoch} setShowStoch={setShowStoch} />
+                )}
+              </div>
+            );
+          })()}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, flex: "0 0 auto" }}>
             <window.MetricTile k="EDGE SCORE" v={asset.edge} suffix="/100" color={c.fg} bar={asset.edge} />

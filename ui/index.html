@@ -162,6 +162,13 @@
     z-index: 60;
     flex-shrink: 0;
   }
+
+  /* Mobile legibility floor — below the 700px isMobile breakpoint used in JS.
+     Also bumps form inputs to 16px so iOS Safari doesn't auto-zoom on focus. */
+  @media (max-width: 699px) {
+    body { font-size: 14px; }
+    input, select, textarea { font-size: 16px; }
+  }
 </style>
 </head>
 <body>
