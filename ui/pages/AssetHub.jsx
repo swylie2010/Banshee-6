@@ -178,6 +178,7 @@ function computeWarnings(smcData, ghData, xabcdData, asset) {
 
 /* ── AssetHub — standard overview (Page 2) ─────────────────── */
 function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate }) {
+  const isMobile = window.useIsMobile();
   const [mode, setMode] = useState("swing");
   const [tf, setTf] = useState("1H");
   const [simPanel, setSimPanel]   = useState(false);
@@ -254,7 +255,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
       <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
 
       {/* header */}
-      <div style={{ height: 56, padding: "0 18px", flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 18, background: "var(--bg-2)" }}>
+      <div style={{ height: isMobile ? "auto" : 56, minHeight: isMobile ? 56 : undefined, padding: isMobile ? "8px 10px" : "0 18px", flex: "0 0 auto", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", flexWrap: isMobile ? "wrap" : "nowrap", gap: isMobile ? 10 : 18, background: "var(--bg-2)" }}>
         <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: "transparent", border: "1px solid var(--line-2)", color: "#FF6D00", cursor: "pointer", clipPath: "polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)" }}>
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M7 1 L3 5 L7 9" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
           <span className="mono" style={{ fontSize: 13, letterSpacing: "0.16em" }}>GRID</span>
@@ -293,7 +294,16 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
       })()}
 
       {/* main grid: chart left, trade rec right */}
-      <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 12, padding: "12px 12px 0 12px" }}>
+      <div style={{
+        flex: 1,
+        minHeight: isMobile ? undefined : 0,
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 300px",
+        gap: 12,
+        padding: "12px 12px 0 12px",
+        overflowY: isMobile ? "auto" : "visible",
+        WebkitOverflowScrolling: isMobile ? "touch" : undefined,
+      }}>
 
         {/* left: mode/TF + chart + metrics */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
@@ -325,7 +335,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
             </div>
           </div>
 
-          <div style={{ position: "relative", flex: 1, minHeight: 0, background: "var(--bg-2)", border: "1px solid var(--line)", padding: 10 }}>
+          <div style={{ position: "relative", ...(isMobile ? { flex: "0 0 auto", height: 300 } : { flex: 1, minHeight: 0 }), background: "var(--bg-2)", border: "1px solid var(--line)", padding: 10 }}>
             <window.Chart symbol={asset.sym} tf={tf} height={300} accent={c.fg}
               smcData={null} smcLoading={false}
               ghData={null} ghLoading={false}
@@ -348,7 +358,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
         </div>
 
         {/* right: trade recommendation */}
-        <aside style={{ background: "var(--bg-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden", minHeight: 0 }}>
+        <aside style={{ background: "var(--bg-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", position: "relative", ...(isMobile ? { overflow: "visible" } : { overflow: "hidden", minHeight: 0 }) }}>
           <window.CornerTicks color={c.fg} />
           <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)", background: `linear-gradient(180deg, ${c.bg}, transparent)`, flex: "0 0 auto" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
@@ -464,7 +474,7 @@ function AssetHub({ asset, onBack, macroWarning, onDeepDive, onGoRiskSimulate })
       </div>
 
       {/* deep dive navigation cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "8px 12px 10px 12px", flex: "0 0 auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 8, padding: "8px 12px 10px 12px", flex: "0 0 auto" }}>
         <window.DeepDiveCard icon="◈" title="SMC STRUCTURE" sub="Order blocks · FVGs · BOS/CHoCH · Liquidity pools · HTF/LTF alignment" accent="var(--cyan)" onDeepDive={() => onDeepDive("smc")} />
         <window.DeepDiveCard icon="◎" title="GEO HARMONIC" sub="Fibonacci arc intersections · XABCD patterns · PRZ zones · Fib cycles" accent="var(--magenta)" onDeepDive={() => onDeepDive("gh")} />
         <window.DeepDiveCard icon="◆" title="NEXUS SYNTHESIS" sub="Full AI briefing · Cross-system confluence · Trade signal synthesis" accent="var(--amber)" onDeepDive={() => onDeepDive("nexus")} />
