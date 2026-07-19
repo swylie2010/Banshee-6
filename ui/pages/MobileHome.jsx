@@ -135,7 +135,7 @@ function MHGridbotHero({ onNav }) {
         style={{
           minHeight: 72, cursor: "pointer",
           background: "linear-gradient(180deg, var(--bg-2), var(--bg-1))",
-          border: "1px solid var(--buy)", borderRadius: 11,
+          border: `1px solid ${idle ? "var(--line)" : "var(--buy)"}`, borderRadius: 11,
           padding: "12px 14px",
         }}
       >
@@ -299,7 +299,7 @@ function MHMore({ onNav }) {
   );
 }
 
-function MobileHome({ macroData, radarData, snapshot, watchlist, watchlists, onOpenSymbol, onSearch, onNav }) {
+function MobileHome({ macroData, radarData, watchlist, watchlists, onOpenSymbol, onSearch, onNav }) {
   return (
     <div style={{
       height: "100%", overflowY: "auto", WebkitOverflowScrolling: "touch",

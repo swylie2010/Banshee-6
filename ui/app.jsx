@@ -976,7 +976,6 @@ function App() {
           <MobileHome
             macroData={macroData}
             radarData={radarData}
-            snapshot={snapshot}
             watchlist={watchlist}
             watchlists={watchlists}
             onOpenSymbol={openAsset}
