@@ -623,6 +623,24 @@ function _migratePresetsFromLocalStorage() {
   } catch { return []; }
 }
 
+/* Single source of truth for the phone/desktop split. Reactive to resize and
+ * device rotation. Components branch on this; desktop path is the `false` case. */
+function useIsMobile(breakpoint = 700) {
+  const query = `(max-width: ${breakpoint - 1}px)`;
+  const [isMobile, setIsMobile] = React.useState(
+    typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  React.useEffect(() => {
+    const mq = window.matchMedia(query);
+    const handler = e => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    setIsMobile(mq.matches);
+    return () => mq.removeEventListener("change", handler);
+  }, [query]);
+  return isMobile;
+}
+window.useIsMobile = useIsMobile;
+
 /* ── App ───────────────────────────────────────────────────── */
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
