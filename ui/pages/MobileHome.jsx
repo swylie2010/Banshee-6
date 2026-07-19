@@ -1,8 +1,8 @@
 /* ui/pages/MobileHome.jsx
  * Phone landing: one scrollable column you thumb down. Desktop is unaffected —
- * this only renders below the mobile breakpoint (App decides). This task fills
- * the top: symbol search, macro regime strip, gridbot hero. Watchlist/news/more
- * come in a later task (YAGNI — do not add them here). */
+ * this only renders below the mobile breakpoint (App decides). Top: symbol
+ * search, macro regime strip, gridbot hero. Bottom: watchlist rows, news
+ * headlines, and a more-tools row. */
 
 /* Section label wrapper — every home section gets one for consistent rhythm. */
 function MHSection({ label, children }) {
@@ -162,7 +162,144 @@ function MHGridbotHero({ onNav }) {
   );
 }
 
-function MobileHome({ macroData, radarData, snapshot, watchlist, onOpenSymbol, onSearch, onNav }) {
+/* Single watchlist row — symbol left (bold, ellipsis-truncated so a long/odd
+ * ticker never overflows the column), verdict + RSI/edge right in the verdict
+ * color. Whole row is tappable → opens that symbol's full-screen detail. */
+function MHWatchlistRow({ asset, onOpenSymbol }) {
+  const c = window.verdictColors(asset?.verdict);
+  const metric = typeof asset?.rsi === "number" ? `RSI ${asset.rsi}`
+    : typeof asset?.edge === "number" ? `E${asset.edge}` : "—";
+  return (
+    <div
+      onClick={() => onOpenSymbol(asset.sym)}
+      role="button" tabIndex={0}
+      style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        minHeight: 44, padding: "0 10px", cursor: "pointer",
+        background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 8,
+        marginBottom: 4,
+      }}
+    >
+      <span className="mono" style={{
+        fontSize: 14, fontWeight: 700, color: "var(--ink)", minWidth: 0, marginRight: 10,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{asset?.sym || "—"}</span>
+      <span className="mono" style={{
+        fontSize: 12, flexShrink: 0, display: "flex", gap: 8, alignItems: "center",
+      }}>
+        <span style={{ color: c.fg, fontWeight: 700 }}>{asset?.verdict || "—"}</span>
+        <span style={{ color: "var(--ink-3)" }}>{metric}</span>
+      </span>
+    </div>
+  );
+}
+
+/* Watchlist rows — mirrors how Sidebar derives its symbol list from the
+ * active watchlist (app.jsx:252-259), since MobileHome only receives the
+ * `watchlist` id, not the array of lists (that's why `watchlists` was added
+ * to the mobile app.jsx call site). Guarded end to end: an unknown/renamed
+ * watchlist id or a missing radar entry must never throw. */
+function MHWatchlist({ watchlists, watchlist, radarData, onOpenSymbol }) {
+  const wl = (watchlists || []).find(w => w.id === watchlist);
+  const symAssets = (wl?.syms || []).map(s => {
+    const key = window.canonSym(s);
+    const base = window.resolveBaseAsset(key);
+    return { ...window.mergeRadar(base, radarData?.[key]), sym: key };
+  }).filter(Boolean);
+
+  return (
+    <MHSection label="WATCHLIST">
+      {symAssets.length === 0 ? (
+        <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", padding: "8px 2px" }}>
+          — no symbols —
+        </div>
+      ) : (
+        symAssets.map(a => <MHWatchlistRow key={a.sym} asset={a} onOpenSymbol={onOpenSymbol} />)
+      )}
+    </MHSection>
+  );
+}
+
+/* News — same Predator Briefing NewsPage reads (ui/pages/NewsPage.jsx:120),
+ * flattened to the first few headlines. Fetches on mount with a
+ * cancelled-flag cleanup; a fetch failure degrades to null → no items → the
+ * whole section is omitted (never an empty box). */
+function MHNews() {
+  const [news, setNews] = React.useState(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    window.API.fetchPredatorBriefing()
+      .then(b => { if (!cancelled) setNews(b); })
+      .catch(() => { if (!cancelled) setNews(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const items = [...(news?.watchlist_events || []), ...(news?.discovered_signals || [])];
+  if (items.length === 0) return null;
+
+  return (
+    <MHSection label="NEWS">
+      {items.slice(0, 3).map((it, i) => {
+        const headline = it?.headline || "—";
+        const body = (
+          <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", lineHeight: 1.4 }}>
+            {headline}
+          </div>
+        );
+        return (
+          <div key={i} style={{
+            padding: "8px 2px", borderBottom: i < items.slice(0, 3).length - 1 ? "1px solid var(--line)" : "none",
+          }}>
+            {it?.url
+              ? <a href={it.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>{body}</a>
+              : body}
+            {it?.source && (
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-4)", marginTop: 3 }}>{it.source}</div>
+            )}
+          </div>
+        );
+      })}
+    </MHSection>
+  );
+}
+
+/* More tools — the phone-safe subset of the desktop sidebar's NAVIGATE list
+ * (app.jsx:428-438), using the same page ids so onNav (App's setPage) routes
+ * identically. */
+function MHMore({ onNav }) {
+  const TOOLS = [
+    { id: "options",     label: "OPTIONS",        icon: "◆" },
+    { id: "news",        label: "PREDATOR NEWS",  icon: "◉" },
+    { id: "observatory", label: "OBSERVATORY",    icon: "✧" },
+    { id: "risk",        label: "RISK DESK",      icon: "⚖" },
+    { id: "journal",     label: "TRADE JOURNAL",  icon: "◎" },
+  ];
+  return (
+    <MHSection label="MORE">
+      {TOOLS.map(t => (
+        <div
+          key={t.id}
+          onClick={() => onNav(t.id)}
+          role="button" tabIndex={0}
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            minHeight: 44, padding: "0 10px", cursor: "pointer",
+            background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 8,
+            marginBottom: 4,
+          }}
+        >
+          <span className="mono" style={{ fontSize: 14, color: "var(--ink-3)" }}>{t.icon}</span>
+          <span className="mono" style={{ fontSize: 13, color: "var(--ink)", letterSpacing: "0.08em", fontWeight: 600 }}>
+            {t.label}
+          </span>
+        </div>
+      ))}
+    </MHSection>
+  );
+}
+
+function MobileHome({ macroData, radarData, snapshot, watchlist, watchlists, onOpenSymbol, onSearch, onNav }) {
   return (
     <div style={{
       height: "100%", overflowY: "auto", WebkitOverflowScrolling: "touch",
@@ -171,9 +308,9 @@ function MobileHome({ macroData, radarData, snapshot, watchlist, onOpenSymbol, o
       <MHSearch onSearch={onSearch} />
       <MHMacroStrip macroData={macroData} onNav={onNav} />
       <MHGridbotHero onNav={onNav} />
-      <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>
-        More sections coming (watchlist, news)
-      </div>
+      <MHWatchlist watchlists={watchlists} watchlist={watchlist} radarData={radarData} onOpenSymbol={onOpenSymbol} />
+      <MHNews />
+      <MHMore onNav={onNav} />
     </div>
   );
 }

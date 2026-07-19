@@ -978,6 +978,7 @@ function App() {
             radarData={radarData}
             snapshot={snapshot}
             watchlist={watchlist}
+            watchlists={watchlists}
             onOpenSymbol={openAsset}
             onSearch={handleSymbolSearch}
             onNav={setPage}
