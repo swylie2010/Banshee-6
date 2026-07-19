@@ -2,6 +2,7 @@
 const { useState, useEffect, useMemo, useRef } = React;
 import AssetGrid from './pages/AssetGrid.jsx';
 import AssetHub from './pages/AssetHub.jsx';
+import MobileHome from './pages/MobileHome.jsx';
 import AnalysisPage from './pages/AnalysisPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import MacroPage from './pages/MacroPage.jsx';
@@ -643,6 +644,7 @@ window.useIsMobile = useIsMobile;
 
 /* ── App ───────────────────────────────────────────────────── */
 function App() {
+  const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [watchlist, setWatchlist]     = useState("all");
   const [customPresets, setCustomPresets] = React.useState([]);
@@ -947,38 +949,52 @@ function App() {
         onToggleUnleashed={toggleUnleashed}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
-        <Sidebar
-          open={sidebarOpen}
-          watchlists={watchlists}
-          watchlist={watchlist} setWatchlist={setWatchlist}
-          focusedSym={focusedSym}
-          radarData={radarData}
-          setFocusedSym={openAsset}
-          onSearch={handleSymbolSearch}
-          onSettings={() => setPage("settings")}
-          onMacro={() => setPage("macro")}
-          onNews={() => setPage("news")}
-          onLab={() => setPage("lab")}
-          onRisk={() => handleGoRisk(false)}
-          onJournal={() => setPage("journal")}
-          onManual={() => setPage("manual")}
-          onOptions={() => setPage("options")}
-          onGridbot={() => setPage("gridbot")}
-          onObservatory={() => setPage("observatory")}
-          currentPage={page}
-          onPresetsOpen={() => setPresetsOpen(true)}
-        />
-        <AssetGrid
-          watchlists={watchlists}
-          watchlist={watchlist}
-          focusedSym={focusedSym}
-          onOpen={openAsset}
-          radarData={radarData}
-          radarLoading={radarLoading}
-          snapshot={snapshot}
-          isCustomPreset={isCustomPreset}
-          onPortfolioClick={handlePortfolioClick}
-        />
+        {!isMobile && (
+          <Sidebar
+            open={sidebarOpen}
+            watchlists={watchlists}
+            watchlist={watchlist} setWatchlist={setWatchlist}
+            focusedSym={focusedSym}
+            radarData={radarData}
+            setFocusedSym={openAsset}
+            onSearch={handleSymbolSearch}
+            onSettings={() => setPage("settings")}
+            onMacro={() => setPage("macro")}
+            onNews={() => setPage("news")}
+            onLab={() => setPage("lab")}
+            onRisk={() => handleGoRisk(false)}
+            onJournal={() => setPage("journal")}
+            onManual={() => setPage("manual")}
+            onOptions={() => setPage("options")}
+            onGridbot={() => setPage("gridbot")}
+            onObservatory={() => setPage("observatory")}
+            currentPage={page}
+            onPresetsOpen={() => setPresetsOpen(true)}
+          />
+        )}
+        {isMobile ? (
+          <MobileHome
+            macroData={macroData}
+            radarData={radarData}
+            snapshot={snapshot}
+            watchlist={watchlist}
+            onOpenSymbol={openAsset}
+            onSearch={handleSymbolSearch}
+            onNav={setPage}
+          />
+        ) : (
+          <AssetGrid
+            watchlists={watchlists}
+            watchlist={watchlist}
+            focusedSym={focusedSym}
+            onOpen={openAsset}
+            radarData={radarData}
+            radarLoading={radarLoading}
+            snapshot={snapshot}
+            isCustomPreset={isCustomPreset}
+            onPortfolioClick={handlePortfolioClick}
+          />
+        )}
         {page === "hub" && liveAsset && (
           <AssetHub
             asset={liveAsset}
